@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.Tokilive" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_fg</item>
+        <item name="android:windowSplashScreenBackground">#1C1B1F</item>
+    </style>
+</resources>
