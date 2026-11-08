@@ -1,2 +1,2 @@
 # tokilive
-B站直播 MD3 弹幕工具 (BiliDanmakuMD3)
+B站直播弹幕工具
