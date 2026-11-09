@@ -67,9 +67,13 @@ async function downloadToFile({ fetchImpl = fetch, fs, file, url, redirects = 0,
   return pump(res, file, fs, onProgress);
 }
 
-async function fetchReleaseList(fetchImpl = fetch) {
+async function fetchReleaseList(fetchImpl = fetch, attempt = 0) {
   const url = `${API}/repos/${REPO}/releases?per_page=20`;
   const res = await githubJson(url, fetchImpl);
+  if ((res.status === 429 || res.status >= 500) && attempt < 2) {
+    await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+    return fetchReleaseList(fetchImpl, attempt + 1);
+  }
   if (res.status !== 200 || !Array.isArray(res.json)) {
     const err = new Error(res.message || '无法读取发行版');
     err.status = res.status;

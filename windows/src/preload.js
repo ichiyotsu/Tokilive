@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('bili', {
   sampleBackground: () => ipcRenderer.invoke('sample-background'),
   lyricsNow: () => ipcRenderer.invoke('lyrics-now'),
   lyricsControl: action => ipcRenderer.invoke('lyrics-control', action),
+  importLyrics: () => ipcRenderer.invoke('import-lyrics'),
   taskbarState: () => ipcRenderer.invoke('taskbar-state'),
   minWidth: w => ipcRenderer.send('min-width', w),
   edgeStart: () => ipcRenderer.send('edge-start'), edgeMove: (d, dx, dy, end) => ipcRenderer.send('edge-move', d, dx, dy, !!end),

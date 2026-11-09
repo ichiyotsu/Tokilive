@@ -195,10 +195,10 @@ button.ac{background:var(--accent);color:var(--on-accent);border-color:transpare
  <label class="card"><div class="t"><span>停留时间（秒）</span><small>0 = 不自动消失</small></div><input id="lifetime" type="number" min="0"></label>
  <label class="card"><div class="t"><span>最大消息数</span></div><input id="maxMessages" type="number" min="1" max="200"></label>
  <h3>互动消息去向</h3>
- <label class="card"><div class="t"><span>进场</span></div><select id="route.enter"><option value="mini">互动小窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
- <label class="card"><div class="t"><span>关注</span></div><select id="route.follow"><option value="mini">互动小窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
- <label class="card"><div class="t"><span>分享</span></div><select id="route.share"><option value="mini">互动小窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
- <label class="card"><div class="t"><span>点赞</span></div><select id="route.like"><option value="mini">互动小窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
+ <label class="card"><div class="t"><span>进场</span></div><select id="route.enter"><option value="mini">实时窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
+ <label class="card"><div class="t"><span>关注</span></div><select id="route.follow"><option value="mini">实时窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
+ <label class="card"><div class="t"><span>分享</span></div><select id="route.share"><option value="mini">实时窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
+ <label class="card"><div class="t"><span>点赞</span></div><select id="route.like"><option value="mini">实时窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
  <label class="card"><div class="t"><span>语音播报</span><small>关掉会立刻停止正在读的和排队的内容，不会过一会自己继续。使用系统语音，没有额外语音库。</small></div><input id="tts" type="checkbox"></label>
  <label class="card"><div class="t"><span>语音</span></div><select id="ttsVoice"></select></label>
  <label class="card"><div class="t"><span>语速</span></div><input id="ttsRate" type="range" min="0.5" max="2" step="0.1"><span class="val"></span></label>
@@ -224,7 +224,8 @@ button.ac{background:var(--accent);color:var(--on-accent);border-color:transpare
  <label class="card"><div class="t"><span>标签颜色</span></div><input id="c.miniLabel" type="color" value="#FFFFFF"><input id="cOn.miniLabel" type="checkbox"></label>
  <label class="card"><div class="t"><span>提示停留时间（秒）</span></div><input id="miniLifetime" type="number" min="1" max="60"></label>
  <label class="card"><div class="t"><span>最多显示条数</span></div><input id="miniMax" type="number" min="1" max="20"></label>
- <label class="card"><div class="t"><span>OBS 地址</span></div><input id="miniUrl" type="text" readonly></label>
+ <label class="card"><div class="t"><span>窗口源地址</span></div><input id="miniUrl" type="text" readonly></label>
+ <div class="pv"><div class="cap"><span>实时预览</span><span class="bgs"></span></div><iframe class="preview" src="overlay.html?preview=1&mini=1" style="height:180px"></iframe></div>
  <div class="btns"><button data-t="like">测试点赞</button><button data-t="share">测试分享</button><button data-t="follow">测试关注</button><button data-t="enter">测试进场</button></div>
 </section>
 <!-- 自定义设计 -->
@@ -255,7 +256,7 @@ button.ac{background:var(--accent);color:var(--on-accent);border-color:transpare
  <label class="card"><div class="t"><span>在任务栏隐藏</span><small>窗口仍在托盘里。如果托盘创建失败，会留下任务栏按钮，避免程序消失。</small></div><input id="hideFromTaskbar" type="checkbox"></label>
  <div class="btns"><button id="resetBounds">重置窗口位置</button></div>
  <h3>窗口捕获</h3>
- <div class="card" style="display:block"><p class="note" id="capNote">两个悬浮窗的标题分别是「tokilive · 弹幕」和「tokilive · 互动小窗」，设置窗口是「tokilive · 设置」。它们会出现在任务栏里，是为了去掉工具窗口样式，让 OBS 和直播姬的窗口列表能分开枚举。透明本身仍是分层窗口，传统 BitBlt 捕获通常仍是黑的或捕不到。没有在这台环境里用真实的 OBS 或直播姬核对过画面。</p></div>
+ <div class="card" style="display:block"><p class="note" id="capNote">两个悬浮窗的标题分别是「tokilive · 弹幕」和「tokilive · 实时窗」，设置窗口是「tokilive · 设置」。它们会出现在任务栏里，是为了去掉工具窗口样式，让 OBS 和直播姬的窗口列表能分开枚举。透明本身仍是分层窗口，传统 BitBlt 捕获通常仍是黑的或捕不到。没有在这台环境里用真实的 OBS 或直播姬核对过画面。</p></div>
  <h3>OBS 浏览器源</h3>
  <p class="note">这是保持透明的捕获办法。浏览器源不走窗口捕获。直播姬如果支持浏览器源，使用同一对地址。宽度和高度按你的悬浮窗来，勾选自定义 CSS 并允许透明背景。</p>
  <label class="card"><div class="t"><span>启用本地服务</span></div><input id="obsServer" type="checkbox"></label>
@@ -267,6 +268,10 @@ button.ac{background:var(--accent);color:var(--on-accent);border-color:transpare
  <p class="note">读取 Windows 系统媒体会话，优先标出 QQ 音乐和网易云。不读取播放器自己的数据库，也不注入进程。歌词来自你导入的 LRC，或公开的 LRCLIB。没有时间轴就不会假装有逐字时间。</p>
  <label class="card"><div class="t"><span>演示</span><small>播放一段 tokilive 自己写的演示词，用来看排版。不是你正在听的歌。</small></div><input id="lyricsDemo" type="checkbox"></label>
  <label class="card"><div class="t"><span>时间偏移（秒）</span></div><input id="lyricsOffset" type="range" min="-5" max="5" step="0.1"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>字号</span></div><input id="lyricsSize" type="range" min="14" max="48" step="1"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>文字颜色</span></div><input id="lyricsColor" type="color"></label>
+ <label class="card"><div class="t"><span>底色不透明度</span></div><input id="lyricsBg" type="range" min="0" max="1" step="0.05"><span class="val"></span></label>
+ <div class="btns"><button type="button" id="lyricImport">导入 LRC / TTML</button></div>
  <div class="card"><div class="t"><span id="lyricTitle">尚未读取</span><small id="lyricMeta"></small></div></div>
  <pre id="lyricLines" class="note"></pre>
  <div class="btns"><button type="button" id="lyricPrev">上一首</button><button type="button" id="lyricToggle">播放/暂停</button><button type="button" id="lyricNext">下一首</button><button type="button" id="lyricRefresh">刷新</button></div>
@@ -452,10 +457,21 @@ $('ttsStop').onclick = () => speechSynthesis && speechSynthesis.cancel();
 async function showLyrics() {
   const r = await bili.lyricsNow();
   $('lyricTitle').textContent = r.session?.title || (r.demo ? '演示' : '没有曲目');
-  $('lyricMeta').textContent = [r.label, r.session?.artist, r.session?.source, r.message].filter(Boolean).join(' · ');
+  $('lyricMeta').textContent = [r.label, r.session?.artist, r.session?.source, r.lyric?.source, r.message].filter(Boolean).join(' · ');
   const lines = r.lines || [];
-  $('lyricLines').textContent = lines.length ? lines.map((line, i) => (i === r.index ? '▸ ' : '  ') + line.text + (line.translation ? '  /  ' + line.translation : '')).join('\n') : (r.lyric?.message || r.message || '没有歌词');
+  const box = $('lyricLines');
+  box.style.fontSize = (cfg?.lyricsSize || 22) + 'px';
+  box.style.color = cfg?.lyricsColor || '#f5f5f5';
+  box.style.background = `rgba(0,0,0,${cfg?.lyricsBg ?? 0.45})`;
+  box.style.padding = '12px';
+  box.style.borderRadius = '8px';
+  box.textContent = lines.length ? lines.map((line, i) => {
+    const mark = i === r.index ? '▸ ' : '  ';
+    const words = i === r.index && line.words?.length ? line.words.map(w => w.text).join('') : line.text;
+    return mark + words + (line.translation ? '  /  ' + line.translation : '');
+  }).join('\n') : (r.lyric?.message || r.message || '没有带时间轴的歌词。可以导入 LRC 或 TTML。');
 }
+$('lyricImport').onclick = async () => { const r = await bili.importLyrics(); $('lyricMsg').textContent = r.message || ''; if (r.ok) { cfg = await bili.getSettings(); showLyrics(); } };
 $('lyricRefresh').onclick = showLyrics;
 $('lyricPrev').onclick = () => bili.lyricsControl('previous');
 $('lyricNext').onclick = () => bili.lyricsControl('next');

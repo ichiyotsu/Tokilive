@@ -16,6 +16,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -143,6 +144,49 @@ private fun ExpressiveNavItem(icon: String, label: String, selected: Boolean, re
                 Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1)
             }
         }
+    }
+}
+
+/**
+ * 宽屏（≥840dp，M3 expanded）用侧栏，而不是把手机底栏拉宽。
+ * 选中项用 16dp 圆角的主色块，和未选中的图标形成形状对比，对应 MD3 Expressive 的形状策略。
+ * 窄屏仍用 [ExpressiveBottomBar]。来源：m3.material.io navigation rail / navigation bar，以及 Apache-2.0 的 md3e-skill 设计策略说明，没有复制其模板代码。
+ */
+@Composable
+fun ExpressiveNavRail(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    actionDescription: String,
+    onAction: () -> Unit,
+    actionIcon: String,
+    modifier: Modifier = Modifier,
+) {
+    val entries = listOf("forum" to "弹幕", "monitoring" to "数据", "settings" to "设置")
+    Column(
+        modifier.width(96.dp).fillMaxSize().padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        entries.forEachIndexed { index, (icon, label) ->
+            val on = index == selected
+            Column(
+                Modifier
+                    .height(64.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .clip(RoundedCornerShape(if (on) 16.dp else 8.dp))
+                    .background(if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+                    .clickable { onSelect(index) }
+                    .semantics { role = androidx.compose.ui.semantics.Role.Tab; this.selected = on; contentDescription = label },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Symbol(icon, filled = on, size = 22.dp)
+                Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        ExpressiveAction(actionIcon, actionDescription, onAction)
     }
 }
 

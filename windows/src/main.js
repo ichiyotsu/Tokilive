@@ -22,6 +22,7 @@ const { classifyHotkey } = require('./hotkey-policy');
 const { colorFromColorRef } = require('./accent-color');
 const { taskbarDecision } = require('./taskbar-policy');
 const { parseLrc, lineAt, DEMO_LRC } = require('./lyrics/lrc');
+const { parseTtml } = require('./lyrics/ttml');
 const { searchLyrics } = require('./lyrics/lrclib');
 const { parseSession, sourceLabel, controlCommand } = require('./lyrics/smtc');
 
@@ -37,7 +38,7 @@ const DEFAULTS = {
   appTheme: 'system', appAccent: '#6750A4', useSystemAccent: true, appBackground: '', appBgOpacity: 0.45, appMaterial: 'mica', sidebar: 'auto', overlayVisible: true,
   showWindowBorder: false, showLiveBorder: false, adaptiveText: false, adaptiveManual: 'light',
   danmakuInput: false, danmakuHotkey: '', experimentalGameTopmost: false, hideFromTaskbar: false,
-  lyricsVisible: false, lyricsOffset: 0, lyricsDemo: false,
+  lyricsVisible: false, lyricsOffset: 0, lyricsDemo: false, lyricsLocal: '', lyricsSize: 22, lyricsColor: '#f5f5f5', lyricsBg: 0.45,
 };
 let cfgPath, cfg, overlay, mini, settingsWin, stats = {}, tray, live, sseClients = new Set(), lastStatus = '未连接';
 let pendingCheck = null, pendingUpdate = null, lastDanmakuSent = 0, lyricCache = { key: '', hit: null }, systemAccent = '';
@@ -517,9 +518,11 @@ $tl = $s.GetTimelineProperties(); $pb = $s.GetPlaybackInfo()
       if (lyricCache.key !== key) {
         lyricCache = { key, hit: await searchLyrics(session.title, session.artist).catch(err => ({ ok: false, message: err.message })) };
       }
-      const lines = lyricCache.hit && lyricCache.hit.ok ? parseLrc(lyricCache.hit.synced || lyricCache.hit.plain) : [];
+      const local = String(cfg.lyricsLocal || '');
+      const lines = local ? (/<tt /i.test(local) || /<p\b/i.test(local) ? parseTtml(local) : parseLrc(local))
+        : (lyricCache.hit && lyricCache.hit.ok ? parseLrc(lyricCache.hit.synced || lyricCache.hit.plain) : []);
       const at = Math.max(0, session.position + Number(cfg.lyricsOffset || 0));
-      return { ok: true, session, lines, index: lineAt(lines, at), lyric: lyricCache.hit, label: sourceLabel(session.sourceKind) };
+      return { ok: true, session, lines, index: lineAt(lines, at), lyric: local ? { ok: true, source: '本地文件' } : lyricCache.hit, label: local ? '本地歌词' : sourceLabel(session.sourceKind) };
     } catch (err) { return { ok: false, message: '读不到系统媒体会话：' + redact(err.message), capability: 'SMTC 不可用或系统版本过旧' }; }
   });
   ipcMain.handle('lyrics-control', async (_e, action) => {
@@ -539,6 +542,15 @@ $null = Await ($s.${method}()) ([bool])`);
     } catch (err) { return { ok: false, message: '播放器没有接受这个操作。' }; }
   });
   ipcMain.handle('taskbar-state', () => taskbarDecision({ hideRequested: !!cfg.hideFromTaskbar, trayAvailable: !!tray }));
+  ipcMain.handle('import-lyrics', async () => {
+    const r = await dialog.showOpenDialog(settingsWin, { title: '导入歌词', properties: ['openFile'], filters: [{ name: '歌词', extensions: ['lrc', 'ttml', 'xml', 'txt'] }] });
+    if (r.canceled || !r.filePaths[0]) return { ok: false, message: '没有选择文件' };
+    const text = fs.readFileSync(r.filePaths[0], 'utf8');
+    const lines = /\.ttml$|\.xml$/i.test(r.filePaths[0]) || /<tt[\s>]/i.test(text) ? parseTtml(text) : parseLrc(text);
+    if (!lines.length) return { ok: false, message: '文件里没有带时间的歌词行，没有替换当前歌词。' };
+    cfg.lyricsLocal = text.slice(0, 200000); save();
+    return { ok: true, message: `已导入 ${lines.length} 行。只保存在本机设置里。`, count: lines.length };
+  });
   ipcMain.handle('obs-probe', async () => {
     if (!cfg.obsServer) return { ok: false, message: '本地服务没开。打开开关后才能把地址交给 OBS 浏览器源。', note: BROWSER_SOURCE_NOTE };
     try {

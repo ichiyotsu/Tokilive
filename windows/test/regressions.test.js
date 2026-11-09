@@ -14,6 +14,7 @@ const { luminanceOutside } = require('../src/adaptive');
 const { canSend, validateText, allowSend, interpretResponse } = require('../src/danmaku-send');
 const { speechPlan } = require('../src/tts');
 const { parseLrc, lineAt, DEMO_LRC } = require('../src/lyrics/lrc');
+const { parseTtml } = require('../src/lyrics/ttml');
 const { pickRecord, searchUrl } = require('../src/lyrics/lrclib');
 const { parseSession, controlCommand, sourceLabel } = require('../src/lyrics/smtc');
 const { colorFromColorRef } = require('../src/accent-color');
@@ -235,6 +236,9 @@ test('danmaku send, lyrics, adaptive text and taskbar policy', () => {
   assert.ok(lines.length >= 3);
   assert.equal(lineAt(lines, 3.2) >= 1, true);
   assert.ok(lines.some(l => l.words.length));
+  const ttml = parseTtml('<tt><body><p begin="00:00:02.5">第二行</p><p>无时间</p></body></tt>');
+  assert.equal(ttml.length, 1);
+  assert.equal(ttml[0].text, '第二行');
   assert.match(searchUrl('歌', '人'), /lrclib\.net/);
   assert.equal(pickRecord([{ trackName: '歌', syncedLyrics: '[00:01.00]词' }], '歌').syncedLyrics.includes('词'), true);
   assert.equal(sourceLabel(parseSession({ ok: true, source: 'QQ音乐', title: 'a' }).sourceKind), 'QQ音乐');

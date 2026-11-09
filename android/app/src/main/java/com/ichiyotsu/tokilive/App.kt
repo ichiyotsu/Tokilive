@@ -39,31 +39,36 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 fun TokiApp(vm: LiveViewModel, initialTab: Int = 0) {
     var tab by rememberSaveable { mutableIntStateOf(initialTab) }
     val haze = rememberHazeState()
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-        Box(Modifier.fillMaxSize().hazeSource(haze)) {
-            val ms = MaterialTheme.motionScheme
-            val eIn = ms.defaultEffectsSpec<Float>(); val sIn = ms.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>(); val eOut = ms.fastEffectsSpec<Float>()
-            AnimatedContent(tab, transitionSpec = {
-                (fadeIn(eIn) + slideInVertically(sIn) { it / 12 }) togetherWith fadeOut(eOut)
-            }, label = "tab") { t: Int ->
-                when (t) { 0 -> LiveScreen(vm); 1 -> StatsScreen(vm); else -> SettingsScreen(vm) }
+    BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        val expanded = maxWidth >= 840.dp
+        val pages = @Composable {
+            Box(Modifier.fillMaxSize().hazeSource(haze)) {
+                val ms = MaterialTheme.motionScheme
+                val eIn = ms.defaultEffectsSpec<Float>(); val sIn = ms.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>(); val eOut = ms.fastEffectsSpec<Float>()
+                AnimatedContent(tab, transitionSpec = {
+                    (fadeIn(eIn) + slideInVertically(sIn) { it / 12 }) togetherWith fadeOut(eOut)
+                }, label = "tab") { t: Int ->
+                    when (t) { 0 -> LiveScreen(vm, if (expanded) 24.dp else 140.dp); 1 -> StatsScreen(vm); else -> SettingsScreen(vm) }
+                }
             }
         }
-        ExpressiveBottomBar(
-            selected = tab,
-            onSelect = { tab = it },
-            actionDescription = if (vm.connected) "断开直播" else "连接或预览",
-            actionIcon = if (vm.connected) "stop" else "play_arrow",
-            onAction = { if (vm.room.isBlank()) vm.demo() else vm.toggle() },
-            haze = haze,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+        if (expanded) {
+            Row(Modifier.fillMaxSize()) {
+                ExpressiveNavRail(tab, { tab = it }, if (vm.connected) "断开直播" else "连接或预览", { if (vm.room.isBlank()) vm.demo() else vm.toggle() }, if (vm.connected) "stop" else "play_arrow")
+                Box(Modifier.weight(1f)) { pages() }
+            }
+        } else {
+            Box(Modifier.fillMaxSize()) {
+                pages()
+                ExpressiveBottomBar(tab, { tab = it }, if (vm.connected) "断开直播" else "连接或预览", { if (vm.room.isBlank()) vm.demo() else vm.toggle() }, if (vm.connected) "stop" else "play_arrow", haze, Modifier.align(Alignment.BottomCenter))
+            }
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun LiveScreen(vm: LiveViewModel) {
+fun LiveScreen(vm: LiveViewModel, bottomPad: androidx.compose.ui.unit.Dp = 140.dp) {
     val status by vm.client.status.collectAsState()
     val sb = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val list = rememberLazyListState()
@@ -72,7 +77,7 @@ fun LiveScreen(vm: LiveViewModel) {
         LargeFlexibleTopAppBar(title = { Text("tokilive", fontWeight = FontWeight.Bold) }, subtitle = { Text(if (vm.connected) "房间 ${vm.room} · $status" else "弹幕预览") },
             scrollBehavior = sb, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer))
     }) { pad ->
-        LazyColumn(state = list, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = pad.calculateTopPadding() + 4.dp, bottom = 140.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = list, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = pad.calculateTopPadding() + 4.dp, bottom = bottomPad), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
             item(key = "room") { RoomCard(vm, status) }
             items(vm.messages, key = { it.id }) { m -> Box(Modifier.animateItem()) { MsgCard(m) } }
         }
