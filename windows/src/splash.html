@@ -1,0 +1,10 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>tokilive</title>
+<style>@font-face{font-family:"Google Sans";src:url(fonts/GoogleSans-700.woff2) format("woff2");font-weight:700}
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;-webkit-app-region:drag;user-select:none}
+.card{position:fixed;inset:8px;border-radius:36px;display:grid;place-items:center;background:var(--bg,#1c1b1f);color:var(--fg,#fff);box-shadow:0 10px 30px rgba(0,0,0,.28);
+ animation:in .55s cubic-bezier(.2,0,0,1) both}
+@media (prefers-color-scheme:light){.card{--bg:#fdf7ff;--fg:#1d1b20}}
+h1{margin:0;font:700 56px/1 "Google Sans",sans-serif;letter-spacing:-.02em;animation:t .8s .1s cubic-bezier(.05,.7,.1,1) both}
+body.out .card{animation:out .3s cubic-bezier(.3,0,.8,.15) forwards}
+@keyframes in{from{opacity:0;transform:scale(.86)}}@keyframes t{from{opacity:0;transform:translateY(10px)}}@keyframes out{to{opacity:0;transform:scale(.94)}}
+</style></head><body><div class="card"><h1>tokilive</h1></div></body></html>

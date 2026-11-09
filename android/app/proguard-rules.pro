@@ -1,0 +1,5 @@
+-keep class androidx.core.content.FileProvider { *; }
+-dontwarn okhttp3.internal.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**

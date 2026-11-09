@@ -1,0 +1,496 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>tokilive 设置</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+/* tokilive 设置 · Fluent 2 / WinUI 3 风格 */
+:root{--app-accent:#6750a4;--accent:var(--app-accent);--on-accent:#fff;--bg:#f3f3f3;--layer:rgba(255,255,255,.5);--card:rgba(255,255,255,.72);--card-h:rgba(249,249,249,.9);--stroke:rgba(0,0,0,.07);--stroke2:rgba(0,0,0,.14);
+ --fg:#1b1b1b;--fg2:#5d5d5d;--ctl:rgba(255,255,255,.75);--ctl-h:rgba(249,249,249,.6);--sel:rgba(0,0,0,.055);--ease:cubic-bezier(.1,.9,.2,1)}
+:root.dark{--bg:#202020;--layer:rgba(58,58,58,.3);--card:rgba(255,255,255,.05);--card-h:rgba(255,255,255,.08);--stroke:rgba(255,255,255,.07);--stroke2:rgba(255,255,255,.12);--fg:#fff;--fg2:#c5c5c5;--ctl:rgba(255,255,255,.06);--ctl-h:rgba(255,255,255,.09);--sel:rgba(255,255,255,.06)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font:14px/1.45 "Segoe UI Variable Text","Segoe UI","Google Sans","Source Han Sans SC","Microsoft YaHei UI",sans-serif;color:var(--fg);overflow:hidden}
+body{background:radial-gradient(1200px 700px at 0 0,color-mix(in srgb,var(--accent) 14%,transparent),transparent 60%),radial-gradient(900px 600px at 100% 100%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 60%),var(--bg)}
+body.mica{background:transparent}
+#title{height:40px;display:flex;align-items:center;gap:10px;padding:0 12px 0 8px;-webkit-app-region:drag;font-size:12px;color:var(--fg2)}
+#title b{font:700 13px "Google Sans",sans-serif;color:var(--fg);letter-spacing:-.01em}
+#title .dot{width:16px;height:16px;border-radius:5px;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 50%,#ff5fc8))}
+#navToggle{width:32px;height:32px;padding:0;-webkit-app-region:no-drag;font-size:16px}
+#app{display:grid;grid-template-columns:240px 1fr;height:calc(100% - 40px);transition:grid-template-columns .22s var(--ease);position:relative}
+body.compact #app{grid-template-columns:56px 1fr}
+body.minimal #app{grid-template-columns:0 1fr}
+nav{padding:4px 8px 12px;display:flex;flex-direction:column;gap:2px;min-height:0;overflow:auto}
+body.compact nav .lbl,body.compact nav .me div{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+body.compact nav .me{padding:8px 0;justify-content:center}
+body.minimal nav{position:absolute;z-index:6;top:0;left:0;bottom:0;width:280px;background:var(--bg);transform:translateX(-105%);transition:transform .22s var(--ease);box-shadow:8px 0 24px rgba(0,0,0,.18)}
+body.minimal nav.open{transform:none}
+#scrim{display:none;position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.28)}
+body.minimal #scrim.show{display:block}
+nav .me{display:flex;align-items:center;gap:12px;padding:10px 12px 14px}
+nav .me img,nav .me .ph{width:40px;height:40px;border-radius:50%;background:var(--sel);object-fit:cover}
+nav .me div{min-width:0}nav .me b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}nav .me small{color:var(--fg2);font-size:12px}
+nav .navi{position:relative;display:flex;align-items:center;gap:14px;width:100%;height:40px;padding:0 12px;border-radius:6px;border:0;background:transparent;color:var(--fg);text-align:left;cursor:pointer;transition:background .15s}
+nav .navi:hover{background:var(--sel)} nav .navi.on{background:var(--sel)}
+nav .navi:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+nav .navi::before{content:"";position:absolute;left:0;top:50%;width:3px;height:0;border-radius:2px;background:var(--accent);transform:translateY(-50%);transition:height .25s var(--ease)}
+nav .navi.on::before{height:16px}
+nav svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+body.compact nav .navi{justify-content:center;padding:0}
+nav .sp{flex:1}
+main{position:relative;background:var(--layer);border-top-left-radius:8px;border:1px solid var(--stroke);border-right:0;border-bottom:0;overflow:auto;display:flex;flex-direction:column}
+@media (forced-colors: active) {
+  nav .navi.on { outline: 2px solid CanvasText; }
+  button, input, select { forced-color-adjust: auto; }
+  .page { border: 1px solid CanvasText; }
+}
+.page{display:none;flex:0 0 auto;min-width:0;overflow:visible;padding:28px 36px 12px;animation:pg .32s var(--ease)}
+.page.on{display:block}
+@keyframes pg{from{opacity:0;transform:translateY(14px)}}
+.page h1{margin:0 0 20px;font:600 28px/1.2 "Segoe UI Variable Display","Segoe UI","Google Sans",sans-serif;letter-spacing:-.01em}
+.page h3{margin:22px 0 8px;font-size:14px;font-weight:600}
+.wrap{display:flex;gap:28px;align-items:flex-start}.wrap>.col{flex:1;min-width:0}
+.pv{position:sticky;top:0;flex:0 0 360px;border-radius:8px;background:var(--card);border:1px solid var(--stroke);padding:12px}
+.pv .cap{display:flex;justify-content:space-between;font-size:12px;color:var(--fg2);margin:0 2px 8px}
+.pv iframe{color-scheme:light;width:100%;height:560px;border:0;border-radius:6px;background:repeating-conic-gradient(#8882 0 25%,#0000 0 50%) 0 0/18px 18px}
+.pv .bgs{display:flex;gap:6px}.pv .bgs i{width:16px;height:16px;border-radius:50%;border:1px solid var(--stroke2);cursor:pointer}
+.card,label.card{display:flex;align-items:center;gap:16px;min-height:68px;padding:12px 18px;margin:0 0 4px;border-radius:6px;background:var(--card);border:1px solid var(--stroke);transition:background .15s}
+.card:hover{background:var(--card-h)}
+.card>.t{flex:1;min-width:0}.card>.t>span{display:block}.card small{display:block;color:var(--fg2);font-size:12px;margin-top:1px}
+.card .ico{width:20px;height:20px;flex:none;color:var(--fg2)}
+.sub{margin:-4px 0 4px;border-top-left-radius:0;border-top-right-radius:0;padding-left:54px;min-height:52px}
+input[type=text],input[type=number],select,textarea{min-width:200px;padding:6px 11px;border-radius:5px;border:1px solid var(--stroke);border-bottom-color:var(--stroke2);background:var(--ctl);color:inherit;font:inherit;outline:none;transition:background .15s}
+input[type=text]:hover,input[type=number]:hover,select:hover,textarea:hover{background:var(--ctl-h)}
+input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{border-bottom:2px solid var(--accent);padding-bottom:5px}
+input[type=number]{min-width:110px;width:110px}
+select{appearance:none;padding-right:34px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 17px) 52%,calc(100% - 12px) 52%;background-size:5px 5px;background-repeat:no-repeat}
+select option{background:var(--bg);color:var(--fg)}
+textarea{width:100%;resize:vertical}
+.code{font:12.5px/1.55 "Cascadia Code",Consolas,monospace;min-height:220px;tab-size:2}
+input[type=range]{appearance:none;width:200px;height:20px;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(var(--accent),var(--accent)) 0/var(--p,50%) 100% no-repeat,var(--stroke2)}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:20px;height:20px;margin-top:-8px;border-radius:50%;background:var(--ctl);border:1px solid var(--stroke2);box-shadow:inset 0 0 0 4px var(--bg),inset 0 0 0 10px var(--accent);transition:box-shadow .15s}
+input[type=range]:hover::-webkit-slider-thumb{box-shadow:inset 0 0 0 3px var(--bg),inset 0 0 0 10px var(--accent)}
+.val{min-width:40px;text-align:right;font-variant-numeric:tabular-nums;color:var(--fg2)}
+input[type=checkbox]{appearance:none;flex:none;width:40px;height:20px;margin:0;border-radius:10px;border:1px solid var(--fg2);position:relative;cursor:pointer;transition:background .2s,border-color .2s}
+input[type=checkbox]::after{content:"";position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:6px;background:var(--fg2);transition:transform .25s var(--ease),width .15s,background .2s}
+input[type=checkbox]:active::after{width:16px}
+input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+input[type=checkbox]:checked::after{transform:translateX(20px);background:var(--on-accent)}
+input[type=checkbox]:checked:active::after{transform:translateX(16px)}
+input[type=color]{appearance:none;width:44px;height:30px;padding:2px;border-radius:6px;border:1px solid var(--stroke2);background:var(--ctl);cursor:pointer}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0}input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+button{height:32px;padding:0 14px;border-radius:5px;border:1px solid var(--stroke);border-bottom-color:var(--stroke2);background:var(--ctl);color:var(--fg);font:inherit;cursor:pointer;transition:background .15s,transform .1s}
+button:hover{background:var(--ctl-h)}button:active{transform:scale(.97);opacity:.8}
+button.ac{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:4px 12px;border-radius:999px;font-size:12px;background:var(--sel)}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--st,#999)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips button{height:auto;padding:12px 16px;border-radius:8px;min-width:120px;text-align:left}
+.chips button b{display:block;font-weight:600}.chips button small{color:var(--fg2);font-size:12px}
+.chips button.on{border:1px solid var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.order{display:flex;flex-direction:column;gap:4px}
+.order .it{display:flex;align-items:center;gap:10px;padding:6px 8px 6px 14px;border-radius:6px;background:var(--ctl);border:1px solid var(--stroke)}
+.order .it span{flex:1}.order button{height:28px;width:32px;padding:0}
+#qrBox{display:none;text-align:center;padding:16px}#qrBox img{border-radius:12px;background:#fff;padding:8px;cursor:pointer}
+.about{display:flex;align-items:center;gap:18px;margin-bottom:16px}.about .logo{font:700 40px "Google Sans",sans-serif;letter-spacing:-.02em}
+.bar{height:6px;border-radius:3px;background:var(--stroke2);overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;width:0;background:var(--accent)}
+.note{white-space:pre-wrap;color:var(--fg2);font-size:12.5px;line-height:1.55}
+.modal{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.35);display:grid;place-items:center}
+.modal[hidden]{display:none}
+.dialog{width:min(480px,calc(100% - 32px));background:var(--bg);color:var(--fg);border-radius:10px;padding:18px;border:1px solid var(--stroke)}
+.warn{color:#a4262c}
+@media (max-width:900px){.wrap{flex-direction:column}.pv{position:static;flex-basis:auto;width:100%}.page{padding:18px 16px 32px}.pv iframe{height:420px}}
+::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--stroke2);border-radius:5px;border:3px solid transparent;background-clip:padding-box}
+</style></head><body>
+<div id="title"><button id="navToggle" type="button" aria-label="导航" aria-expanded="true" aria-controls="nav">☰</button><span class="dot"></span><b>tokilive</b><span id="titlePage">设置</span></div>
+<div id="app">
+<nav id="nav" aria-label="设置导航">
+ <div class="me"><img id="uface" referrerpolicy="no-referrer" style="display:none" alt=""><span class="ph" id="uph"></span><div><b id="navName">未登录</b><small id="st">…</small></div></div>
+ <button type="button" class="navi on" data-p="conn"><svg viewBox="0 0 24 24"><path d="M4 9a12 12 0 0 1 16 0M7 12.5a7.5 7.5 0 0 1 10 0M10 16a3 3 0 0 1 4 0"/><circle cx="12" cy="19" r=".8"/></svg><span class="lbl">连接</span></button>
+ <button type="button" class="navi" data-p="danmaku"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg><span class="lbl">弹幕面板</span></button>
+ <button type="button" class="navi" data-p="live"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="4"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg><span class="lbl">实时窗</span></button>
+ <button type="button" class="navi" data-p="lyrics"><svg viewBox="0 0 24 24"><path d="M9 18V6l12-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span class="lbl">歌词（测试）</span></button>
+ <button type="button" class="navi" data-p="source"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 5V3M16 5V3"/></svg><span class="lbl">窗口源</span></button>
+ <span class="sp"></span>
+ <button type="button" class="navi" data-p="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg><span class="lbl">设置</span></button>
+</nav>
+<div id="scrim"></div>
+<main>
+<!-- 连接 -->
+<section class="page on" id="p-conn"><h1>连接</h1>
+ <label class="card"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9l9-6 9 6v11H3z"/></svg><div class="t"><span>直播间房间号</span><small>支持短号，例如 7777</small></div><input id="roomId" type="text" placeholder="房间号"></label>
+ <div class="btns"><button id="ownRoom" type="button">读取我的直播间</button><span id="ownRoomMsg" class="note"></span></div>
+ <div class="card"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/></svg><div class="t"><span id="uname">未登录</span><small>匿名连接时用户名会被打码；登录后显示完整用户名</small></div><button id="qrBtn">扫码登录</button><button id="logout" style="display:none">退出登录</button></div>
+ <div class="card" id="qrBox"><div style="margin:auto"><img id="qrImg" title="点击刷新"><div id="qrText" style="margin-top:8px"></div></div></div>
+ <div class="card" style="flex-wrap:wrap"><div class="t"><span>Cookie（可选）</span><small>手动粘贴，仅保存在本机</small></div><textarea id="cookie" rows="3" placeholder="SESSDATA=...; buvid3=...; DedeUserID=..."></textarea></div>
+ <div class="btns"><button class="ac" id="saveRoom">保存并连接</button><button id="reconnect">重新连接</button></div>
+</section>
+<!-- 应用外观：与弹幕卡片主题分开 -->
+<section class="page" id="p-app"><h1>外观</h1>
+ <p class="note">这里只改变设置窗口。弹幕卡片、悬浮窗模糊和卡片配色不会跟着变。</p>
+ <label class="card"><div class="t"><span>应用主题</span><small>浅色、深色或跟随系统。不影响弹幕卡片。</small></div><select id="appTheme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+ <label class="card"><div class="t"><span>使用 Windows 强调色</span><small>读到系统强调色时用于设置控件和窗口边框。读不到就用下面的自定义色。Windows 10 和 11 都是只读查询。</small></div><input id="useSystemAccent" type="checkbox"></label>
+ <label class="card"><div class="t"><span>应用强调色</span><small>只用于设置窗口的控件和导航，不是弹幕种子色。</small></div><input id="appAccent" type="color"></label>
+ <label class="card"><div class="t"><span>侧栏</span><small>自动会在变窄时收成图标，再窄就变成覆盖层。方向键可以移动焦点。</small></div><select id="sidebar"><option value="auto">自动</option><option value="expanded">展开</option><option value="compact">仅图标</option></select></label>
+ <h3>背景与材质</h3>
+ <div class="card"><div class="t"><span>自定义背景图</span><small id="bgState">没有背景图时使用纯色；材质不可用时也会退回纯色。</small></div><button id="pickBg" type="button">选择图片</button><button id="clearBg" type="button">清除</button></div>
+ <label class="card"><div class="t"><span>背景图不透明度</span><small>只作用于这张背景，不改变弹幕卡片的不透明度。</small></div><input id="appBgOpacity" type="range" min="0" max="1" step="0.05"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>设置窗口材质</span><small>Windows 11 的 Mica / Acrylic。其他系统或设置失败时使用纯色。</small></div><select id="appMaterial"><option value="mica">云母 Mica</option><option value="acrylic">亚克力 Acrylic</option><option value="tabbed">Tabbed</option><option value="none">无（纯色）</option></select></label>
+</section>
+<!-- 卡片外观 -->
+<section class="page" id="p-look"><h1>弹幕面板</h1><div class="wrap"><div class="col">
+ <p class="note">卡片外观、配色、消息和自定义设计都在这一页。下面这些开关作用于真正的悬浮窗，预览用同一份配置。</p>
+ <label class="card"><div class="t"><span>锁定弹幕窗（鼠标穿透）</span><small>解锁后可拖动，并拖边缘改大小。</small></div><input id="locked" type="checkbox"></label>
+ <label class="card"><div class="t"><span>始终置顶</span></div><input id="alwaysOnTop" type="checkbox"></label>
+ <label class="card"><div class="t"><span>锁定快捷键</span><small>同时锁定或解锁弹幕窗和实时窗。</small></div><input id="hotkey" type="text"></label>
+ <label class="card"><div class="t"><span>窗口边框</span><small>用 Windows 强调色画一圈细边，方便拖动。关闭时没有这圈边。</small></div><input id="showWindowBorder" type="checkbox"></label>
+ <label class="card"><div class="t"><span>文字颜色自适应</span><small>默认关闭。打开后只在本机看窗口外侧的桌面亮度，不上传，也不把悬浮窗自己采进去。约 2 秒一次。失败时用下面的手动深浅，不会假装种子色就是桌面。</small></div><input id="adaptiveText" type="checkbox"></label>
+ <label class="card"><div class="t"><span>手动深浅</span><small>采不到背景时使用。</small></div><select id="adaptiveManual"><option value="light">浅色字</option><option value="dark">深色字</option></select></label>
+ <label class="card"><div class="t"><span>弹幕实时输入</span><small>默认关闭。只在你按回车时，用已登录账号发到当前房间。不会匿名，也不会自动发测试弹幕。</small></div><input id="danmakuInput" type="checkbox"></label>
+ <label class="card"><div class="t"><span>打开输入的快捷键</span><small>单独的 / 只在 tokilive 窗口前台时生效。带 Ctrl/Alt 的组合才会尝试全局注册，失败会提示。</small></div><input id="danmakuHotkey" type="text" placeholder="/"></label>
+ <label class="card"><div class="t"><span>实验性游戏置顶</span><small id="topmostNote">不注入游戏，不关反作弊，也不保证盖住独占全屏。无边框窗口化更有机会。</small></div><input id="experimentalGameTopmost" type="checkbox"></label>
+ <h3>卡片主题</h3>
+ <p class="note">这些选项只作用于弹幕卡片和互动小窗。更改它们不会改设置窗口的主题、强调色或背景。</p>
+ <label class="card"><div class="t"><span>主题色</span><small>Material 3 种子色，自动生成全部色调</small></div><input id="seedColor" type="color"></label>
+ <label class="card"><div class="t"><span>卡片样式</span><small>浅色 / 深色 / 透明描边 / 跟随系统</small></div><select id="themeMode"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option><option value="transparent">透明（仅描边）</option></select></label>
+ <label class="card"><div class="t"><span>文字阴影</span><small>透明样式下保证可读</small></div><input id="textShadow" type="range" min="0" max="1" step="0.05"><span class="val"></span></label>
+ <h3>形状与材质</h3>
+ <label class="card"><div class="t"><span>背景不透明度</span></div><input id="opacity" type="range" min="0" max="1" step="0.05"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>磨砂模糊</span></div><input id="blur" type="range" min="0" max="40"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>圆角</span><small>0 = 自动胶囊；同时缩放粉丝牌、等级、徽章、礼物胶囊与互动小窗</small></div><input id="radius" type="range" min="0" max="36"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>悬浮窗材质</span><small>只加在弹幕窗和互动小窗上。全透明才能保住现有的透明效果。这不是设置窗口的材质。</small></div><select id="material"><option value="none">无（全透明）</option><option value="acrylic">亚克力 Acrylic</option><option value="mica">云母 Mica</option><option value="tabbed">Tabbed</option></select></label>
+ <h3>文字</h3>
+ <label class="card"><div class="t"><span>字号</span></div><input id="fontSize" type="range" min="11" max="32"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>字重</span></div><select id="fontWeight"><option value="400">常规 400</option><option value="500">中等 500</option><option value="600">半粗 600</option><option value="700">粗体 700</option><option value="800">特粗 800</option></select></label>
+ <label class="card"><div class="t"><span>英文字体</span><small>拉丁字母与数字</small></div><select id="fontFamily" class="fonts"></select></label>
+ <label class="card"><div class="t"><span>中文字体</span></div><select id="cjkFont" class="fonts"></select></label>
+ <label class="card"><div class="t"><span>日文字体</span><small>平假名 / 片假名</small></div><select id="jpFont" class="fonts"></select></label>
+</div><div class="pv"><div class="cap"><span>实时预览</span><span class="bgs"></span></div><iframe class="preview" src="overlay.html?preview=1"></iframe></div></div></section>
+<!-- 卡片配色 -->
+<section class="page" id="p-cards"><h1>卡片配色</h1><div class="wrap"><div class="col">
+ <h3>粉丝牌</h3>
+ <label class="card"><div class="t"><span>粉丝牌颜色</span></div><select id="medalStyle"><option value="unified">统一样式（默认）</option><option value="bili">跟随 B 站</option><option value="custom">自定义</option></select></label>
+ <div id="medalCustom">
+ <label class="card sub"><div class="t">粉丝牌底色</div><input id="medalColors.bg" type="color"></label>
+ <label class="card sub"><div class="t">粉丝牌文字</div><input id="medalColors.fg" type="color"></label>
+ <label class="card sub"><div class="t">等级底色</div><input id="medalColors.lvBg" type="color"></label>
+ <label class="card sub"><div class="t">等级文字</div><input id="medalColors.lvFg" type="color"></label></div>
+ <label class="card"><div class="t"><span>显示头像</span></div><input id="showAvatar" type="checkbox"></label>
+ <label class="card"><div class="t"><span>显示粉丝勋章</span></div><input id="showMedal" type="checkbox"></label>
+ <h3>按类型覆盖颜色</h3>
+ <label class="card"><div class="t"><span>弹幕卡</span><small>开启后改用此颜色生成的调色板</small></div><input id="ov.danmaku" type="color" value="#7A7A8C"><input id="ovOn.danmaku" type="checkbox"></label>
+ <label class="card"><div class="t"><span>礼物卡</span></div><input id="ov.gift" type="color" value="#C9B46E"><input id="ovOn.gift" type="checkbox"></label>
+ <label class="card"><div class="t"><span>上舰卡</span></div><input id="ov.guard" type="color" value="#9C6ADE"><input id="ovOn.guard" type="checkbox"></label>
+ <label class="card"><div class="t"><span>醒目留言</span></div><input id="ov.superchat" type="color" value="#6750A4"><input id="ovOn.superchat" type="checkbox"></label>
+ <label class="card"><div class="t"><span>进场</span></div><input id="ov.enter" type="color" value="#777777"><input id="ovOn.enter" type="checkbox"></label>
+ <label class="card"><div class="t"><span>互动小窗</span></div><input id="ov.mini" type="color" value="#7A7A8C"><input id="ovOn.mini" type="checkbox"></label>
+ <label class="card"><div class="t"><span>醒目留言使用 B 站价格色</span></div><input id="scBiliColor" type="checkbox"></label>
+</div><div class="pv"><div class="cap"><span>实时预览</span><span class="bgs"></span></div><iframe class="preview" src="overlay.html?preview=1"></iframe></div></div></section>
+<!-- 消息 -->
+<section class="page" id="p-msgs"><h1>消息</h1>
+ <h3>显示的消息</h3>
+ <label class="card"><div class="t"><span>弹幕</span></div><input id="show.danmaku" type="checkbox"></label>
+ <label class="card"><div class="t"><span>礼物</span></div><input id="show.gift" type="checkbox"></label>
+ <label class="card"><div class="t"><span>醒目留言 SC</span></div><input id="show.superchat" type="checkbox"></label>
+ <label class="card"><div class="t"><span>上舰</span></div><input id="show.guard" type="checkbox"></label>
+ <label class="card"><div class="t"><span>礼物最低价值（元）</span><small>0 = 全部显示；大于 0 时隐藏免费礼物</small></div><input id="minGiftPrice" type="number" min="0" step="0.1"></label>
+ <label class="card"><div class="t"><span>停留时间（秒）</span><small>0 = 不自动消失</small></div><input id="lifetime" type="number" min="0"></label>
+ <label class="card"><div class="t"><span>最大消息数</span></div><input id="maxMessages" type="number" min="1" max="200"></label>
+ <h3>互动消息去向</h3>
+ <label class="card"><div class="t"><span>进场</span></div><select id="route.enter"><option value="mini">实时窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
+ <label class="card"><div class="t"><span>关注</span></div><select id="route.follow"><option value="mini">实时窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
+ <label class="card"><div class="t"><span>分享</span></div><select id="route.share"><option value="mini">实时窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
+ <label class="card"><div class="t"><span>点赞</span></div><select id="route.like"><option value="mini">实时窗</option><option value="main">弹幕窗</option><option value="off">不显示</option></select></label>
+ <label class="card"><div class="t"><span>语音播报</span><small>关掉会立刻停止正在读的和排队的内容，不会过一会自己继续。使用系统语音，没有额外语音库。</small></div><input id="tts" type="checkbox"></label>
+ <label class="card"><div class="t"><span>语音</span></div><select id="ttsVoice"></select></label>
+ <label class="card"><div class="t"><span>语速</span></div><input id="ttsRate" type="range" min="0.5" max="2" step="0.1"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>音高</span></div><input id="ttsPitch" type="range" min="0.5" max="2" step="0.1"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>音量</span></div><input id="ttsVolume" type="range" min="0" max="1" step="0.05"><span class="val"></span></label>
+ <div class="btns"><button type="button" id="ttsPreview">试听</button><button type="button" id="ttsStop">停止</button></div>
+ <div class="btns"><button data-t="danmaku">测试弹幕</button><button data-t="gift">测试礼物</button><button data-t="superchat">测试 SC</button><button data-t="guard">测试上舰</button></div>
+</section>
+<!-- 互动小窗 -->
+<section class="page" id="p-mini"><h1>实时窗</h1>
+ <label class="card"><div class="t"><span>显示实时窗</span><small>点赞、分享、关注、进场与直播间数据。隐藏不断开连接。</small></div><input id="miniVisible" type="checkbox"></label>
+ <label class="card"><div class="t"><span>实时窗边框</span><small>同样使用 Windows 强调色。关闭时没有边框。</small></div><input id="showLiveBorder" type="checkbox"></label>
+ <label class="card"><div class="t"><span>锁定（鼠标穿透）</span></div><input id="miniLocked" type="checkbox"></label>
+ <label class="card"><div class="t"><span>显示数据栏</span><small>本场点赞 / 弹幕 / 当前在线</small></div><input id="miniStats" type="checkbox"></label>
+ <label class="card"><div class="t"><span>布局</span></div><select id="miniLayout"><option value="h">横条（默认）</option><option value="v">竖条</option><option value="auto">按窗口比例自动</option></select></label>
+ <label class="card"><div class="t"><span>显示互动提示</span><small>数据栏下方淡出的点赞 / 关注 / 分享 / 进场</small></div><input id="miniPills" type="checkbox"></label>
+ <h3>颜色</h3>
+ <label class="card"><div class="t"><span>背景色</span><small>关闭 = 跟随主题</small></div><input id="c.miniBg" type="color" value="#D9D9D9"><input id="cOn.miniBg" type="checkbox"></label>
+ <label class="card"><div class="t"><span>背景不透明度</span></div><input id="miniAlpha" type="range" min="0" max="1" step="0.05"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>描边颜色</span></div><input id="c.miniLine" type="color" value="#000000"><input id="cOn.miniLine" type="checkbox"></label>
+ <label class="card"><div class="t"><span>描边粗细（px）</span></div><input id="miniLineW" type="range" min="0" max="8" step="0.5"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>数字颜色</span><small>关闭 = 按背景亮度自动对比</small></div><input id="c.miniText" type="color" value="#111111"><input id="cOn.miniText" type="checkbox"></label>
+ <label class="card"><div class="t"><span>标签颜色</span></div><input id="c.miniLabel" type="color" value="#FFFFFF"><input id="cOn.miniLabel" type="checkbox"></label>
+ <label class="card"><div class="t"><span>提示停留时间（秒）</span></div><input id="miniLifetime" type="number" min="1" max="60"></label>
+ <label class="card"><div class="t"><span>最多显示条数</span></div><input id="miniMax" type="number" min="1" max="20"></label>
+ <label class="card"><div class="t"><span>窗口源地址</span></div><input id="miniUrl" type="text" readonly></label>
+ <div class="pv"><div class="cap"><span>实时预览</span><span class="bgs"></span></div><iframe class="preview" src="overlay.html?preview=1&mini=1" style="height:180px"></iframe></div>
+ <div class="btns"><button data-t="like">测试点赞</button><button data-t="share">测试分享</button><button data-t="follow">测试关注</button><button data-t="enter">测试进场</button></div>
+</section>
+<!-- 自定义设计 -->
+<section class="page" id="p-design"><h1>自定义设计</h1><div class="wrap"><div class="col">
+ <h3>预设</h3>
+ <div class="chips" id="presets"></div>
+ <h3>元素顺序</h3>
+ <div class="card" style="display:block"><div class="order" id="order"></div></div>
+ <h3>元素显示</h3>
+ <label class="card"><div class="t"><span>用户名</span></div><input id="hide.name" type="checkbox" class="inv"></label>
+ <label class="card"><div class="t"><span>粉丝团</span></div><input id="hide.medal" type="checkbox" class="inv"></label>
+ <label class="card"><div class="t"><span>舰长徽章 / 舰队标签</span></div><input id="hide.badge" type="checkbox" class="inv"></label>
+ <label class="card"><div class="t"><span>动作文字</span><small>“投喂了”“开通了”等</small></div><input id="hide.verb" type="checkbox" class="inv"></label>
+ <label class="card"><div class="t"><span>礼物图标</span></div><input id="hide.giftimg" type="checkbox" class="inv"></label>
+ <label class="card"><div class="t"><span>弹幕内容另起一行</span><small>关闭时一行放得下就不换行</small></div><input id="design.newline" type="checkbox"></label>
+ <h3>间距</h3>
+ <label class="card"><div class="t"><span>卡片内边距</span></div><input id="design.pad" type="range" min="0.5" max="2" step="0.05"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>元素间距</span><small>名称、粉丝团、等级之间的呼吸间距</small></div><input id="design.spacing" type="range" min="0.3" max="2.5" step="0.05"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>卡片间距</span></div><input id="design.gap" type="range" min="0" max="2.5" step="0.05"><span class="val"></span></label>
+ <h3>自定义 CSS</h3>
+ <div class="card" style="display:block"><small style="margin-bottom:8px">作用于弹幕窗、互动小窗与 OBS 浏览器源。可用类：.msg .dm .gift .guard .sc .enter .name .medal .lv .badge .text .price；变量：--md-primary 等</small>
+ <textarea id="customCss" class="code" spellcheck="false" placeholder=".msg.dm{ border-radius: 8px }"></textarea></div>
+ <div class="btns"><button id="exportTheme">导出主题 JSON</button><button id="importTheme">导入主题 JSON</button></div>
+</div><div class="pv"><div class="cap"><span>实时预览</span><span class="bgs"></span></div><iframe class="preview" src="overlay.html?preview=1"></iframe></div></div></section>
+<!-- 窗口与 OBS -->
+<section class="page" id="p-win"><h1>窗口源</h1>
+ <label class="card"><div class="t"><span>显示弹幕窗</span><small>隐藏只是不显示，不断开直播，也不销毁窗口。</small></div><input id="overlayVisible" type="checkbox"></label>
+ <label class="card"><div class="t"><span>在任务栏隐藏</span><small>窗口仍在托盘里。如果托盘创建失败，会留下任务栏按钮，避免程序消失。</small></div><input id="hideFromTaskbar" type="checkbox"></label>
+ <div class="btns"><button id="resetBounds">重置窗口位置</button></div>
+ <h3>窗口捕获</h3>
+ <div class="card" style="display:block"><p class="note" id="capNote">两个悬浮窗的标题分别是「tokilive · 弹幕」和「tokilive · 实时窗」，设置窗口是「tokilive · 设置」。它们会出现在任务栏里，是为了去掉工具窗口样式，让 OBS 和直播姬的窗口列表能分开枚举。透明本身仍是分层窗口，传统 BitBlt 捕获通常仍是黑的或捕不到。没有在这台环境里用真实的 OBS 或直播姬核对过画面。</p></div>
+ <h3>OBS 浏览器源</h3>
+ <p class="note">这是保持透明的捕获办法。浏览器源不走窗口捕获。直播姬如果支持浏览器源，使用同一对地址。宽度和高度按你的悬浮窗来，勾选自定义 CSS 并允许透明背景。</p>
+ <label class="card"><div class="t"><span>启用本地服务</span></div><input id="obsServer" type="checkbox"></label>
+ <label class="card"><div class="t"><span>端口</span></div><input id="obsPort" type="number"></label>
+ <label class="card"><div class="t"><span>弹幕地址</span></div><input id="obsUrl" type="text" readonly></label>
+ <div class="btns"><button id="obsProbe" type="button">检查本地页面</button><span id="obsProbeMsg" class="note"></span></div>
+</section>
+<section class="page" id="p-lyrics"><h1>歌词（测试）</h1>
+ <p class="note">读取 Windows 系统媒体会话，优先标出 QQ 音乐和网易云。不读取播放器自己的数据库，也不注入进程。歌词来自你导入的 LRC，或公开的 LRCLIB。没有时间轴就不会假装有逐字时间。</p>
+ <label class="card"><div class="t"><span>演示</span><small>播放一段 tokilive 自己写的演示词，用来看排版。不是你正在听的歌。</small></div><input id="lyricsDemo" type="checkbox"></label>
+ <label class="card"><div class="t"><span>时间偏移（秒）</span></div><input id="lyricsOffset" type="range" min="-5" max="5" step="0.1"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>字号</span></div><input id="lyricsSize" type="range" min="14" max="48" step="1"><span class="val"></span></label>
+ <label class="card"><div class="t"><span>文字颜色</span></div><input id="lyricsColor" type="color"></label>
+ <label class="card"><div class="t"><span>底色不透明度</span></div><input id="lyricsBg" type="range" min="0" max="1" step="0.05"><span class="val"></span></label>
+ <div class="btns"><button type="button" id="lyricImport">导入 LRC / TTML</button></div>
+ <div class="card"><div class="t"><span id="lyricTitle">尚未读取</span><small id="lyricMeta"></small></div></div>
+ <pre id="lyricLines" class="note"></pre>
+ <div class="btns"><button type="button" id="lyricPrev">上一首</button><button type="button" id="lyricToggle">播放/暂停</button><button type="button" id="lyricNext">下一首</button><button type="button" id="lyricRefresh">刷新</button></div>
+ <p id="lyricMsg" class="note"></p>
+</section>
+<section class="page" id="p-update"><h1>更新</h1>
+ <div class="card"><div class="t"><span>当前版本 <b id="curVer">1.2.0</b></span><small>公开的 GitHub Releases，不需要令牌。</small></div><button id="updCheck" type="button" class="ac">检查更新</button></div>
+ <p id="updMsg" class="note"></p>
+ <div class="bar" aria-hidden="true"><i id="updBar"></i></div>
+ <p id="updNotes" class="note"></p>
+ <div class="btns"><button id="updDown" type="button">下载并校验</button><button id="updInst" type="button">确认后安装</button></div>
+ <p class="note">安装包来自 https://github.com/ichiyotsu/tokilive/releases 。会按安装版或便携版选择文件，并核对 SHA-256。没有授权头。</p>
+</section>
+<section class="page" id="p-about"><h1>关于</h1>
+ <div class="card about"><span class="logo">tokilive</span><div class="t"><span>版本 <b id="ver">1.2.0</b></span><small>设置页按 WinUI 的导航、间距和焦点来排，运行时仍是 Electron，不是原生 WinUI 3。</small></div></div>
+ <div class="card" style="display:block"><p class="note" id="aboutUpgrade">1.0.0 和 1.1.0 需要手动安装 1.2.0 一次。之后从公开的 Releases 更新。</p></div>
+ <div class="card"><div class="t"><span>语音</span><small>使用 Chromium 自带的 Web Speech API 和系统语音，没有再打包语音引擎。各系统语音的许可跟随操作系统。</small></div></div>
+ <div class="card"><div class="t"><span>字体</span><small>仍内置 Google Sans、思源黑体、Inter、One UI Sans、苹方。体积主要来自 Electron 运行时和这些字体，没有为了变小删掉可选字体。</small></div></div>
+</section>
+</main></div>
+<script>
+const $ = id => document.getElementById(id); let cfg;
+if (/Win/.test(navigator.platform) && /Windows NT 1\d/.test(navigator.userAgent)) document.body.classList.add('mica');
+const FONTS = [['Google Sans', 'Google Sans'], ['Source Han Sans SC', '思源黑体'], ['Inter', 'Inter'], ['One UI Sans', 'One UI Sans'], ['PingFang SC', '苹方'], ['Microsoft YaHei', '微软雅黑'], ['system-ui', '系统默认']];
+document.querySelectorAll('select.fonts').forEach(s => s.innerHTML = FONTS.map(([v, n]) => `<option value="${v}">${n}</option>`).join(''));
+const PRESETS = {
+  default: ['默认', 'MD3 胶囊卡片', { design: { order: ['name', 'medal', 'badge'], hide: {}, newline: false, pad: 1, gap: 1, spacing: 1 }, customCss: '' }],
+  compact: ['紧凑', '更小的边距', { design: { order: ['name', 'medal', 'badge'], hide: {}, newline: false, pad: .72, gap: .55, spacing: .8 }, customCss: '' }],
+  minimal: ['极简', '无描边，无粉丝团', { design: { order: ['name', 'medal', 'badge'], hide: { medal: true, badge: true }, newline: false, pad: .85, gap: .8, spacing: .9 }, customCss: '.msg{box-shadow:none!important}' }],
+  neon: ['霓虹', '主题色发光描边', { design: { order: ['medal', 'name', 'badge'], hide: {}, newline: false, pad: 1, gap: 1, spacing: 1.1 }, customCss: '.msg{box-shadow:0 0 0 .1em var(--md-primary),0 0 1.1em color-mix(in srgb,var(--md-primary) 55%,transparent)!important}\n.msg:not(.sc) .name{color:var(--md-primary)!important}' }],
+  text: ['纯文字', '只保留描边文字', { design: { order: ['name', 'medal', 'badge'], hide: { medal: true, badge: true }, newline: false, pad: .4, gap: .25, spacing: .8 }, customCss: '.msg{background:none!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-text-stroke:.03em #0008;text-shadow:0 0 .2em #000,0 0 .45em #000}\n.msg .text,.msg .name{color:#fff!important}' }],
+  readable: ['大字', '直播时更易读', { fontSize: 22, textShadow: 0.85, design: { order: ['name', 'medal', 'badge'], hide: {}, newline: true, pad: 1.15, gap: 1.1, spacing: 1.15 }, customCss: '' }],
+  quiet: ['安静', '少徽章、少模糊', { opacity: 0.72, blur: 0, design: { order: ['name', 'medal', 'badge'], hide: { medal: true, badge: true }, newline: false, pad: .8, gap: .6, spacing: .85 }, customCss: '' }]
+};
+$('presets').innerHTML = Object.entries(PRESETS).map(([k, [n, d]]) => `<button data-pr="${k}"><b>${n}</b><small>${d}</small></button>`).join('');
+document.querySelectorAll('[data-pr]').forEach(b => b.onclick = async () => { const p = PRESETS[b.dataset.pr][2]; const { design, customCss, ...rest } = p; cfg = await bili.setSettings({ ...rest, customCss, design: { ...cfg.design, ...design, preset: b.dataset.pr } }); fill(); });
+const ELN = { name: '用户名', medal: '粉丝团', badge: '舰长徽章' };
+function drawOrder() { const o = cfg.design?.order || ['name', 'medal', 'badge'];
+  $('order').innerHTML = o.map((k, i) => `<div class="it"><span>${i + 1}. ${ELN[k]}</span><button data-mv="${i},-1" ${i ? '' : 'disabled'}>↑</button><button data-mv="${i},1" ${i < o.length - 1 ? '' : 'disabled'}>↓</button></div>`).join('');
+  $('order').querySelectorAll('[data-mv]').forEach(b => b.onclick = async () => { const [i, d] = b.dataset.mv.split(',').map(Number), a = [...o]; [a[i], a[i + d]] = [a[i + d], a[i]]; cfg = await bili.setSettings({ design: { ...cfg.design, order: a } }); fill(); }); }
+const get = k => k.startsWith('hide.') ? !cfg.design?.hide?.[k.slice(5)] : k.split('.').reduce((o, p) => o?.[p], cfg);
+const inputs = [...document.querySelectorAll('input[id],select[id],textarea[id]')].filter(e => !['obsUrl', 'miniUrl', 'roomId', 'cookie', 'customCss', 'ghToken', 'perfWhitelistText'].includes(e.id));
+function val(e) { return e.type === 'checkbox' ? e.checked : (e.type === 'range' || e.type === 'number') ? Number(e.value) : e.value; }
+function prog(e) { if (e.type === 'range') e.style.setProperty('--p', ((e.value - e.min) / (e.max - e.min) * 100) + '%'); }
+function fill() {
+  document.querySelectorAll('select.fonts').forEach(s => { const v = cfg[s.id]; if (v && ![...s.options].some(o => o.value === v)) s.add(new Option(v, v)); });
+  for (const e of [...inputs, $('roomId'), $('cookie')]) { if (/^(ov|c)(On)?\./.test(e.id)) continue; const v = get(e.id); if (e.type === 'checkbox') e.checked = !!v; else if (document.activeElement !== e) e.value = v ?? ''; prog(e); const s = e.nextElementSibling; if (s?.classList.contains('val')) s.textContent = e.id === 'radius' && +e.value === 0 ? '自动' : e.value; }
+  for (const k of ['danmaku', 'gift', 'guard', 'superchat', 'enter', 'mini']) { const o = (cfg.overrides || {})[k]; $('ovOn.' + k).checked = !!o; if (o) $('ov.' + k).value = o; }
+  for (const k of ['miniBg', 'miniLine', 'miniText', 'miniLabel']) { $('cOn.' + k).checked = !!cfg[k]; if (cfg[k]) $('c.' + k).value = cfg[k]; }
+  $('medalCustom').style.display = cfg.medalStyle === 'custom' ? '' : 'none';
+  if (document.activeElement !== $('customCss')) $('customCss').value = cfg.customCss || '';
+  document.querySelectorAll('[data-pr]').forEach(b => b.classList.toggle('on', b.dataset.pr === (cfg.design?.preset || 'default')));
+  drawOrder();
+  $('obsUrl').value = `http://127.0.0.1:${cfg.obsPort}/overlay`; $('miniUrl').value = `http://127.0.0.1:${cfg.obsPort}/mini`;
+}
+async function patch(e) {
+  const v = val(e); let p; const id = e.id;
+  if (id.startsWith('show.')) p = { show: { ...cfg.show, [id.slice(5)]: v } }; else if (id.startsWith('route.')) p = { route: { ...cfg.route, [id.slice(6)]: v } }; else if (id.startsWith('medalColors.')) p = { medalColors: { ...cfg.medalColors, [id.slice(12)]: v } };
+  else if (id.startsWith('ovOn.') || id.startsWith('ov.')) { const k = id.split('.')[1]; p = { overrides: { ...cfg.overrides, [k]: $('ovOn.' + k).checked ? $('ov.' + k).value : '' } }; }
+  else if (/^c(On)?\./.test(id)) { const k = id.split('.')[1]; p = { [k]: $('cOn.' + k).checked ? $('c.' + k).value : '' }; }
+  else if (id.startsWith('hide.')) p = { design: { ...cfg.design, preset: 'custom', hide: { ...cfg.design.hide, [id.slice(5)]: !v } } };
+  else if (id.startsWith('design.')) p = { design: { ...cfg.design, preset: 'custom', [id.slice(7)]: v } };
+  else if (id === 'fontWeight') p = { fontWeight: Number(v) }; else p = { [id]: v };
+  cfg = await bili.setSettings(p); fill(); applySidebar();
+}
+inputs.forEach(e => e.addEventListener(e.type === 'range' ? 'input' : 'change', () => patch(e)));
+let cssT; $('customCss').addEventListener('input', () => { clearTimeout(cssT); cssT = setTimeout(async () => { cfg = await bili.setSettings({ customCss: $('customCss').value, design: { ...cfg.design, preset: 'custom' } }); fill(); }, 250); });
+$('customCss').addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertText', false, '  '); } });
+$('exportTheme').onclick = () => bili.exportTheme(); $('importTheme').onclick = async () => { const c = await bili.importTheme(); if (c) { cfg = c; fill(); } };
+const navItems = () => [...document.querySelectorAll('#nav .navi')];
+let paneOpen = false;
+function applySidebar() {
+  const pref = cfg?.sidebar || 'auto';
+  const mode = bili.sidebar({ width: window.innerWidth, preference: pref, userOpen: paneOpen });
+  document.body.classList.toggle('compact', mode.display === 'compact');
+  document.body.classList.toggle('minimal', mode.display === 'minimal');
+  document.body.classList.toggle('expanded', mode.display === 'expanded');
+  document.getElementById('nav').classList.toggle('open', mode.open && mode.display === 'minimal');
+  document.getElementById('scrim').classList.toggle('show', mode.open && mode.display === 'minimal');
+  const toggle = $('navToggle');
+  toggle.setAttribute('aria-expanded', mode.display === 'minimal' ? String(mode.open) : 'true');
+  navItems().forEach((el, i) => { el.tabIndex = i === 0 || el.classList.contains('on') ? 0 : -1; });
+}
+const GROUPS = { conn: ['conn'], danmaku: ['look', 'cards', 'msgs', 'design'], live: ['mini'], lyrics: ['lyrics'], source: ['win'], settings: ['app', 'update', 'about'] };
+function showPage(btn, closePane) {
+  const pages = GROUPS[btn.dataset.p] || [btn.dataset.p];
+  navItems().forEach(x => { const on = x === btn; x.classList.toggle('on', on); x.setAttribute('aria-current', on ? 'page' : 'false'); x.tabIndex = on ? 0 : -1; });
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', pages.includes(p.id.slice(2))));
+  $('titlePage').textContent = btn.querySelector('.lbl')?.textContent || '设置';
+  if (closePane && document.body.classList.contains('minimal')) { paneOpen = false; applySidebar(); btn.focus(); }
+}
+navItems().forEach(a => a.onclick = () => showPage(a, true));
+document.getElementById('nav').addEventListener('keydown', e => {
+  const items = navItems();
+  let i = items.indexOf(document.activeElement);
+  if (i < 0) i = items.findIndex(x => x.classList.contains('on'));
+  if ((e.key === 'Enter' || e.key === ' ') && items[i]) { e.preventDefault(); showPage(items[i], true); return; }
+  const moved = bili.navKey(e.key, Math.max(i, 0), items.length);
+  const typed = moved == null ? bili.typeahead(e.key, items.map(x => x.querySelector('.lbl')?.textContent || ''), Math.max(i, 0)) : null;
+  const dest = moved != null ? moved : typed;
+  if (dest == null) return;
+  e.preventDefault();
+  items[dest].focus();
+  showPage(items[dest], false);
+});
+$('navToggle').onclick = () => {
+  const pref = cfg?.sidebar || 'auto';
+  if (window.innerWidth < 720) { paneOpen = !paneOpen; applySidebar(); if (paneOpen) navItems().find(x => x.classList.contains('on'))?.focus(); return; }
+  const next = document.body.classList.contains('compact') || pref === 'compact' ? 'expanded' : 'compact';
+  bili.setSettings({ sidebar: next }).then(c => { cfg = c; applySidebar(); });
+};
+$('scrim').onclick = () => { paneOpen = false; applySidebar(); $('navToggle').focus(); };
+addEventListener('resize', () => applySidebar());
+window.__tokiSidebar = { apply() { applySidebar(); }, open() { paneOpen = true; applySidebar(); } };
+if (location.hash) document.querySelector(`#nav .navi[data-p="${location.hash.slice(1)}"]`)?.click();
+const BGS = ['repeating-conic-gradient(#8882 0 25%,#0000 0 50%) 0 0/18px 18px', '#ffffff', '#1b1b1b', 'linear-gradient(135deg,#3a6df0,#c03ad0)'];
+document.querySelectorAll('.bgs').forEach(s => { s.innerHTML = BGS.map((b, i) => `<i data-bg="${i}" style="background:${b}"></i>`).join(''); s.querySelectorAll('i').forEach(i => i.onclick = () => document.querySelectorAll('.preview').forEach(f => f.style.background = BGS[i.dataset.bg])); });
+$('saveRoom').onclick = async () => { cfg = await bili.setSettings({ roomId: $('roomId').value.trim().replace(/\D/g, ''), cookie: $('cookie').value.trim() }); refreshUser(); };
+$('ownRoom').onclick = async () => {
+  const before = $('roomId').value;
+  $('ownRoomMsg').textContent = '正在读取…';
+  try {
+    const r = await bili.readOwnRoom($('cookie').value.trim());
+    if (!r || !r.ok) { $('roomId').value = before; $('ownRoomMsg').textContent = r?.message || '没有读到房间号，输入框没有改动。'; return; }
+    $('roomId').value = r.roomId;
+    $('ownRoomMsg').textContent = r.message;
+  } catch (e) { $('roomId').value = before; $('ownRoomMsg').textContent = '读取失败，输入框没有改动。' + e.message; }
+};
+$('reconnect').onclick = () => bili.reconnect(); $('resetBounds').onclick = () => bili.resetBounds();
+document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => bili.test(b.dataset.t));
+function setSt(s) { $('st').textContent = s; document.documentElement.style.setProperty('--st', /已连接|连接成功|直播中/.test(s) ? '#2fb344' : /失败|错误|断开/.test(s) ? '#e5484d' : '#999'); }
+bili.on('status', setSt);
+function applyVars(v) {
+  const c = v.stored || v.cfg; const app = v.app || {};
+  for (const [k, val] of Object.entries(v.vars || {})) document.documentElement.style.setProperty(k, val);
+  document.documentElement.classList.toggle('dark', !!(c.appDark ?? app.appDark));
+  document.documentElement.style.colorScheme = (c.appDark ?? app.appDark) ? 'dark' : 'light';
+  const accent = app.appAccent || c.appAccent || '#6750A4';
+  document.documentElement.style.setProperty('--app-accent', accent);
+  const op = app.appBgOpacity ?? c.appBgOpacity ?? 0.45;
+  const dk = !!(c.appDark ?? app.appDark);
+  const veil = dk ? '32,32,32' : '243,243,243';
+  if (c.appBackground || app.appBackground) {
+    document.body.style.backgroundImage = `linear-gradient(rgba(${veil},${1 - op}), rgba(${veil},${1 - op})), url("tokilive-bg://bg?t=${Date.now()}")`;
+    document.body.classList.remove('mica');
+  } else { document.body.style.backgroundImage = ''; document.body.classList.toggle('mica', (c.appMaterial || app.settingsMaterial || 'mica') !== 'none'); }
+  if (c.useSystemAccent && c.winAccent) document.documentElement.style.setProperty('--app-accent', c.winAccent);
+}
+bili.on('config', v => { const c = v.stored || v.cfg; if (cfg) { for (const k of ['locked', 'alwaysOnTop', 'miniLocked', 'miniVisible', 'overlayVisible']) { if ($(k)) { cfg[k] = c[k]; $(k).checked = c[k] !== false; } } } applyVars(v); sendPreview(v); });
+function sendPreview(v) { const d = JSON.parse(JSON.stringify(v)); document.querySelectorAll('.preview').forEach(f => { try { f.contentWindow.postMessage(d, '*'); } catch {} }); }
+document.querySelectorAll('.preview').forEach(f => f.addEventListener('load', async () => sendPreview(await bili.getView())));
+let qrTimer;
+async function refreshUser() { const u = await bili.whoami(); $('uface').style.display = u ? '' : 'none'; $('uph').style.display = u ? 'none' : ''; $('logout').style.display = u ? '' : 'none'; $('qrBtn').style.display = u ? 'none' : '';
+  const t = u ? u.uname : (cfg?.cookie ? 'Cookie 无效或已过期' : '未登录'); $('uname').textContent = u ? '已登录：' + u.uname : t; $('navName').textContent = t; if (u) $('uface').src = u.face; }
+async function startQr() { clearInterval(qrTimer); $('qrBox').style.display = 'flex'; $('qrText').textContent = '正在获取二维码…';
+  try { const q = await bili.qrGenerate(); $('qrImg').src = q.dataUrl; $('qrText').textContent = '请用 B 站 App 扫码';
+    qrTimer = setInterval(async () => { try { const r = await bili.qrPoll(q.key); $('qrText').textContent = r.text;
+      if (r.code === 0) { clearInterval(qrTimer); setTimeout(() => $('qrBox').style.display = 'none', 1200); cfg = await bili.getSettings(); fill(); refreshUser(); }
+      if (r.code === 86038) clearInterval(qrTimer); } catch {} }, 2000);
+  } catch (e) { $('qrText').textContent = '获取二维码失败：' + e.message; } }
+$('qrBtn').onclick = startQr; $('qrImg').onclick = startQr;
+$('logout').onclick = async () => { await bili.logout(); cfg = await bili.getSettings(); fill(); refreshUser(); };
+$('pickBg').onclick = async () => { const r = await bili.pickBackground(); if (r && !r.ok && r.message) $('bgState').textContent = r.message; if (r?.ok) applyVars(await bili.getView()); };
+$('clearBg').onclick = async () => { await bili.clearBackground(); $('bgState').textContent = '已清除背景图。'; applyVars(await bili.getView()); };
+$('obsProbe').onclick = async () => { const r = await bili.obsProbe(); $('obsProbeMsg').textContent = r.message || ''; if (r.overlay) $('obsUrl').value = r.overlay; if (r.mini) $('miniUrl').value = r.mini; };
+function fillVoices() {
+  const sel = $('ttsVoice'); if (!sel || !window.speechSynthesis) return;
+  const voices = speechSynthesis.getVoices();
+  const current = sel.value;
+  sel.innerHTML = '<option value="">系统默认</option>' + voices.map(v => `<option value="${v.name.replace(/"/g, '')}">${v.name} (${v.lang})</option>`).join('');
+  if (current) sel.value = current;
+}
+if (window.speechSynthesis) { fillVoices(); speechSynthesis.onvoiceschanged = fillVoices; }
+$('ttsPreview').onclick = () => {
+  if (!window.speechSynthesis) return;
+  const plan = bili.speechPlan({ tts: true, ttsVoice: $('ttsVoice').value, ttsRate: $('ttsRate').value, ttsPitch: $('ttsPitch').value, ttsVolume: $('ttsVolume').value });
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance('这是 tokilive 的试听。'); u.lang = 'zh-CN'; u.rate = plan.rate; u.pitch = plan.pitch; u.volume = plan.volume;
+  const voice = speechSynthesis.getVoices().find(v => v.name === plan.voice); if (voice) u.voice = voice;
+  speechSynthesis.speak(u);
+};
+$('ttsStop').onclick = () => speechSynthesis && speechSynthesis.cancel();
+async function showLyrics() {
+  const r = await bili.lyricsNow();
+  $('lyricTitle').textContent = r.session?.title || (r.demo ? '演示' : '没有曲目');
+  $('lyricMeta').textContent = [r.label, r.session?.artist, r.session?.source, r.lyric?.source, r.message].filter(Boolean).join(' · ');
+  const lines = r.lines || [];
+  const box = $('lyricLines');
+  box.style.fontSize = (cfg?.lyricsSize || 22) + 'px';
+  box.style.color = cfg?.lyricsColor || '#f5f5f5';
+  box.style.background = `rgba(0,0,0,${cfg?.lyricsBg ?? 0.45})`;
+  box.style.padding = '12px';
+  box.style.borderRadius = '8px';
+  box.textContent = lines.length ? lines.map((line, i) => {
+    const mark = i === r.index ? '▸ ' : '  ';
+    const words = i === r.index && line.words?.length ? line.words.map(w => w.text).join('') : line.text;
+    return mark + words + (line.translation ? '  /  ' + line.translation : '');
+  }).join('\n') : (r.lyric?.message || r.message || '没有带时间轴的歌词。可以导入 LRC 或 TTML。');
+}
+$('lyricImport').onclick = async () => { const r = await bili.importLyrics(); $('lyricMsg').textContent = r.message || ''; if (r.ok) { cfg = await bili.getSettings(); showLyrics(); } };
+$('lyricRefresh').onclick = showLyrics;
+$('lyricPrev').onclick = () => bili.lyricsControl('previous');
+$('lyricNext').onclick = () => bili.lyricsControl('next');
+$('lyricToggle').onclick = () => bili.lyricsControl('toggle');
+bili.onProgress(p => { const pct = p.total ? Math.round(p.received / p.total * 100) : 0; $('updBar').style.width = (p.total ? pct : 30) + '%'; $('updMsg').textContent = p.total ? `已下载 ${pct}%` : '正在下载…'; });
+$('updCheck').onclick = async () => {
+  $('updMsg').textContent = '正在检查公开的 Release…';
+  const r = await bili.updateCheck();
+  $('updMsg').textContent = r.message || '';
+  $('updNotes').textContent = r.notes || r.note || '';
+  if (r.note) $('aboutUpgrade').textContent = r.note;
+};
+$('updDown').onclick = async () => { $('updMsg').textContent = '开始下载…'; const r = await bili.updateDownload(); $('updMsg').textContent = r.message || ''; if (r.ok) $('updBar').style.width = '100%'; };
+$('updInst').onclick = async () => { const r = await bili.updateInstall(); $('updMsg').textContent = r.message || ''; };
+(async () => {
+  cfg = await bili.getSettings(); fill(); refreshUser(); setSt(await bili.getStatus()); applyVars(await bili.getView()); applySidebar();
+  try { const v = await bili.getVersion(); $('ver').textContent = v; $('curVer').textContent = v; } catch {}
+  try { const g = await bili.getGuidance(); if (g.upgrade) $('aboutUpgrade').textContent = g.upgrade; if (g.topmost) $('topmostNote').textContent = g.topmost; if (!$('updMsg').textContent) $('updMsg').textContent = g.upgrade || ''; } catch {}
+  $('bgState').textContent = cfg.appBackground ? '已设置自定义背景。图片坏了会退回纯色。' : '没有背景图时使用纯色；材质不可用时也会退回纯色。';
+  fillVoices();
+})();
+</script></body></html>

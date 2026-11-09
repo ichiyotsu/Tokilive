@@ -1,0 +1,38 @@
+name: iOS unsigned archive
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  archive:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode
+        run: xcodebuild -version
+      - name: Archive without signing
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project ios/Tokilive.xcodeproj \
+            -scheme Tokilive \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Tokilive.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+          APP=$(find "$RUNNER_TEMP/Tokilive.xcarchive/Products/Applications" -name '*.app' -maxdepth 1 | head -1)
+          test -n "$APP"
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP" Payload/
+          ditto -c -k --keepParent Payload tokilive-1.2.0-ios-unsigned.ipa
+          unzip -l tokilive-1.2.0-ios-unsigned.ipa | head
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tokilive-1.2.0-ios-unsigned
+          path: tokilive-1.2.0-ios-unsigned.ipa
+          if-no-files-found: error
