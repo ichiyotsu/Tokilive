@@ -1,6 +1,6 @@
 # tokilive
 
-B 站直播弹幕工具。当前开发版本 **1.2.0**。Windows、Android、iOS / iPadOS 的应用 ID 都是 `com.ichiyotsu.tokilive`。
+B站直播弹幕工具。当前开发版本 **1.2.0**。Windows、Android、iOS / iPadOS 的应用 ID 都是 `com.ichiyotsu.tokilive`。
 
 | 平台 | 版本 |
 | --- | --- |
