@@ -214,28 +214,17 @@ fun SettingsScreen(vm: LiveViewModel) {
 
 @Composable
 private fun UpdateCard(vm: LiveViewModel) {
-    var token by remember { mutableStateOf("") }
-    var client by remember { mutableStateOf(vm.clientId()) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("更新", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(vm.updateMessage, style = MaterialTheme.typography.bodyMedium)
+                Text("公开的 GitHub Releases。下载后核对 SHA-256、包名和签名，再打开系统安装界面。", style = MaterialTheme.typography.bodySmall)
                 if (vm.updateProgress >= 0) LinearProgressIndicator(progress = { vm.updateProgress / 100f }, modifier = Modifier.fillMaxWidth())
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton({ vm.checkUpdate() }, enabled = !vm.updateBusy) { Text("检查") }
                     TextButton({ vm.downloadUpdate() }, enabled = !vm.updateBusy) { Text("下载") }
                     TextButton({ vm.installUpdate() }, enabled = !vm.updateBusy) { Text("安装") }
-                }
-                OutlinedTextField(client, { client = it; vm.saveClientId(it) }, label = { Text("OAuth client id") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton({ vm.startDeviceLogin() }) { Text("设备码") }
-                    TextButton({ vm.pollDeviceLogin() }) { Text("我已授权") }
-                }
-                OutlinedTextField(token, { token = it }, label = { Text("只读令牌") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton({ vm.saveGithubToken(token); token = "" }) { Text("加密保存") }
-                    TextButton({ vm.clearGithubToken() }) { Text("清除") }
                 }
             }
         }

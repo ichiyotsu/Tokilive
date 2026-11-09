@@ -9,10 +9,10 @@ android {
     buildToolsVersion = "37.0.0"
     defaultConfig {
         applicationId = "com.ichiyotsu.tokilive"
-        minSdk = 35
-        targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        minSdk = 31
+        targetSdk = 37
+        versionCode = 3
+        versionName = "1.2.0"
     }
     signingConfigs {
         val keystore = System.getenv("TOKILIVE_KEYSTORE")

@@ -1,7 +1,7 @@
 (() => {
   const MINI = /[?&]mini=1/.test(location.search) || location.pathname === '/mini';
   if (MINI) document.body.classList.add('mini');
-  document.title = MINI ? 'tokilive · 互动小窗' : (/[?&]preview=1/.test(location.search) ? 'tokilive · 预览' : 'tokilive · 弹幕');
+  document.title = MINI ? 'tokilive · 实时窗' : (/[?&]preview=1/.test(location.search) ? 'tokilive · 预览' : 'tokilive · 弹幕');
   const list = document.getElementById('list');
   let cfg = { show: {}, maxMessages: 30, lifetime: 30, showAvatar: true, showMedal: true, minGiftPrice: 0 };
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -16,6 +16,12 @@
     const mc = c.medalColors || {}; r.setProperty('--mc-bg', mc.bg || '#FF5FC8'); r.setProperty('--mc-fg', mc.fg || '#2A0A1E'); r.setProperty('--mc-lv-bg', mc.lvBg || '#4A0A30'); r.setProperty('--mc-lv-fg', mc.lvFg || '#FFFFFF');
     document.body.classList.toggle('transparent', c.themeMode === 'transparent'); r.setProperty('--ts', c.textShadow ?? .6); document.body.classList.toggle('medal-custom', c.medalStyle === 'custom');
     document.body.classList.toggle('reduce-motion', !!c.reduceMotion);
+    document.body.classList.toggle('no-avatar', c.showAvatar !== true);
+    document.body.classList.toggle('win-border', !!(MINI ? c.showLiveBorder : c.showWindowBorder));
+    document.documentElement.style.setProperty('--win-accent', c.winAccent || '#6750A4');
+    document.body.classList.toggle('input-on', !!c.danmakuInput && !MINI);
+    const plan = window.bili?.speechPlan ? bili.speechPlan(c) : { speak: !!c.tts, cancel: !c.tts };
+    if (plan.cancel && window.speechSynthesis) { speechSynthesis.cancel(); window.__ttsQueue = []; }
     document.body.classList.toggle('unlocked', !(MINI ? c.miniLocked : c.locked) && !!window.bili);
     trim(); miniStyle(vars); requestAnimationFrame(() => document.fonts.ready.then(() => measureMin(true)));
   }
@@ -95,9 +101,12 @@
     const life = (m.type === 'superchat' ? Math.max(lt, m.duration || 60) : lt) * 1000;
     if (lt > 0) setTimeout(() => fade(d), life);
     trim();
-    if (cfg.tts && !MINI && window.speechSynthesis && ['danmaku', 'gift', 'superchat', 'guard'].includes(m.type)) {
+    const plan = window.bili?.speechPlan ? bili.speechPlan(cfg) : { speak: !!cfg.tts };
+    if (plan.speak && !MINI && window.speechSynthesis && ['danmaku', 'gift', 'superchat', 'guard'].includes(m.type)) {
       const t = m.type === 'danmaku' ? `${m.uname}说：${m.text}` : m.type === 'gift' ? `感谢${m.uname}${m.action}的${m.num}个${m.gift}` : m.type === 'superchat' ? `${m.uname}的醒目留言：${m.text}` : `感谢${m.uname}开通${m.gift}`;
-      const u = new SpeechSynthesisUtterance(t); u.lang = 'zh-CN'; speechSynthesis.speak(u);
+      const u = new SpeechSynthesisUtterance(t); u.lang = 'zh-CN'; u.rate = plan.rate || 1; u.pitch = plan.pitch || 1; u.volume = plan.volume ?? 1;
+      const voice = plan.voice && speechSynthesis.getVoices().find(v => v.name === plan.voice); if (voice) u.voice = voice;
+      speechSynthesis.speak(u);
     }
   }
   // 最小宽度 = 最宽粉丝牌 + 左右内边距（随字号动态更新）
@@ -194,4 +203,34 @@
     es.addEventListener('config', e => applyConfig(JSON.parse(e.data)));
     es.addEventListener('message', e => onMessage(JSON.parse(e.data)));
   }
+  const say = document.getElementById('say');
+  const sayMsg = document.getElementById('sayMsg');
+  document.getElementById('composer')?.addEventListener('submit', async ev => {
+    ev.preventDefault();
+    if (!window.bili?.sendDanmaku) { sayMsg.textContent = '预览里不会发送。'; return; }
+    sayMsg.textContent = '发送中…';
+    const r = await bili.sendDanmaku(say.value);
+    sayMsg.textContent = r.message || '';
+    if (r.ok) say.value = '';
+  });
+  say?.addEventListener('keydown', ev => { if (ev.isComposing || ev.keyCode === 229) ev.stopPropagation(); });
+  addEventListener('keydown', ev => {
+    if (MINI || ev.isComposing) return;
+    if (ev.key === '/' && document.activeElement !== say && cfg.danmakuHotkey === '/') {
+      ev.preventDefault(); document.body.classList.add('input-temp'); say?.focus();
+    }
+  });
+  if (window.bili?.on) bili.on('composer', () => { document.body.classList.add('input-temp'); say?.focus(); });
+  async function adapt() {
+    if (!cfg.adaptiveText || !window.bili?.sampleBackground) {
+      document.body.classList.remove('adaptive-dark', 'adaptive-light');
+      return;
+    }
+    const r = await bili.sampleBackground();
+    const mode = r.ok ? r.text : (cfg.adaptiveManual === 'dark' ? 'dark' : 'light');
+    document.body.classList.toggle('adaptive-dark', mode === 'dark');
+    document.body.classList.toggle('adaptive-light', mode === 'light');
+    if (!r.ok && sayMsg && !MINI) sayMsg.textContent = r.message || '';
+  }
+  setInterval(adapt, 2500);
 })();

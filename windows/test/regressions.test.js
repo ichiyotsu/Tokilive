@@ -9,25 +9,37 @@ const { nextVisibility, visibilityActions } = require('../src/visibility');
 const { WINDOW_TITLES, titleFor } = require('../src/titles');
 const { captureExStyle, captureFixPlan, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WDA_EXCLUDEFROMCAPTURE } = require('../src/capture-style');
 const { lookupOwnRoom } = require('../src/room');
-const { applyPerf, isProtected, planClose, gracefulScript, forceScript, scanScript, filterCandidates, assertNoWildcard } = require('../src/perf');
+const { classifyHotkey } = require('../src/hotkey-policy');
+const { luminanceOutside } = require('../src/adaptive');
+const { canSend, validateText, allowSend, interpretResponse } = require('../src/danmaku-send');
+const { speechPlan } = require('../src/tts');
+const { parseLrc, lineAt, DEMO_LRC } = require('../src/lyrics/lrc');
+const { pickRecord, searchUrl } = require('../src/lyrics/lrclib');
+const { parseSession, controlCommand, sourceLabel } = require('../src/lyrics/smtc');
+const { colorFromColorRef } = require('../src/accent-color');
+const { taskbarDecision } = require('../src/taskbar-policy');
+const { forgetSavedToken } = require('../src/update-run');
 const { routeOf } = require('../src/obs-routes');
 const {
   compareVersions, isNewer, pickUpdate, assetApiUrl, redirectPlan, verifySha256, parseDigest,
-  redact, publicDeviceStart, sealToken, installPlan, portableScript, setupArgs, distributionKind,
-  FIRST_UPGRADE_NOTE, authStatus,
+  redact, installPlan, portableScript, setupArgs, distributionKind, FIRST_UPGRADE_NOTE,
 } = require('../src/update-core');
-const { resolveToken, downloadToFile } = require('../src/update-run');
+const { downloadToFile } = require('../src/update-run');
 const { buildScript } = require('../src/capture-win');
 
 const root = path.join(__dirname, '..', '..');
 
-test('versions are 1.1.0 and android versionCode moved forward', () => {
+test('versions are 1.2.0 on Windows and Android', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'windows', 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '1.1.0');
+  assert.equal(pkg.version, '1.2.0');
   assert.equal(pkg.build.appId, 'com.ichiyotsu.tokilive');
   const gradle = fs.readFileSync(path.join(root, 'android', 'app', 'build.gradle.kts'), 'utf8');
-  assert.match(gradle, /versionName = "1\.1\.0"/);
-  assert.match(gradle, /versionCode = 2/);
+  assert.match(gradle, /versionName = "1\.2\.0"/);
+  assert.match(gradle, /versionCode = 3/);
+  assert.match(gradle, /minSdk = 31/);
+  const plist = fs.readFileSync(path.join(root, 'ios', 'Tokilive', 'Info.plist'), 'utf8');
+  assert.match(plist, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.2\.0<\/string>/);
+  assert.match(plist, /<key>CFBundleVersion<\/key>\s*<string>3<\/string>/);
   assert.match(gradle, /applicationId = "com\.ichiyotsu\.tokilive"/);
   assert.doesNotMatch(gradle, /storePassword\s*=\s*"/);
   assert.doesNotMatch(gradle, /keyPassword\s*=\s*"/);
@@ -89,7 +101,7 @@ test('hiding windows does not drop the connection', () => {
 
 test('window titles are distinct and capture keeps transparency flags', () => {
   assert.equal(titleFor('danmaku'), 'tokilive · 弹幕');
-  assert.equal(titleFor('mini'), 'tokilive · 互动小窗');
+  assert.equal(titleFor('mini'), 'tokilive · 实时窗');
   assert.equal(titleFor('settings'), 'tokilive · 设置');
   assert.equal(new Set(Object.values(WINDOW_TITLES)).size, Object.values(WINDOW_TITLES).length);
   const styled = captureExStyle(WS_EX_TOOLWINDOW | WS_EX_LAYERED);
@@ -141,43 +153,10 @@ test('room lookup failures do not return a room id', async () => {
   assert.equal(ok.roomId, '7777');
 });
 
-test('cleanup refuses protected processes, wildcards and unconfirmed force', () => {
-  for (const name of ['obs64', 'livehime', 'tokilive', 'MsMpEng', 'svchost', 'dwm', 'audiodg', 'nvcontainer']) {
-    assert.equal(isProtected({ name, path: 'D:\\apps\\' + name + '.exe' }), true, name);
-  }
-  assert.equal(isProtected({ name: 'notepad', path: 'C:\\Windows\\System32\\notepad.exe' }), true);
-  assert.equal(isProtected({ name: 'chrome', path: 'C:\\Users\\a\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe' }), false);
-  const list = filterCandidates([
-    { pid: 4, name: 'System' },
-    { pid: 20, name: 'obs64', mem: 100 },
-    { pid: 30, name: 'chrome', mem: 50, path: 'C:\\Users\\a\\Chrome\\chrome.exe' },
-    { pid: 31, name: 'chrome', mem: 10, path: 'C:\\Users\\a\\Chrome\\chrome.exe' },
-  ], ['chrome']);
-  assert.equal(list.selectable.length, 0);
-  assert.ok(list.protectedCount >= 2);
-  const open = [
-    { pid: 30, name: 'chrome', path: 'C:\\Users\\a\\Chrome\\chrome.exe', title: 'page' },
-    { pid: 40, name: 'obs64', path: 'D:\\obs\\obs64.exe' },
-  ];
-  const graceful = planClose(open, [30, 40], { force: false });
-  assert.deepEqual(graceful.allowed.map(p => p.pid), [30]);
-  assert.equal(graceful.rejected.some(r => r.reason === 'protected'), true);
-  const script = gracefulScript(graceful.allowed.map(p => p.pid));
-  assert.match(script, /CloseMainWindow/);
-  assert.doesNotMatch(script, /-Force|taskkill|\*/);
-  assert.throws(() => planClose(open, [30], { force: true, forceConfirmed: false }));
-  const forced = forceScript([30]);
-  assert.match(forced, /Stop-Process -Id 30 -Force/);
-  assert.throws(() => assertNoWildcard('taskkill /IM *'));
-  assert.throws(() => assertNoWildcard('Stop-Process -Name chrome*'));
-  assert.doesNotMatch(scanScript(), /Stop-Process|taskkill|CloseMainWindow|\*/);
-  const perfOff = applyPerf({ perfEnabled: false, perfStrength: 100, blur: 16, maxMessages: 30 });
-  assert.equal(perfOff.blur, 16);
-  assert.equal(perfOff.perfActive, false);
-  const perfOn = applyPerf({ perfEnabled: true, perfStrength: 100, blur: 16, maxMessages: 30, miniMax: 5 });
-  assert.equal(perfOn.blur, 0);
-  assert.ok(perfOn.maxMessages < 30);
-  assert.equal(perfOn.reduceMotion, true);
+test('performance tooling is gone', () => {
+  assert.equal(fs.existsSync(path.join(root, 'windows', 'src', 'perf.js')), false);
+  const main = fs.readFileSync(path.join(root, 'windows', 'src', 'main.js'), 'utf8');
+  assert.doesNotMatch(main, /perf-scan|perf-force|taskkill|Stop-Process/);
 });
 
 test('private update compares versions and will not fetch anonymously', () => {
@@ -206,7 +185,9 @@ test('private update compares versions and will not fetch anonymously', () => {
   assert.equal(verifySha256('ab'.repeat(32), 'cd'.repeat(32)), false);
   assert.match(FIRST_UPGRADE_NOTE, /1\.0\.0/);
   assert.match(redact('token ghp_' + 'a'.repeat(30) + ' Bearer ghp_zzzz'), /\[token\]/);
-  assert.equal(publicDeviceStart({ ok: true, userCode: 'ABCD-1234', uri: 'https://github.com/login/device', deviceCode: 'secret-code' }).deviceCode, undefined);
+  assert.equal(isNewer('1.2.0', '1.1.0'), true);
+  assert.equal(isNewer('1.1.0', '1.2.0'), false);
+  assert.equal(isNewer('1.2.0', '1.2.0'), false);
   assert.deepEqual(setupArgs(), []);
   const plan = installPlan({ packaged: true, kind: 'setup', verified: true, version: '1.2.0' });
   assert.equal(plan.silent, false);
@@ -221,44 +202,47 @@ test('private update compares versions and will not fetch anonymously', () => {
   assert.equal(parseDigest({ name: 'tokilive-1.1.0-portable.exe' }, sums), 'cd'.repeat(32));
 });
 
-test('token never appears in resolver logs or renderer-facing status', async () => {
-  const secret = 'github_pat_' + 'abcDEF1234567890xyz';
-  const logs = [];
-  const auth = await resolveToken({
-    fs: { existsSync: () => true, readFileSync: () => Buffer.from('blob') },
-    file: 'github-auth.bin',
-    safeStorage: { isEncryptionAvailable: () => true, decryptString: () => secret },
-    env: '',
-    execFile: () => { throw new Error('should not call gh'); },
-    log: m => logs.push(m),
-  });
-  assert.equal(auth.source, 'stored');
-  assert.equal(logs.join('').includes(secret), false);
-  assert.equal(JSON.stringify(authStatus({ hasStored: true, envOk: false, ghOk: false })).includes(secret), false);
-  const sealed = sealToken({ isEncryptionAvailable: () => false }, secret);
-  assert.equal(sealed.ok, false);
-  assert.equal(JSON.stringify(sealed).includes(secret), false);
-});
-
-test('asset download drops authorization on redirect', async () => {
-  const secret = 'ghp_' + 'q'.repeat(36);
+test('public downloads never send an authorization header', async () => {
   const calls = [];
   const fetchImpl = async (url, opts) => {
-    calls.push({ url, auth: opts.headers.Authorization || '' });
+    calls.push({ url, auth: opts.headers.Authorization || '', keys: Object.keys(opts.headers) });
     if (url.includes('api.github.com')) {
       return { status: 302, headers: { get: k => k === 'location' ? 'https://objects.githubusercontent.com/pkg' : null } };
     }
-    return {
-      status: 200,
-      headers: { get: () => '3' },
-      body: { getReader: () => ({ read: async () => ({ done: true, value: undefined }) }) },
-    };
+    return { status: 200, headers: { get: () => '0' }, body: { getReader: () => ({ read: async () => ({ done: true }) }) } };
   };
   const fsMock = { createWriteStream: () => ({ write() {}, on() {}, end(cb) { cb(); } }) };
-  await downloadToFile({ fetchImpl, fs: fsMock, file: 'x.bin', url: 'https://api.github.com/repos/ichiyotsu/tokilive/releases/assets/9', token: secret });
-  assert.match(calls[0].auth, /Bearer/);
-  assert.equal(calls[1].auth, '');
-  assert.equal(calls[1].url, 'https://objects.githubusercontent.com/pkg');
+  await downloadToFile({ fetchImpl, fs: fsMock, file: 'x.bin', url: 'https://api.github.com/repos/ichiyotsu/tokilive/releases/assets/9' });
+  assert.equal(calls.every(c => c.auth === '' && !c.keys.includes('Authorization')), true);
+  const removed = [];
+  forgetSavedToken({ existsSync: () => true, unlinkSync: p => removed.push(p) }, 'user/github-auth.bin');
+  assert.deepEqual(removed, ['user/github-auth.bin']);
+});
+
+test('danmaku send, lyrics, adaptive text and taskbar policy', () => {
+  assert.equal(canSend('').ok, false);
+  assert.equal(canSend('SESSDATA=a').reason, 'no-csrf');
+  assert.equal(validateText('  你好 ').text, '你好');
+  assert.equal(allowSend(2000, 1000).ok, false);
+  assert.equal(interpretResponse({ code: 0 }).ok, true);
+  assert.equal(classifyHotkey('/').registerGlobal, false);
+  assert.equal(classifyHotkey('CommandOrControl+Alt+D').registerGlobal, true);
+  const px = Buffer.alloc(8 * 8 * 4, 255);
+  const sample = luminanceOutside(px, 8, 8, { x: 2, y: 2, width: 2, height: 2 });
+  assert.equal(sample.text, 'dark');
+  assert.equal(speechPlan({ tts: false }).cancel, true);
+  const lines = parseLrc(DEMO_LRC);
+  assert.ok(lines.length >= 3);
+  assert.equal(lineAt(lines, 3.2) >= 1, true);
+  assert.ok(lines.some(l => l.words.length));
+  assert.match(searchUrl('歌', '人'), /lrclib\.net/);
+  assert.equal(pickRecord([{ trackName: '歌', syncedLyrics: '[00:01.00]词' }], '歌').syncedLyrics.includes('词'), true);
+  assert.equal(sourceLabel(parseSession({ ok: true, source: 'QQ音乐', title: 'a' }).sourceKind), 'QQ音乐');
+  assert.equal(controlCommand('next'), 'TrySkipNextAsync');
+  assert.throws(() => controlCommand('format C:'));
+  assert.equal(colorFromColorRef(0x00ff8000), '#0080ff');
+  assert.equal(taskbarDecision({ hideRequested: true, trayAvailable: false }).skipTaskbar, false);
+  assert.equal(taskbarDecision({ hideRequested: true, trayAvailable: true }).skipTaskbar, true);
 });
 
 test('obs routes keep overlay and mini distinct', () => {

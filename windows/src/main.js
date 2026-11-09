@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, screen, nativeTheme, dialog, protocol, shell, safeStorage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, screen, nativeTheme, dialog, protocol, desktopCapturer } = require('electron');
 app.setName('tokilive'); if (process.platform === 'win32') app.setAppUserModelId('com.ichiyotsu.tokilive');
 if (process.argv.includes('--shots')) { app.disableHardwareAcceleration(); app.commandLine.appendSwitch('disable-gpu'); }
 try {
@@ -12,13 +12,18 @@ const { splitTheme, isAppDark } = require('./theme-split');
 const { titleFor } = require('./titles');
 const { applyCaptureFix } = require('./capture-win');
 const { lookupOwnRoom } = require('./room');
-const { applyPerf, normalizeWhitelist, filterCandidates, parseProcessJson, planClose, gracefulScript, forceScript, scanScript, GUIDANCE } = require('./perf');
 const { visibilityActions } = require('./visibility');
 const { routeOf, BROWSER_SOURCE_NOTE } = require('./obs-routes');
-const {
-  FIRST_UPGRADE_NOTE, authStatus, sealToken, pickUpdate, distributionKind, installPlan, portableScript, setupArgs, redact,
-} = require('./update-core');
-const { resolveToken, fetchReleaseList, downloadVerified, startDevice, pollDevice } = require('./update-run');
+const { FIRST_UPGRADE_NOTE, pickUpdate, distributionKind, installPlan, portableScript, setupArgs, redact } = require('./update-core');
+const { forgetSavedToken, fetchReleaseList, downloadVerified } = require('./update-run');
+const { canSend, validateText, allowSend, formBody, interpretResponse } = require('./danmaku-send');
+const { luminanceOutside, mapRect } = require('./adaptive');
+const { classifyHotkey } = require('./hotkey-policy');
+const { colorFromColorRef } = require('./accent-color');
+const { taskbarDecision } = require('./taskbar-policy');
+const { parseLrc, lineAt, DEMO_LRC } = require('./lyrics/lrc');
+const { searchLyrics } = require('./lyrics/lrclib');
+const { parseSession, sourceLabel, controlCommand } = require('./lyrics/smtc');
 
 const DEFAULTS = {
   roomId: '', cookie: '', opacity: 0.82, blur: 16, radius: 0, fontSize: 18, fontFamily: 'Google Sans', cjkFont: 'Source Han Sans SC', jpFont: 'Source Han Sans SC', fontWeight: 700,
@@ -27,13 +32,15 @@ const DEFAULTS = {
   seedColor: '#6750A4', show: { danmaku: true, gift: true, superchat: true, guard: true, enter: false },
   route: { enter: 'mini', follow: 'mini', share: 'mini', like: 'mini' }, miniVisible: true, miniLocked: false, miniBounds: null, miniLifetime: 6, miniMax: 5, miniStats: true, miniLayout: 'h', miniBg: '', miniAlpha: 0.92, miniText: '', miniLabel: '', miniLine: '', miniLineW: 3, miniPills: false,
   lifetime: 30, maxMessages: 30, locked: false, alwaysOnTop: true, material: 'none', hotkey: 'CommandOrControl+Shift+L',
-  showAvatar: false, showMedal: true, minGiftPrice: 0, tts: false, obsServer: false, obsPort: 7788, bounds: null,
+  showAvatar: false, showMedal: true, minGiftPrice: 0, tts: false, ttsVoice: '', ttsRate: 1, ttsPitch: 1, ttsVolume: 1, obsServer: false, obsPort: 7788, bounds: null,
   customCss: '', design: { preset: 'default', order: ['name', 'medal', 'badge'], hide: {}, newline: false, pad: 1, gap: 1, spacing: 1 },
-  appTheme: 'system', appAccent: '#6750A4', appBackground: '', appBgOpacity: 0.45, appMaterial: 'mica', sidebar: 'auto', overlayVisible: true,
-  perfEnabled: false, perfStrength: 40, perfWhitelist: [], githubClientId: '',
+  appTheme: 'system', appAccent: '#6750A4', useSystemAccent: true, appBackground: '', appBgOpacity: 0.45, appMaterial: 'mica', sidebar: 'auto', overlayVisible: true,
+  showWindowBorder: false, showLiveBorder: false, adaptiveText: false, adaptiveManual: 'light',
+  danmakuInput: false, danmakuHotkey: '', experimentalGameTopmost: false, hideFromTaskbar: false,
+  lyricsVisible: false, lyricsOffset: 0, lyricsDemo: false,
 };
 let cfgPath, cfg, overlay, mini, settingsWin, stats = {}, tray, live, sseClients = new Set(), lastStatus = '未连接';
-let pendingCheck = null, pendingUpdate = null, deviceFlow = null;
+let pendingCheck = null, pendingUpdate = null, lastDanmakuSent = 0, lyricCache = { key: '', hit: null }, systemAccent = '';
 const SHOT_ARG = (() => { const i = process.argv.indexOf('--shots'); return i >= 0 ? (process.argv[i + 1] || '') : null; })();
 function shotsDir() { if (SHOT_ARG == null) return null; return SHOT_ARG || path.join(app.getPath('temp'), 'tokilive-shots'); }
 
@@ -41,20 +48,23 @@ function load() { cfgPath = path.join(app.getPath('userData'), 'settings.json');
   // 从旧版（BiliDanmakuMD3）迁移设置
   try { const old = path.join(app.getPath('appData'), 'BiliDanmakuMD3', 'settings.json'); if (!fs.existsSync(cfgPath) && fs.existsSync(old)) { fs.mkdirSync(path.dirname(cfgPath), { recursive: true }); fs.copyFileSync(old, cfgPath); } } catch {}
   try { cfg = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(cfgPath, 'utf8')) }; cfg.show = { ...DEFAULTS.show, ...cfg.show }; cfg.design = { ...DEFAULTS.design, ...cfg.design, hide: { ...(cfg.design?.hide || {}) } }; if (!cfg.jpFont) cfg.jpFont = DEFAULTS.jpFont; cfg.medalColors = { ...DEFAULTS.medalColors, ...cfg.medalColors }; cfg.route = { ...DEFAULTS.route, ...cfg.route }; cfg.overrides = { ...DEFAULTS.overrides, ...cfg.overrides };
-    if (!Array.isArray(cfg.perfWhitelist)) cfg.perfWhitelist = [];
+    delete cfg.perfEnabled; delete cfg.perfStrength; delete cfg.perfWhitelist; delete cfg.githubClientId;
     const v0 = cfg.styleVersion || 1;
     if (v0 < 6) { cfg.radius = 0; cfg.styleVersion = 6; }
     if (v0 < 5) { cfg.themeMode = 'system'; delete cfg.cardStyle; delete cfg.dark; }
     if (v0 < 4) Object.assign(cfg, { fontFamily: DEFAULTS.fontFamily, cjkFont: DEFAULTS.cjkFont, jpFont: DEFAULTS.jpFont, fontWeight: 700 });
-    if (v0 < 3) Object.assign(cfg, { showAvatar: false, radius: 22, fontSize: 18, opacity: 0.82, fontFamily: DEFAULTS.fontFamily, medalStyle: 'unified' }); } catch { cfg = { ...DEFAULTS }; } }
+    if (v0 < 3) Object.assign(cfg, { showAvatar: false, radius: 22, fontSize: 18, opacity: 0.82, fontFamily: DEFAULTS.fontFamily, medalStyle: 'unified' });
+    if (v0 < 7) cfg.styleVersion = 7;
+  } catch { cfg = { ...DEFAULTS }; }
+  try { forgetSavedToken(fs, path.join(app.getPath('userData'), 'github-auth.bin')); } catch {}
+}
 function save() { fs.mkdirSync(path.dirname(cfgPath), { recursive: true }); const copy = { ...cfg }; fs.writeFileSync(cfgPath, JSON.stringify(copy, null, 2)); }
 function cardDark() { return splitTheme(cfg, { systemDark: nativeTheme.shouldUseDarkColors }).cardDark; }
 async function view() {
   const split = splitTheme(cfg, { systemDark: nativeTheme.shouldUseDarkColors });
-  const stored = { ...cfg, dark: split.cardDark, appDark: split.appDark };
+  const stored = { ...cfg, dark: split.cardDark, appDark: split.appDark, winAccent: systemAccent || cfg.appAccent || '#6750A4' };
   delete stored.cookie;
-  const render = applyPerf(stored);
-  return { cfg: render, stored, vars: await buildPalette(cfg.seedColor, split.cardDark, cfg.overrides), app: split };
+  return { cfg: stored, stored, vars: await buildPalette(cfg.seedColor, split.cardDark, cfg.overrides), app: { ...split, winAccent: stored.winAccent } };
 }
 // target: 'all' | 'main' | 'mini'
 function broadcast(ch, data, target = 'all') {
@@ -65,7 +75,7 @@ function broadcast(ch, data, target = 'all') {
   for (const r of sseClients) if (target === 'all' || r.win === target) r.write(s);
 }
 const LIGHT = ['enter', 'follow', 'share', 'like'];
-let statT; function bumpStats() { if (statT) return; const wait = cfg.perfEnabled ? 400 + Math.round((Number(cfg.perfStrength) || 0) * 8) : 400; statT = setTimeout(() => { statT = null; broadcast('stats', stats, 'mini'); }, wait); }
+let statT; function bumpStats() { if (statT) return; statT = setTimeout(() => { statT = null; broadcast('stats', stats, 'mini'); }, 400); }
 function routeMessage(m) {
   if (m.type === 'danmaku') { stats.danmaku = (stats.danmaku || 0) + 1; bumpStats(); }
   if (LIGHT.includes(m.type)) { const r = cfg.route[m.type] || 'mini'; if (r === 'off') return; if (r === 'main') return broadcast('message', { ...m, routed: true }, 'main'); return broadcast('message', m, 'mini'); }
@@ -91,7 +101,8 @@ function connect() {
 function lockWin(w, locked) {
   if (!w) return;
   w.setIgnoreMouseEvents(locked, { forward: true }); w.setResizable(!locked); w.setMovable(!locked);
-  w.setAlwaysOnTop(cfg.alwaysOnTop, 'screen-saver');
+  const level = cfg.experimentalGameTopmost ? 'screen-saver' : (cfg.alwaysOnTop ? 'floating' : 'normal');
+  w.setAlwaysOnTop(!!(cfg.alwaysOnTop || cfg.experimentalGameTopmost), level);
   if (process.platform === 'win32' && w.setBackgroundMaterial) { try { w.setBackgroundMaterial(cfg.material); } catch {} }
 }
 function applyVisibility() {
@@ -107,8 +118,23 @@ function applyVisibility() {
   }
   return act;
 }
+function applyTaskbar() {
+  const decision = taskbarDecision({ hideRequested: !!cfg.hideFromTaskbar, trayAvailable: !!tray });
+  for (const w of [overlay, mini]) if (w && !w.isDestroyed()) w.setSkipTaskbar(decision.skipTaskbar);
+  return decision;
+}
+let raiseT;
+function applyRaise() {
+  clearInterval(raiseT); raiseT = null;
+  if (!cfg.experimentalGameTopmost) return;
+  raiseT = setInterval(() => {
+    for (const w of [overlay, mini]) if (w && !w.isDestroyed() && w.isVisible()) { try { w.moveTop(); } catch {} }
+  }, 2000);
+}
 function applyLock() {
   lockWin(overlay, cfg.locked); lockWin(mini, cfg.miniLocked);
+  applyTaskbar();
+  applyRaise();
   applyVisibility();
   updateTray(); pushConfig();
 }
@@ -197,7 +223,7 @@ async function runShots() {
   const SHOTS = shotsDir();
   fs.mkdirSync(SHOTS, { recursive: true });
   await new Promise(r => setTimeout(r, 800));
-  const pages = ['conn', 'app', 'look', 'cards', 'mini', 'win', 'perf', 'update', 'about'];
+  const pages = ['conn', 'danmaku', 'live', 'lyrics', 'source', 'settings'];
   for (const p of pages) {
     await settingsWin.webContents.executeJavaScript(`document.querySelector('[data-p="${p}"]')?.click()`);
     await new Promise(r => setTimeout(r, 350));
@@ -225,14 +251,23 @@ function updateTray() {
     { label: '设置…', click: openSettings },
     { label: (cfg.locked && cfg.miniLocked) ? '解锁全部窗口（可移动）' : '锁定全部窗口（鼠标穿透）', click: toggleLock },
     { label: '锁定弹幕窗', type: 'checkbox', checked: cfg.locked, click: () => { cfg.locked = !cfg.locked; save(); applyLock(); } },
-    { label: '锁定互动小窗', type: 'checkbox', checked: cfg.miniLocked, click: () => { cfg.miniLocked = !cfg.miniLocked; save(); applyLock(); } },
+    { label: '锁定实时窗', type: 'checkbox', checked: cfg.miniLocked, click: () => { cfg.miniLocked = !cfg.miniLocked; save(); applyLock(); } },
     { label: '显示弹幕窗', type: 'checkbox', checked: cfg.overlayVisible !== false, click: () => { cfg.overlayVisible = cfg.overlayVisible === false; save(); applyLock(); } },
-    { label: '显示互动小窗', type: 'checkbox', checked: cfg.miniVisible !== false, click: () => { cfg.miniVisible = cfg.miniVisible === false; save(); applyLock(); } },
+    { label: '显示实时窗', type: 'checkbox', checked: cfg.miniVisible !== false, click: () => { cfg.miniVisible = cfg.miniVisible === false; save(); applyLock(); } },
     { label: '置顶', type: 'checkbox', checked: cfg.alwaysOnTop, click: () => { cfg.alwaysOnTop = !cfg.alwaysOnTop; save(); applyLock(); } },
     { label: '重新连接', click: connect }, { type: 'separator' },
     { label: '退出', click: () => app.quit() }]));
 }
-function registerHotkey() { globalShortcut.unregisterAll(); let ok = false; try { ok = globalShortcut.register(cfg.hotkey, toggleLock); } catch {} if (!ok) status('快捷键 ' + cfg.hotkey + ' 注册失败（可能被占用），请在设置中更换'); }
+function registerHotkey() {
+  globalShortcut.unregisterAll();
+  let ok = false; try { ok = globalShortcut.register(cfg.hotkey, toggleLock); } catch {}
+  if (!ok) status('快捷键 ' + cfg.hotkey + ' 注册失败（可能被占用），请在设置中更换');
+  const policy = classifyHotkey(cfg.danmakuHotkey);
+  if (!policy.registerGlobal) return;
+  let inputOk = false;
+  try { inputOk = globalShortcut.register(policy.accelerator, () => broadcast('composer', { show: true })); } catch {}
+  if (!inputOk) status('弹幕输入快捷键没有注册成功，系统按键不会被这个失败的注册占用。');
+}
 
 let server;
 function startServer() {
@@ -252,14 +287,7 @@ function startServer() {
   server.listen(cfg.obsPort, '127.0.0.1');
 }
 
-function authFile() { return path.join(app.getPath('userData'), 'github-auth.bin'); }
 function fromSettings(e) { return !!(settingsWin && e.sender === settingsWin.webContents); }
-async function currentAuth() {
-  return resolveToken({ fs, file: authFile(), safeStorage, env: process.env.TOKILIVE_GITHUB_TOKEN, execFile, log: () => {} });
-}
-function authPublic(auth) {
-  return authStatus({ hasStored: auth?.source === 'stored' || fs.existsSync(authFile()), envOk: auth?.source === 'env', ghOk: auth?.source === 'gh' });
-}
 function runPowershell(script) {
   return new Promise((resolve, reject) => {
     const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true });
@@ -267,27 +295,30 @@ function runPowershell(script) {
     child.stdout.on('data', d => { out += d; });
     child.stderr.on('data', d => { err += d; });
     child.on('error', reject);
-    child.on('close', code => code === 0 ? resolve(out) : reject(new Error((err || out || ('PowerShell ' + code)).slice(0, 400))));
+    child.on('close', code => code === 0 ? resolve(out) : reject(new Error((err || out || ('PowerShell ' + code)).slice(0, 500))));
   });
 }
-async function scanProcesses() {
-  if (process.platform !== 'win32') return { ok: false, message: '进程列表只在 Windows 上读取。这里不会执行任何结束进程的命令。', selectable: [], protectedCount: 0 };
-  const text = await runPowershell(scanScript());
-  const filtered = filterCandidates(parseProcessJson(text), cfg.perfWhitelist);
-  return { ok: true, ...filtered, message: `可选 ${filtered.selectable.length} 个。已排除 ${filtered.protectedCount} 个系统、安全、采集、推流或 tokilive 自身进程。` };
+async function readSystemAccent() {
+  if (process.platform !== 'win32') return '';
+  try {
+    const raw = await runPowershell("(Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\DWM' -Name AccentColor -ErrorAction Stop).AccentColor");
+    return colorFromColorRef(String(raw).trim()) || '';
+  } catch { return ''; }
 }
 
 function sanitizePatch(patch) {
   const p = { ...patch };
   delete p.cookieLog; delete p.token; delete p.githubToken; delete p.accessToken;
   if ('appBackground' in p && p.appBackground !== '' && p.appBackground !== cfg.appBackground) delete p.appBackground;
-  if ('perfWhitelist' in p) p.perfWhitelist = normalizeWhitelist(p.perfWhitelist);
-  if ('perfStrength' in p) p.perfStrength = Math.max(0, Math.min(100, Number(p.perfStrength) || 0));
-  if ('perfEnabled' in p) p.perfEnabled = !!p.perfEnabled;
+  delete p.perfEnabled; delete p.perfStrength; delete p.perfWhitelist; delete p.githubClientId; delete p.token;
   if ('appBgOpacity' in p) p.appBgOpacity = Math.max(0, Math.min(1, Number(p.appBgOpacity) || 0));
+  if ('ttsRate' in p) p.ttsRate = Math.max(0.5, Math.min(2, Number(p.ttsRate) || 1));
+  if ('ttsPitch' in p) p.ttsPitch = Math.max(0.5, Math.min(2, Number(p.ttsPitch) || 1));
+  if ('ttsVolume' in p) p.ttsVolume = Math.max(0, Math.min(1, Number(p.ttsVolume) || 0));
+  if ('lyricsOffset' in p) p.lyricsOffset = Math.max(-10, Math.min(10, Number(p.lyricsOffset) || 0));
+  if ('danmakuHotkey' in p) p.danmakuHotkey = String(p.danmakuHotkey || '').slice(0, 40);
   if ('overlayVisible' in p) p.overlayVisible = !!p.overlayVisible;
   if ('miniVisible' in p) p.miniVisible = !!p.miniVisible;
-  if ('githubClientId' in p) p.githubClientId = String(p.githubClientId || '').trim().slice(0, 128);
   return p;
 }
 
@@ -306,15 +337,16 @@ app.whenReady().then(() => {
   });
   nativeTheme.on('updated', () => { if (cfg.themeMode === 'system' || (cfg.appTheme || 'system') === 'system') { pushConfig(); applySettingsChrome(); } });
   load();
+  readSystemAccent().then(color => { systemAccent = color; if (cfg.useSystemAccent && color) pushConfig(); });
   ipcMain.handle('get-settings', () => cfg);
   ipcMain.handle('get-view', view);
   ipcMain.handle('get-status', () => lastStatus);
   ipcMain.handle('get-version', () => app.getVersion());
-  ipcMain.handle('get-guidance', () => ({ text: GUIDANCE, note: BROWSER_SOURCE_NOTE, upgrade: FIRST_UPGRADE_NOTE }));
+  ipcMain.handle('get-guidance', () => ({ note: BROWSER_SOURCE_NOTE, upgrade: FIRST_UPGRADE_NOTE, topmost: '实验性置顶只会反复把 tokilive 自己的窗口抬到普通置顶层。独占全屏游戏不经过桌面合成，这个开关过不去，也不会注入游戏或改动反作弊。无边框窗口化时更有机会露在画面上。' }));
   ipcMain.handle('set-settings', async (_e, patch) => {
     const prev = { ...cfg }; const clean = sanitizePatch(patch || {}); cfg = { ...cfg, ...clean }; save();
     if (prev.roomId !== cfg.roomId || prev.cookie !== cfg.cookie) connect();
-    if (prev.hotkey !== cfg.hotkey) registerHotkey();
+    if (prev.hotkey !== cfg.hotkey || prev.danmakuHotkey !== cfg.danmakuHotkey) registerHotkey();
     if (prev.miniLayout !== cfg.miniLayout || prev.miniPills !== cfg.miniPills) { miniLimits(true); save(); }
     if (prev.obsServer !== cfg.obsServer || prev.obsPort !== cfg.obsPort) startServer();
     if (prev.appMaterial !== cfg.appMaterial || prev.appTheme !== cfg.appTheme) applySettingsChrome();
@@ -365,60 +397,26 @@ app.whenReady().then(() => {
   ipcMain.handle('clear-background', async () => { cfg.appBackground = ''; save(); pushConfig(); return { ok: true }; });
   ipcMain.handle('test-message', (_e, type) => { const m = require('./samples').sample(type); routeMessage(m); if (type === 'like') { stats.likes = (stats.likes || 1234) + 1; stats.watched = stats.watched || '1.2万人看过'; stats.online = stats.online || 321; broadcast('stats', stats, 'mini'); } });
   ipcMain.handle('reset-bounds', () => { cfg.bounds = null; cfg.miniBounds = null; save(); const wa = screen.getPrimaryDisplay().workArea; overlay.setBounds({ width: 420, height: 640, x: wa.x + 40, y: wa.y + 40 }); mini.setBounds({ width: 460, height: 60, x: wa.x + 480, y: wa.y + 40 }); miniLimits(true); save(); });
-  ipcMain.handle('github-status', async e => { if (!fromSettings(e)) return { source: 'none', label: '' }; const auth = await currentAuth(); return { ...authPublic(auth), upgrade: FIRST_UPGRADE_NOTE }; });
-  ipcMain.handle('github-save-token', async (e, token) => {
-    if (!fromSettings(e)) return { ok: false, message: '拒绝' };
-    const sealed = sealToken(safeStorage, String(token || ''));
-    if (!sealed.ok) return { ok: false, message: sealed.message };
-    fs.mkdirSync(path.dirname(authFile()), { recursive: true });
-    fs.writeFileSync(authFile(), sealed.blob);
-    try { fs.chmodSync(authFile(), 0o600); } catch {}
-    return { ok: true, message: '令牌已写入系统加密存储。界面和日志里不会保留它。' };
-  });
-  ipcMain.handle('github-clear', async e => { if (!fromSettings(e)) return { ok: false }; try { fs.unlinkSync(authFile()); } catch {} deviceFlow = null; return { ok: true, message: '已清除本机保存的令牌。' }; });
-  ipcMain.handle('github-device-start', async e => {
-    if (!fromSettings(e)) return { ok: false, message: '拒绝' };
-    const raw = await startDevice({ clientId: cfg.githubClientId });
-    if (!raw.ok) return { ok: false, message: raw.message };
-    deviceFlow = { deviceCode: raw.deviceCode, clientId: cfg.githubClientId, interval: raw.interval };
-    const uri = /^https:\/\/github\.com\/login\/device/.test(raw.uri || '') ? raw.uri : 'https://github.com/login/device';
-    try { await shell.openExternal(uri); } catch {}
-    return { ok: true, userCode: raw.userCode, uri, message: '在浏览器中输入设备码。令牌回来后只加密保存，不会显示。' };
-  });
-  ipcMain.handle('github-device-poll', async e => {
-    if (!fromSettings(e) || !deviceFlow) return { ok: false, message: '还没有开始设备码登录。' };
-    const r = await pollDevice({ ...deviceFlow });
-    if (!r.token) return { ok: false, pending: !!r.pending, message: r.message };
-    const sealed = sealToken(safeStorage, r.token);
-    if (!sealed.ok) return { ok: false, message: sealed.message };
-    fs.writeFileSync(authFile(), sealed.blob);
-    deviceFlow = null;
-    return { ok: true, message: '设备码登录完成，令牌已加密保存。' };
-  });
   ipcMain.handle('update-check', async e => {
     if (!fromSettings(e)) return { ok: false, message: '拒绝' };
-    const auth = await currentAuth();
-    if (!auth.token) return { ok: false, state: 'need-auth', message: '还没有私人仓库的读取权限。', note: FIRST_UPGRADE_NOTE, auth: authPublic(auth) };
     try {
-      const releases = await fetchReleaseList(auth.token);
+      const releases = await fetchReleaseList();
       const kind = distributionKind({ portableFile: process.env.PORTABLE_EXECUTABLE_FILE, portableDir: process.env.PORTABLE_EXECUTABLE_DIR, execPath: process.execPath, packaged: app.isPackaged });
       pendingCheck = pickUpdate(releases, app.getVersion(), kind);
       pendingUpdate = null;
-      return { ok: pendingCheck.state === 'available' || pendingCheck.state === 'uptodate', ...pendingCheck, note: FIRST_UPGRADE_NOTE, auth: authPublic(auth) };
+      return { ok: pendingCheck.state === 'available' || pendingCheck.state === 'uptodate', ...pendingCheck, note: FIRST_UPGRADE_NOTE };
     } catch (err) { return { ok: false, message: redact(err.message), note: FIRST_UPGRADE_NOTE }; }
   });
   ipcMain.handle('update-download', async e => {
     if (!fromSettings(e)) return { ok: false, message: '拒绝' };
     if (!pendingCheck || pendingCheck.state !== 'available') return { ok: false, message: '没有可下载的更新。请先检查。' };
-    const auth = await currentAuth();
-    if (!auth.token) return { ok: false, message: '没有可用的授权，下载没有开始。' };
     const destDir = path.join(app.getPath('temp'), 'tokilive-update');
     fs.mkdirSync(destDir, { recursive: true });
     const dest = path.join(destDir, pendingCheck.asset.name);
     try {
       const release = { assets: [pendingCheck.asset, pendingCheck.sums].filter(Boolean) };
       const verified = await downloadVerified({
-        fs, file: dest, release, asset: pendingCheck.asset, token: auth.token,
+        fs, file: dest, release, asset: pendingCheck.asset,
         onProgress: p => { try { settingsWin?.webContents.send('update-progress', p); } catch {} },
       });
       pendingUpdate = { file: dest, version: pendingCheck.latest, kind: pendingCheck.kind, sha256: verified.sha256 };
@@ -434,7 +432,7 @@ app.whenReady().then(() => {
     const choice = await dialog.showMessageBox(settingsWin, {
       type: 'warning', buttons: ['取消', '退出并安装'], defaultId: 0, cancelId: 0, noLink: true,
       title: '安装更新', message: `安装 tokilive ${pendingUpdate.version} 会先退出当前程序。`,
-      detail: plan.message + '\n\n从 1.0.0 第一次升到 1.1.0 如果还在用旧安装包，需要手动安装这一次。之后的版本才能走这里。',
+      detail: plan.message + '\n\n1.0.0 和旧的私人仓库更新需要手动安装 1.2.0 一次。',
     });
     if (choice.response !== 1) return { ok: false, message: '已取消，程序仍在运行。' };
     if (kind === 'portable') {
@@ -452,57 +450,95 @@ app.whenReady().then(() => {
     setTimeout(() => app.quit(), 250);
     return { ok: true, message: '正在退出并继续安装。' };
   });
-  ipcMain.handle('perf-sample', async () => {
-    const cpu = process.getCPUUsage();
-    let appMem = null, sys = null;
-    try { appMem = await process.getProcessMemoryInfo(); } catch {}
-    try { sys = process.getSystemMemoryInfo(); } catch {}
-    return {
-      cpu: Math.round(cpu.percentCPUUsage || 0),
-      appMb: appMem ? Math.round((appMem.private || appMem.residentSet || 0) / 1024) : null,
-      totalMb: sys ? Math.round(sys.total / 1024) : null,
-      freeMb: sys ? Math.round(sys.free / 1024) : null,
-    };
+  ipcMain.handle('send-danmaku', async (_e, text) => {
+    const gate = canSend(cfg.cookie);
+    if (!gate.ok) return gate;
+    const bodyText = validateText(text);
+    if (!bodyText.ok) return bodyText;
+    const pace = allowSend(Date.now(), lastDanmakuSent);
+    if (!pace.ok) return pace;
+    if (!cfg.roomId) return { ok: false, message: '还没有房间号，没有发送。' };
+    try {
+      const res = await fetch('https://api.live.bilibili.com/msg/send', {
+        method: 'POST',
+        headers: { 'User-Agent': 'Mozilla/5.0 tokilive', Referer: 'https://live.bilibili.com/', Origin: 'https://live.bilibili.com', Cookie: cfg.cookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formBody({ roomId: cfg.roomId, text: bodyText.text, csrf: (cfg.cookie.match(/(?:^|;\s*)bili_jct=([^;]+)/) || [])[1] ? decodeURIComponent((cfg.cookie.match(/(?:^|;\s*)bili_jct=([^;]+)/) || [])[1]) : '' }),
+      });
+      const json = await res.json();
+      const out = interpretResponse(json);
+      if (out.ok) lastDanmakuSent = Date.now();
+      return out;
+    } catch (err) { return { ok: false, message: '发送失败：' + redact(err.message) }; }
   });
-  ipcMain.handle('perf-scan', async e => { if (!fromSettings(e)) return { ok: false, message: '拒绝' }; try { return await scanProcesses(); } catch (err) { return { ok: false, message: '读取进程失败：' + redact(err.message), selectable: [] }; } });
-  ipcMain.handle('perf-graceful', async (e, pids) => {
-    if (!fromSettings(e)) return { ok: false, message: '拒绝' };
-    if (process.platform !== 'win32') return { ok: false, message: '结束进程只在 Windows 上可用，这次没有执行任何命令。' };
-    let scanned;
-    try { scanned = await scanProcesses(); } catch (err) { return { ok: false, message: '无法再次核对进程，已取消。' + err.message }; }
-    let plan;
-    try { plan = planClose(scanned.selectable, pids, { whitelist: cfg.perfWhitelist, force: false }); }
-    catch (err) { return { ok: false, message: err.message }; }
-    if (!plan.allowed.length) return { ok: false, message: '没有可以关闭的进程。系统、安全、OBS、直播姬、编码、音频、显卡、网络组件和 tokilive 已被排除。', plan };
-    const choice = await dialog.showMessageBox(settingsWin, {
-      type: 'question', buttons: ['取消', '请求关闭'], defaultId: 0, cancelId: 0, noLink: true,
-      title: '关闭选中的程序', message: `向 ${plan.allowed.length} 个程序发送关闭请求。`,
-      detail: plan.allowed.map(p => `${p.name}  (#${p.pid}) ${p.title || ''}`).join('\n') + '\n\n这是正常的关闭，不是强制结束。对方可以拒绝，未保存的内容由那个程序自己处理。',
-    });
-    if (choice.response !== 1) return { ok: false, message: '已取消。' };
-    try { await runPowershell(gracefulScript(plan.allowed.map(p => p.pid))); }
-    catch (err) { return { ok: false, message: '关闭请求没有发出：' + err.message, plan }; }
-    return { ok: true, message: '已发送关闭请求。如果程序还在，可以再决定要不要强制结束。', plan };
+  let adaptiveAt = 0;
+  ipcMain.handle('sample-background', async e => {
+    if (!cfg.adaptiveText) return { ok: false, reason: 'off', message: '文字颜色自适应默认关闭。' };
+    const now = Date.now();
+    if (now - adaptiveAt < 2000) return { ok: false, reason: 'throttled', message: '采样间隔未到。' };
+    adaptiveAt = now;
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return { ok: false, reason: 'no-window' };
+    try {
+      const display = screen.getDisplayMatching(win.getBounds());
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 480, height: 270 } });
+      const source = sources.find(s => String(s.display_id) === String(display.id)) || sources[0];
+      if (!source) return { ok: false, reason: 'unavailable', message: '当前环境读不到桌面画面，请改用手动深浅。这不是根据种子色猜测的。' };
+      const image = source.thumbnail;
+      const size = image.getSize();
+      const bitmap = image.getBitmap();
+      const rect = mapRect(win.getBounds(), display.bounds, size.width, size.height);
+      const sample = luminanceOutside(bitmap, size.width, size.height, rect);
+      if (!sample.ok) return { ...sample, message: sample.message || '无法分析窗口外侧背景。' };
+      return { ok: true, text: sample.text, luminance: sample.luminance, message: sample.text === 'dark' ? '外侧背景偏亮，文字用深色。' : '外侧背景偏暗，文字用浅色。' };
+    } catch (err) { return { ok: false, reason: 'unavailable', message: '无法读取桌面：' + err.message }; }
   });
-  ipcMain.handle('perf-force', async (e, pids) => {
-    if (!fromSettings(e)) return { ok: false, message: '拒绝' };
-    if (process.platform !== 'win32') return { ok: false, message: '强制结束只在 Windows 上可用，这次没有执行任何命令。' };
-    let scanned;
-    try { scanned = await scanProcesses(); } catch (err) { return { ok: false, message: '无法再次核对进程，已取消。' }; }
-    const choice = await dialog.showMessageBox(settingsWin, {
-      type: 'warning', buttons: ['取消', '仍然强制结束'], defaultId: 0, cancelId: 0, noLink: true,
-      title: '强制结束', message: '强制结束不会让这些程序保存未保存的内容。',
-      detail: '只会影响你点名且再次核对后仍允许关闭的进程。不会提权，不会关闭安全软件、系统服务、OBS、直播姬或 tokilive。',
-    });
-    if (choice.response !== 1) return { ok: false, message: '已取消，没有强制结束任何进程。' };
-    let plan;
-    try { plan = planClose(scanned.selectable, pids, { whitelist: cfg.perfWhitelist, force: true, forceConfirmed: true }); }
-    catch (err) { return { ok: false, message: err.message }; }
-    if (!plan.allowed.length) return { ok: false, message: '没有可以强制结束的进程。', plan };
-    try { await runPowershell(forceScript(plan.allowed.map(p => p.pid))); }
-    catch (err) { return { ok: false, message: '强制结束失败：' + err.message, plan }; }
-    return { ok: true, message: `已强制结束 ${plan.allowed.length} 个进程。`, plan };
+  ipcMain.handle('lyrics-now', async () => {
+    if (cfg.lyricsDemo) {
+      const lines = parseLrc(DEMO_LRC);
+      const t = (Date.now() / 1000) % 14;
+      return { ok: true, demo: true, session: { ok: true, source: '演示', sourceKind: 'demo', title: 'tokilive 演示', artist: '不是在售歌曲', position: t, duration: 14, status: 'playing' }, lines, index: lineAt(lines, t), label: '演示，不是正在播放的歌' };
+    }
+    if (process.platform !== 'win32') return { ok: false, message: '系统媒体会话只在 Windows 10/11 上读取。这里不会去翻播放器的数据库。', lines: parseLrc(DEMO_LRC), demoAvailable: true };
+    try {
+      const raw = await runPowershell(`$ErrorActionPreference='Stop'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
+function Await($op, $type) { $m = $asTask.MakeGenericMethod($type); $task = $m.Invoke($null, @($op)); $task.Wait(); $task.Result }
+$null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime]
+$mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+$s = $mgr.GetCurrentSession()
+if (-not $s) { '{"ok":false,"message":"没有正在播放的媒体"}'; exit 0 }
+$props = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+$tl = $s.GetTimelineProperties(); $pb = $s.GetPlaybackInfo()
+@{ ok=$true; source=$s.SourceAppUserModelId; title=$props.Title; artist=$props.Artist; position=$tl.Position.TotalSeconds; duration=$tl.EndTime.TotalSeconds; status=[string]$pb.PlaybackStatus } | ConvertTo-Json -Compress`);
+      const session = parseSession(JSON.parse(raw));
+      if (!session.ok || !session.title) return { ...session, lines: [], label: sourceLabel(session.sourceKind) };
+      const key = session.sourceKind + '|' + session.title + '|' + session.artist;
+      if (lyricCache.key !== key) {
+        lyricCache = { key, hit: await searchLyrics(session.title, session.artist).catch(err => ({ ok: false, message: err.message })) };
+      }
+      const lines = lyricCache.hit && lyricCache.hit.ok ? parseLrc(lyricCache.hit.synced || lyricCache.hit.plain) : [];
+      const at = Math.max(0, session.position + Number(cfg.lyricsOffset || 0));
+      return { ok: true, session, lines, index: lineAt(lines, at), lyric: lyricCache.hit, label: sourceLabel(session.sourceKind) };
+    } catch (err) { return { ok: false, message: '读不到系统媒体会话：' + redact(err.message), capability: 'SMTC 不可用或系统版本过旧' }; }
   });
+  ipcMain.handle('lyrics-control', async (_e, action) => {
+    let method;
+    try { method = controlCommand(action); } catch (err) { return { ok: false, message: err.message }; }
+    if (process.platform !== 'win32') return { ok: false, message: '播放控制只在 Windows 上交给系统媒体会话。' };
+    try {
+      await runPowershell(`$ErrorActionPreference='Stop'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
+function Await($op, $type) { $m = $asTask.MakeGenericMethod($type); $task = $m.Invoke($null, @($op)); $task.Wait(); $task.Result }
+$null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime]
+$mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+$s = $mgr.GetCurrentSession(); if (-not $s) { throw 'no session' }
+$null = Await ($s.${method}()) ([bool])`);
+      return { ok: true };
+    } catch (err) { return { ok: false, message: '播放器没有接受这个操作。' }; }
+  });
+  ipcMain.handle('taskbar-state', () => taskbarDecision({ hideRequested: !!cfg.hideFromTaskbar, trayAvailable: !!tray }));
   ipcMain.handle('obs-probe', async () => {
     if (!cfg.obsServer) return { ok: false, message: '本地服务没开。打开开关后才能把地址交给 OBS 浏览器源。', note: BROWSER_SOURCE_NOTE };
     try {

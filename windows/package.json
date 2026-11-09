@@ -1,7 +1,7 @@
 {
   "name": "tokilive",
   "productName": "tokilive",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "tokilive — MD3 风格 B 站直播弹幕悬浮窗",
   "main": "src/main.js",
   "author": "ichiyotsu",

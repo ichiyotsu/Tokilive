@@ -1,6 +1,6 @@
 const WINDOW_TITLES = {
   danmaku: 'tokilive · 弹幕',
-  mini: 'tokilive · 互动小窗',
+  mini: 'tokilive · 实时窗',
   settings: 'tokilive · 设置',
   splash: 'tokilive',
 };

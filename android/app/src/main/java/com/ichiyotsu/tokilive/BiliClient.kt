@@ -103,6 +103,11 @@ class BiliClient(private val http: OkHttpClient = OkHttpClient.Builder().pingInt
             }
         }
     }
+    private fun longField(o: JSONObject?, vararg keys: String): Long {
+        if (o == null) return 0
+        for (key in keys) if (o.has(key)) return o.optLong(key)
+        return 0
+    }
     private fun medal(o: JSONObject?): Pair<String?, Int> = if (o != null && o.optString("medal_name").isNotEmpty() && o.optInt("medal_level") > 0) o.getString("medal_name") to o.getInt("medal_level") else null to 0
     internal fun handle(m: JSONObject) {
         val cmd = m.optString("cmd").substringBefore(':')
@@ -123,9 +128,12 @@ class BiliClient(private val http: OkHttpClient = OkHttpClient.Builder().pingInt
                 val (type, act) = when (t) { 1 -> "enter" to "进入直播间"; 2, 4 -> "follow" to "按下了关注"; 3 -> "share" to "分享了直播间"; 5 -> "follow" to "与主播互粉了"; else -> return }
                 messages.tryEmit(LiveMsg(nextId(), type, uname, action = act)) }
             "LIKE_INFO_V3_CLICK" -> { val d = m.getJSONObject("data"); messages.tryEmit(LiveMsg(nextId(), "like", d.getString("uname"), action = d.optString("like_text", "点赞了"))) }
-            "LIKE_INFO_V3_UPDATE" -> stats.update { it.copy(likes = m.getJSONObject("data").optLong("click_count")) }
-            "ONLINE_RANK_COUNT" -> m.getJSONObject("data").let { d -> stats.update { it.copy(online = d.optLong("online_count", d.optLong("count"))) } }
-            "WATCHED_CHANGE" -> stats.update { it.copy(watched = m.getJSONObject("data").optString("text_large")) }
+            "LIKE_INFO_V3_UPDATE" -> stats.update { it.copy(likes = longField(m.optJSONObject("data"), "click_count", "total_likes")) }
+            "ONLINE_RANK_COUNT", "ONLINE_RANK_V2" -> m.optJSONObject("data")?.let { d -> stats.update { it.copy(online = longField(d, "online_count", "online_num", "count")) } }
+            "WATCHED_CHANGE" -> m.optJSONObject("data")?.let { d ->
+                val text = d.optString("text_large").ifBlank { d.optString("text_small") }.ifBlank { if (d.has("num")) d.optLong("num").toString() else "" }
+                if (text.isNotBlank()) stats.update { it.copy(watched = text) }
+            }
         }
     }
     /** 极简 protobuf：1 uid, 2 uname, 5 msg_type */

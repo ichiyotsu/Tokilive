@@ -42,24 +42,12 @@ class LiveViewModel(app: Application) : AndroidViewModel(app) {
     var updateBusy by mutableStateOf(false)
     private var pending: RemoteRelease? = null
     private var apkFile: java.io.File? = null
-    private var deviceCode: String? = null
 
-    fun saveGithubToken(value: String) {
-        val clean = value.trim()
-        if (clean.length < 8) { updateMessage = "令牌太短，没有保存。"; return }
-        runCatching { TokenStore.save(getApplication(), clean) }
-            .onSuccess { updateMessage = "令牌已加密保存，不会再显示。" }
-            .onFailure { updateMessage = "系统密钥库没有收下这个令牌。" }
-    }
-    fun clearGithubToken() { TokenStore.clear(getApplication()); deviceCode = null; updateMessage = "已清除本机令牌。" }
-    fun clientId(): String = prefs.getString("ghClient", "") ?: ""
-    fun saveClientId(value: String) { prefs.edit().putString("ghClient", value.trim().take(128)).apply() }
+    init { runCatching { TokenStore.clear(getApplication()) } }
 
     fun checkUpdate() = viewModelScope.launch {
         updateBusy = true
-        val token = TokenStore.read(getApplication())
-        if (token.isNullOrBlank()) { updateMessage = UpdateLogic.FIRST_UPGRADE; updateBusy = false; return@launch }
-        val result = withContext(Dispatchers.IO) { runCatching { GithubUpdate().latest(token, BuildConfig.VERSION_NAME) } }
+        val result = withContext(Dispatchers.IO) { runCatching { GithubUpdate().latest(BuildConfig.VERSION_NAME) } }
         updateBusy = false
         result.onSuccess { rel ->
             pending = rel
@@ -70,12 +58,11 @@ class LiveViewModel(app: Application) : AndroidViewModel(app) {
     fun downloadUpdate() = viewModelScope.launch {
         val rel = pending ?: run { updateMessage = "先检查更新。"; return@launch }
         if (rel.digest.length != 64) { updateMessage = UpdateLogic.decisionMessage("NO_CHECKSUM"); return@launch }
-        val token = TokenStore.read(getApplication()) ?: run { updateMessage = "没有授权，下载没有开始。"; return@launch }
         val dest = java.io.File(getApplication<Application>().cacheDir, "updates/tokilive-update.apk")
         updateBusy = true
         updateProgress = 0
         val result = withContext(Dispatchers.IO) {
-            runCatching { GithubUpdate().download(token, rel.assetId, dest) { read, total ->
+            runCatching { GithubUpdate().download(rel.assetId, dest) { read, total ->
                 viewModelScope.launch { updateProgress = if (total > 0) ((read * 100) / total).toInt() else 0 }
             } }
         }
@@ -96,20 +83,5 @@ class LiveViewModel(app: Application) : AndroidViewModel(app) {
             "OK" -> ApkInstall.launchSystemInstaller(getApplication(), file)
             "UNKNOWN_SOURCES" -> ApkInstall.openUnknownSources(getApplication())
         }
-    }
-    fun startDeviceLogin() = viewModelScope.launch {
-        val id = clientId()
-        if (!Regex("""^[\w.-]{8,128}$""").matches(id)) { updateMessage = "需要填写 OAuth client id，或改用只读令牌。"; return@launch }
-        val json = withContext(Dispatchers.IO) { runCatching { GithubUpdate().startDevice(id) }.getOrNull() } ?: run { updateMessage = "设备码申请失败。"; return@launch }
-        deviceCode = json.optString("device_code").ifBlank { null }
-        updateMessage = "设备码 ${json.optString("user_code")} 。在浏览器打开 ${json.optString("verification_uri")} 后点继续。"
-    }
-    fun pollDeviceLogin() = viewModelScope.launch {
-        val code = deviceCode ?: run { updateMessage = "还没有开始设备码登录。"; return@launch }
-        val json = withContext(Dispatchers.IO) { runCatching { GithubUpdate().pollDevice(clientId(), code) }.getOrNull() } ?: run { updateMessage = "设备码登录没有完成。"; return@launch }
-        val token = json.optString("access_token")
-        if (token.isBlank()) { updateMessage = if (json.optString("error") == "authorization_pending") "还在等待授权。" else "设备码登录没有完成。"; return@launch }
-        saveGithubToken(token)
-        deviceCode = null
     }
 }

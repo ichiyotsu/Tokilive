@@ -1,7 +1,7 @@
 const REPO = 'ichiyotsu/tokilive';
 const API = 'https://api.github.com';
 
-const FIRST_UPGRADE_NOTE = '1.0.0 没有应用内更新。从 1.0.0 升到 1.1.0 需要打开私人仓库的 Releases，手动下载安装包或便携版，安装一次。1.1.0 及之后才能在应用里检查更新。私人仓库的附件不能匿名下载：可以用已经登录的 GitHub CLI、一次设备码授权，或只读令牌。令牌只放在系统加密存储里，不会出现在界面和日志中。';
+const FIRST_UPGRADE_NOTE = '仓库已经公开。1.2.0 起检查更新不需要令牌、设备码或 GitHub CLI。正在使用 1.0.0，或 1.1.0 里那套私人仓库授权的人，需要手动安装 1.2.0 一次。之后的正式版按平台选择安装包，并校验 SHA-256。';
 
 const TOKEN_RE = /(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9_]+/g;
 
