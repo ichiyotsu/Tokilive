@@ -28,11 +28,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install Android SDK platform 37
-        run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses > /dev/null || true
-          yes | "$SDKMANAGER" "platforms;android-37" "build-tools;37.0.0"
+            - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-37.0 build-tools;37.0.0
 
       - name: Restore release keystore
         id: keystore
