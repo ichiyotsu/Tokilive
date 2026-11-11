@@ -58,6 +58,41 @@ public sealed class AppState : INotifyPropertyChanged
     // 1.2.0 main.js 默认 minGiftPrice: 0（元）。>0 时按 overlay.js 的规则
     // 过滤便宜礼物；没有给它做设置 UI，先只留字段和过滤逻辑。
     public double MinGiftPrice { get => minGiftPrice; set => Set(ref minGiftPrice, value); }
+    // 1.2.0 补全（46 项审计）：停留时间/条数、字重、阴影、磨砂、卡片主题、
+    // 种子色、粉丝牌开关、三路字体、实时窗行为、消息去向、自适应兜底、
+    // 设置窗背景/材质/侧栏、粉丝牌样式、输入窗位置、锁定快捷键。
+    // 默认值按 1.2.0 main.js DEFAULTS（miniLayout 默认 'h'，miniPills 默认关）。
+    public double DanmakuLifetime { get => danmakuLifetime; set => Set(ref danmakuLifetime, value); }
+    public int MaxMessages { get => maxMessages; set => Set(ref maxMessages, value); }
+    public string DanmakuFontWeight { get => danmakuFontWeight; set => Set(ref danmakuFontWeight, value); }
+    public double TextShadow { get => textShadow; set => Set(ref textShadow, value); }
+    public double CardBlur { get => cardBlur; set => Set(ref cardBlur, value); }
+    public string CardThemeMode { get => cardThemeMode; set => Set(ref cardThemeMode, value); }
+    public string SeedColor { get => seedColor; set => Set(ref seedColor, value); }
+    public bool ShowMedal { get => showMedal; set => Set(ref showMedal, value); }
+    public string CjkFont { get => cjkFont; set => Set(ref cjkFont, value); }
+    public string JpFont { get => jpFont; set => Set(ref jpFont, value); }
+    public bool MiniStats { get => miniStats; set => Set(ref miniStats, value); }
+    public string MiniLayout { get => miniLayout; set => Set(ref miniLayout, value); }
+    public bool MiniPills { get => miniPills; set => Set(ref miniPills, value); }
+    public double MiniLifetime { get => miniLifetime; set => Set(ref miniLifetime, value); }
+    public int MiniMax { get => miniMax; set => Set(ref miniMax, value); }
+    public string RouteEnter { get => routeEnter; set => Set(ref routeEnter, value); }
+    public string RouteFollow { get => routeFollow; set => Set(ref routeFollow, value); }
+    public string RouteShare { get => routeShare; set => Set(ref routeShare, value); }
+    public string RouteLike { get => routeLike; set => Set(ref routeLike, value); }
+    public string AdaptiveManual { get => adaptiveManual; set => Set(ref adaptiveManual, value); }
+    public string AppBackground { get => appBackground; set => Set(ref appBackground, value); }
+    public double AppBgOpacity { get => appBgOpacity; set => Set(ref appBgOpacity, value); }
+    public string AppMaterial { get => appMaterial; set => Set(ref appMaterial, value); }
+    public string SidebarMode { get => sidebarMode; set => Set(ref sidebarMode, value); }
+    public string MedalStyle { get => medalStyle; set => Set(ref medalStyle, value); }
+    public bool ScBiliColor { get => scBiliColor; set => Set(ref scBiliColor, value); }
+    public int InputX { get => inputX; set => Set(ref inputX, value); }
+    public int InputY { get => inputY; set => Set(ref inputY, value); }
+    public int InputW { get => inputW; set => Set(ref inputW, value); }
+    public int InputH { get => inputH; set => Set(ref inputH, value); }
+    public string LockHotkey { get => lockHotkey; set => Set(ref lockHotkey, value); }
     public double TtsVolume { get => ttsVolume; set => Set(ref ttsVolume, value); }
     public string CardFont { get => cardFont; set => Set(ref cardFont, value); }
     public bool ExperimentalTopmost { get => experimentalTopmost; set => Set(ref experimentalTopmost, value); }
@@ -136,6 +171,36 @@ public sealed class AppState : INotifyPropertyChanged
     string danmakuAnim = "default";
     double danmakuAnimSpeed = 1;
     double minGiftPrice;
+    double danmakuLifetime = 30;
+    int maxMessages = 30;
+    string danmakuFontWeight = "700";
+    double textShadow = 0.6;
+    double cardBlur = 16;
+    string cardThemeMode = "system";
+    string seedColor = "#6750A4";
+    bool showMedal = true;
+    string cjkFont = "Source Han Sans SC";
+    string jpFont = "Source Han Sans SC";
+    bool miniStats = true;
+    string miniLayout = "h";
+    // 默认开：WinUI 1.3.1 一直显示互动气泡，默认关会让现有用户升级后
+    // 气泡突然消失（行为回归）。1.2.0 迁移仍以 Electron 的值（默认关）为准。
+    bool miniPills = true;
+    double miniLifetime = 6;
+    int miniMax = 5;
+    string routeEnter = "mini";
+    string routeFollow = "mini";
+    string routeShare = "mini";
+    string routeLike = "mini";
+    string adaptiveManual = "light";
+    string appBackground = "";
+    double appBgOpacity = 0.45;
+    string appMaterial = "mica";
+    string sidebarMode = "auto";
+    string medalStyle = "unified";
+    bool scBiliColor;
+    int inputX, inputY, inputW, inputH;
+    string lockHotkey = "Control+Shift+L";
     double ttsVolume = 1;
     string cardFont = "Segoe UI Variable";
     bool experimentalTopmost;
@@ -240,7 +305,41 @@ public sealed class AppState : INotifyPropertyChanged
             s.FontSize = Num("fontSize", s.FontSize);
             s.CardOpacity = Num("opacity", s.CardOpacity);
             s.Corner = Num("radius", s.Corner);
-            s.Hotkey = Str("hotkey").Length > 0 ? Str("hotkey") : s.Hotkey;
+            // 1.2.0 的 hotkey 是锁定快捷键，danmakuHotkey 才是输入快捷键；
+            // 以前迁移把锁定快捷键错写进了输入快捷键字段，这里分开。
+            s.LockHotkey = Str("hotkey").Length > 0 ? Str("hotkey") : s.LockHotkey;
+            var dh = Str("danmakuHotkey");
+            if (dh.Length > 0) s.Hotkey = dh;
+            s.DanmakuLifetime = Num("lifetime", s.DanmakuLifetime);
+            s.MaxMessages = (int)Num("maxMessages", s.MaxMessages);
+            s.DanmakuFontWeight = ((int)Num("fontWeight", 700)).ToString();
+            s.TextShadow = Num("textShadow", s.TextShadow);
+            s.CardBlur = Num("blur", s.CardBlur);
+            s.CardThemeMode = Str("themeMode").Length > 0 ? Str("themeMode") : s.CardThemeMode;
+            s.SeedColor = Str("seedColor").Length > 0 ? Str("seedColor") : s.SeedColor;
+            s.ShowMedal = Bool("showMedal", s.ShowMedal);
+            s.CjkFont = Str("cjkFont").Length > 0 ? Str("cjkFont") : s.CjkFont;
+            s.JpFont = Str("jpFont").Length > 0 ? Str("jpFont") : s.JpFont;
+            s.MiniStats = Bool("miniStats", s.MiniStats);
+            s.MiniLayout = Str("miniLayout").Length > 0 ? Str("miniLayout") : s.MiniLayout;
+            s.MiniPills = Bool("miniPills", s.MiniPills);
+            s.MiniLifetime = Num("miniLifetime", s.MiniLifetime);
+            s.MiniMax = (int)Num("miniMax", s.MiniMax);
+            s.AdaptiveManual = Str("adaptiveManual").Length > 0 ? Str("adaptiveManual") : s.AdaptiveManual;
+            s.AppBackground = Str("appBackground");
+            s.AppBgOpacity = Num("appBgOpacity", s.AppBgOpacity);
+            s.AppMaterial = Str("appMaterial").Length > 0 ? Str("appMaterial") : s.AppMaterial;
+            s.SidebarMode = Str("sidebar").Length > 0 ? Str("sidebar") : s.SidebarMode;
+            s.MedalStyle = Str("medalStyle").Length > 0 ? Str("medalStyle") : s.MedalStyle;
+            s.ScBiliColor = Bool("scBiliColor", s.ScBiliColor);
+            if (root.TryGetProperty("route", out var route))
+            {
+                string R(string n, string fb) => route.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? fb : fb;
+                s.RouteEnter = R("enter", s.RouteEnter);
+                s.RouteFollow = R("follow", s.RouteFollow);
+                s.RouteShare = R("share", s.RouteShare);
+                s.RouteLike = R("like", s.RouteLike);
+            }
             s.ObsPort = (int)Num("obsPort", s.ObsPort);
             s.ShowWindowBorder = Bool("showWindowBorder", s.ShowWindowBorder);
             s.ShowLiveBorder = Bool("showLiveBorder", s.ShowLiveBorder);

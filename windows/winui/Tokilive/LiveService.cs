@@ -33,6 +33,9 @@ public sealed class ChatLine
     public string Emote { get; init; } = "";
     public int Price { get; init; }
     public string Color { get; init; } = "";
+    // #20：SUPER_CHAT_MESSAGE 的 time（持续秒数，1.2.0 duration: d.time）。
+    // 0 表示用默认 DanmakuLifetime；>0 时实际停留取 max(默认, duration)，见 LifetimeOf()。
+    public double DurationSeconds { get; init; }
 }
 
 public static class LiveService
@@ -48,21 +51,41 @@ public static class LiveService
     public static string Watched = "";
 
     // 对齐 1.2.0 的默认值：弹幕 lifetime 30 秒，实时窗互动 miniLifetime 6 秒。
-    public static readonly TimeSpan DanmakuLifetime = TimeSpan.FromSeconds(30);
-    public static readonly TimeSpan PillLifetime = TimeSpan.FromSeconds(6);
+    // 这两个数现在直接读 AppState（设置页可改）：DanmakuLifetime 0 = 不消失，
+    // MiniLifetime 0 = 不消失。以前这里是写死的 readonly 常量，设置改了也不生效。
+    public static TimeSpan PillLifetime => AppState.Current.MiniLifetime <= 0 ? TimeSpan.MaxValue : TimeSpan.FromSeconds(AppState.Current.MiniLifetime);
 
-    static bool IsExpired(ChatLine line, TimeSpan lifetime) =>
-        DateTimeOffset.UtcNow - line.At > lifetime;
+    static bool IsExpired(ChatLine line, double lifetimeSeconds) =>
+        // 不直接 TimeSpan.FromSeconds：PositiveInfinity / TimeSpan.MaxValue
+        // 的秒数会让 FromSeconds 抛 OverflowException，这里只比秒数。
+        !double.IsPositiveInfinity(lifetimeSeconds) && (DateTimeOffset.UtcNow - line.At).TotalSeconds > lifetimeSeconds;
+
+    // #20：一条弹幕的实际停留秒数。醒目留言按 duration 延长，
+    // 取 max(默认, duration)；0 表示用默认 lifetime。
+    // DanmakuLifetime 设成 0 = 永不消失，返回 PositiveInfinity，
+    // IsExpired / OverlayWindow 的 Render 都把它当“不过期”。
+    public static double LifetimeOf(ChatLine line)
+    {
+        var baseLifetime = AppState.Current.DanmakuLifetime;
+        if (baseLifetime <= 0) return double.PositiveInfinity;
+        return line.DurationSeconds > 0
+            ? Math.Max(baseLifetime, line.DurationSeconds)
+            : baseLifetime;
+    }
 
     public static bool HasExpired() =>
-        Lines.TakeLast(8).Any(l => IsExpired(l, DanmakuLifetime)) ||
-        Pills.TakeLast(4).Any(l => IsExpired(l, PillLifetime));
+        Lines.TakeLast(Math.Max(1, AppState.Current.MaxMessages)).Any(l => IsExpired(l, LifetimeOf(l))) ||
+        Pills.TakeLast(Math.Max(1, AppState.Current.MiniMax)).Any(l => IsExpired(l, PillLifetime.TotalSeconds));
 
     static readonly HttpClient Http = new(new HttpClientHandler { UseCookies = false }) { Timeout = TimeSpan.FromSeconds(20) };
     static readonly int[] Mixin = [46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52];
     static CancellationTokenSource? _run;
     static DateTime _nextSend = DateTime.MinValue;
     static string? _mix;
+    // #17：buvid3 只在会话内缓存，不写盘（null = 还没拿到或上次获取失败，下次重连再试）。
+    static string? _buvid;
+    // #18：看门狗用的最后收到数据时间，每收到一帧 WebSocket 数据就更新。
+    static DateTime _lastRx = DateTime.UtcNow;
     // 1.2.0 bili.js resolveRoom() 读 room_init 的 data.live_status（1=开播），
     // 连接成功时据此报“未开播”。RunOnce 里记下来，Unpack 收到 op==8 时用。
     static int _liveStatus = 1;
@@ -73,15 +96,34 @@ public static class LiveService
     public static void PushLine(ChatLine line, bool force = false)
     {
         if (!force && !AppState.Current.Allows(line.Type)) return;
-        var pills = line.Type is "enter" or "follow" or "like" or "share";
+        var isPill = line.Type is "enter" or "follow" or "like" or "share";
         App.UI(() =>
         {
-            var list = pills ? Pills : Lines;
+            ObservableCollection<ChatLine> list;
+            if (isPill)
+            {
+                // 1.2.0 的 route：mini = 实时窗，main = 弹幕窗，off = 丢掉。
+                // 默认全是 mini，和以前一样进 Pills。
+                var route = RouteFor(line.Type);
+                if (route == "off") return;
+                list = route == "main" ? Lines : Pills;
+            }
+            else list = Lines;
             list.Add(line);
-            // 1.2.0 maxMessages 默认 30；1.3.1 放到 200 条，旧消息一直占着列表。
-            while (list.Count > 30) list.RemoveAt(0);
+            // 上限也读设置：弹幕窗 MaxMessages（默认 30），实时窗 MiniMax（默认 5）。
+            var cap = ReferenceEquals(list, Lines) ? Math.Max(1, AppState.Current.MaxMessages) : Math.Max(1, AppState.Current.MiniMax);
+            while (list.Count > cap) list.RemoveAt(0);
         });
     }
+
+    static string RouteFor(string type) => type switch
+    {
+        "enter" => AppState.Current.RouteEnter,
+        "follow" => AppState.Current.RouteFollow,
+        "share" => AppState.Current.RouteShare,
+        "like" => AppState.Current.RouteLike,
+        _ => "mini"
+    };
 
     public static async Task RefreshAccount()
     {
@@ -228,6 +270,10 @@ public static class LiveService
     static async Task RunOnce(string roomText, CancellationToken token)
     {
             Report("正在解析房间号…");
+            // #19：每次（重）连都把统计清零（1.2.0 main.js connect() 里 stats = {}），
+            // 并通知界面清空数字。
+            Likes = 0; Danmaku = 0; Online = 0; Watched = "";
+            StatsChanged?.Invoke();
             var id = new string(roomText.Where(char.IsDigit).ToArray());
             var init = await GetJson("https://api.live.bilibili.com/room/v1/Room/room_init?id=" + id, AppState.Current.Cookie);
             if (init.RootElement.GetProperty("code").GetInt32() != 0) throw new InvalidOperationException("直播间不存在");
@@ -239,15 +285,50 @@ public static class LiveService
             var data = info.RootElement.GetProperty("data");
             var host = data.GetProperty("host_list")[0];
             var url = $"wss://{host.GetProperty("host").GetString()}:{host.GetProperty("wss_port").GetInt32()}/sub";
-            var auth = JsonSerializer.Serialize(new { uid = 0, roomid = roomId, protover = 2, platform = "web", type = 2, key = data.GetProperty("token").GetString() });
+            // #16：cookie 里的 DedeUserID 就是登录 uid（1.2.0 bili.js start()），
+            // 没有或解析失败才用 0 匿名；匿名连接用户名会被 B 站打码。
+            var uid = long.TryParse(CookieValue(AppState.Current.Cookie, "DedeUserID"), out var parsedUid) ? parsedUid : 0;
+            // #17：cookie 里没有 buvid3 就向 finger/spi 要一个，失败也不阻塞连接。
+            var buvid = await EnsureBuvidAsync();
+            var authObj = new Dictionary<string, object>
+            {
+                ["uid"] = uid, ["roomid"] = roomId, ["protover"] = 2, ["platform"] = "web", ["type"] = 2,
+                ["key"] = data.GetProperty("token").GetString() ?? ""
+            };
+            if (buvid.Length > 0) authObj["buvid"] = buvid;
+            var auth = JsonSerializer.Serialize(authObj);
             using var ws = new ClientWebSocket();
             ws.Options.SetRequestHeader("User-Agent", "tokilive/1.3.1");
             ws.Options.SetRequestHeader("Origin", "https://live.bilibili.com");
             await ws.ConnectAsync(new Uri(url), token);
             await ws.SendAsync(Pack(7, auth), WebSocketMessageType.Binary, true, token);
+            _lastRx = DateTime.UtcNow;
             var buf = new byte[1 << 20];
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
-            var beat = Task.Run(async () => { while (await timer.WaitForNextTickAsync(token)) await ws.SendAsync(Pack(2, ""), WebSocketMessageType.Binary, true, token); }, token);
+            var beat = Task.Run(async () =>
+            {
+                try { while (await timer.WaitForNextTickAsync(token)) await ws.SendAsync(Pack(2, ""), WebSocketMessageType.Binary, true, token); }
+                catch { /* 连接断开/停止时心跳退出 */ }
+            }, token);
+            // #18：75 秒无数据看门狗（1.2.0 bili.js：每 10 秒检查一次，超 75 秒 terminate）。
+            // Abort() 让 ReceiveAsync 抛错，走 Run() 已有的指数退避重连，不另写重连机制。
+            var watchdog = Task.Run(async () =>
+            {
+                try
+                {
+                    while (!token.IsCancellationRequested && ws.State == WebSocketState.Open)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(10), token);
+                        if (DateTime.UtcNow - _lastRx > TimeSpan.FromSeconds(75))
+                        {
+                            Report("75 秒没有收到数据，正在重连…");
+                            ws.Abort();
+                            break;
+                        }
+                    }
+                }
+                catch { /* 停止时退出 */ }
+            }, token);
             while (!token.IsCancellationRequested && ws.State == WebSocketState.Open)
             {
                 // 1.3.1 只读一帧就解析，分片的大帧会被当成不完整包丢掉。
@@ -257,6 +338,7 @@ public static class LiveService
                 do
                 {
                     result = await ws.ReceiveAsync(buf, token);
+                    if (result.Count > 0) _lastRx = DateTime.UtcNow;
                     if (result.MessageType == WebSocketMessageType.Close) break;
                     ms.Write(buf, 0, result.Count);
                 } while (!result.EndOfMessage);
@@ -264,6 +346,25 @@ public static class LiveService
                 Unpack(ms.ToArray(), roomId);
             }
             await beat;
+            await watchdog;
+    }
+
+    // #17：cookie 里没有 buvid3 时向 finger/spi 要一个（1.2.0 ensureBuvid）。
+    // 失败就返回 ""、连接继续不带 buvid；只在会话内缓存，不写盘。
+    static async Task<string> EnsureBuvidAsync()
+    {
+        if (_buvid != null) return _buvid;
+        var fromCookie = CookieValue(AppState.Current.Cookie, "buvid3");
+        if (fromCookie.Length > 0) { _buvid = fromCookie; return _buvid; }
+        try
+        {
+            var spi = await GetJson("https://api.bilibili.com/x/frontend/finger/spi", AppState.Current.Cookie);
+            var b = spi.RootElement.TryGetProperty("data", out var d) && d.TryGetProperty("b_3", out var b3) && b3.ValueKind == JsonValueKind.String
+                ? b3.GetString() ?? "" : "";
+            if (b.Length > 0) _buvid = b;
+            return b;
+        }
+        catch { return ""; }
     }
 
     static void Unpack(ReadOnlyMemory<byte> buf, int roomId)
@@ -406,8 +507,11 @@ public static class LiveService
             // 1.2.0：color 取 background_bottom_color，没有再取 background_color。
             var color = GetStr(sc, "background_bottom_color");
             if (color.Length == 0) color = GetStr(sc, "background_color");
+            // #20：SUPER_CHAT_MESSAGE 的 time 是持续秒数（1.2.0 duration: d.time），
+            // 实际停留取 max(默认 30 秒, duration)，见 LifetimeOf()。
+            var duration = sc.TryGetProperty("time", out var t) && t.ValueKind == JsonValueKind.Number && t.TryGetDouble(out var d) ? d : 0;
             var (mName, mLevel, mColor) = MedalFrom(sc, "medal_info");
-            PushLine(new ChatLine { Type = "superchat", Name = uname, Text = text, Face = sc.TryGetProperty("user_info", out var uu) ? GetStr(uu, "face") : "", MedalName = mName, MedalLevel = mLevel, MedalColor = mColor, Price = price, Color = color });
+            PushLine(new ChatLine { Type = "superchat", Name = uname, Text = text, Face = sc.TryGetProperty("user_info", out var uu) ? GetStr(uu, "face") : "", MedalName = mName, MedalLevel = mLevel, MedalColor = mColor, Price = price, Color = color, DurationSeconds = duration });
             if (AppState.Current.TtsEnabled) SpeechService.Speak($"{uname}的醒目留言：{text}");
         }
         else if (cmd == "GUARD_BUY" && root.TryGetProperty("data", out var guard))
@@ -466,18 +570,22 @@ public static class LiveService
             _ => ("", "")
         } : ("", "");
         if (type.Length == 0) return;
-        // 1.2.0：进场/关注/分享也带粉丝牌（fans_medal）。V2 解码里没有这块，留空。
+        // 1.2.0：进场/关注/分享也带粉丝牌（fans_medal）；V1 直接是 JSON 对象，
+        // V2 由 DecodeInteract 解出字段 9 拼成同名对象，MedalFrom 一并处理。
         var (mName, mLevel, mColor) = MedalFrom(data, "fans_medal");
         PushLine(new ChatLine { Type = type, Name = GetStr(data, "uname"), Text = action, MedalName = mName, MedalLevel = mLevel, MedalColor = mColor });
     }
 
     // 极简 protobuf 解码，只取 INTERACT_WORD_V2 需要的字段。
-    // 字段 1=uid（varint）、2=uname（bytes）、5=msg_type（varint）。
+    // 字段 1=uid（varint）、2=uname（bytes）、5=msg_type（varint）、
+    // 9=fans_medal（子消息，见 DecodeFansMedal）。
     static JsonElement DecodeInteract(byte[] buf)
     {
         long uid = 0;
         string uname = "";
         long msgType = 0;
+        string medalName = "";
+        int medalLevel = 0, medalColor = 0;
         var i = 0;
         long Varint()
         {
@@ -507,16 +615,75 @@ public static class LiveService
             {
                 var len = (int)Varint();
                 if (i + len > buf.Length) break;
-                var text = Encoding.UTF8.GetString(buf, i, len);
+                if (no == 9)
+                {
+                    // #21：fans_medal 子消息（1.2.0 注释只确认了 3=medal_name，
+                    // 其余子字段按 B 站 FansMedal proto：2=medal_level、4=medal_color_start）。
+                    var (mName, mLevel, mColor) = DecodeFansMedal(buf, i, len);
+                    medalName = mName; medalLevel = mLevel; medalColor = mColor;
+                }
+                else
+                {
+                    var text = Encoding.UTF8.GetString(buf, i, len);
+                    if (no == 2) uname = text;
+                }
                 i += len;
-                if (no == 2) uname = text;
             }
             else if (wt == 1) i += 8;
             else if (wt == 5) i += 4;
             else break;
         }
-        using var doc = JsonDocument.Parse($"{{\"uid\":{uid},\"uname\":{JsonSerializer.Serialize(uname)},\"msg_type\":{msgType}}}");
+        using var doc = JsonDocument.Parse($"{{\"uid\":{uid},\"uname\":{JsonSerializer.Serialize(uname)},\"msg_type\":{msgType},\"fans_medal\":{{\"medal_name\":{JsonSerializer.Serialize(medalName)},\"medal_level\":{medalLevel},\"medal_color\":{medalColor}}}}}");
         return doc.RootElement.Clone();
+    }
+
+    // #21：INTERACT_WORD_V2 字段 9 fans_medal 的子消息解码。
+    // 子字段按 B 站 FansMedal：1=target_id、2=medal_level、3=medal_name、
+    // 4=medal_color_start（显示色，JSON 里 medal_color 对应的就是它）。
+    // 1.2.0 bili.js 注释只确认了 3=medal_name，2 和 4 需实机验证；
+    // 名字或等级为空时 MedalFrom 会丢掉整个牌子，所以解错也只是不显示牌子。
+    static (string name, int level, int color) DecodeFansMedal(byte[] buf, int start, int len)
+    {
+        var name = "";
+        long level = 0, color = 0;
+        var j = start;
+        var end = start + len;
+        long Varint()
+        {
+            long r = 0;
+            var s = 0;
+            while (j < end)
+            {
+                var b = buf[j++];
+                r |= (long)(b & 0x7f) << s;
+                s += 7;
+                if ((b & 0x80) == 0) break;
+            }
+            return r;
+        }
+        while (j < end)
+        {
+            var key = Varint();
+            var no = (int)(key >> 3);
+            var wt = (int)(key & 7);
+            if (wt == 0)
+            {
+                var v = Varint();
+                if (no == 2) level = v;
+                else if (no == 4) color = v;
+            }
+            else if (wt == 2)
+            {
+                var l = (int)Varint();
+                if (j + l > end) break;
+                if (no == 3) name = Encoding.UTF8.GetString(buf, j, l);
+                j += l;
+            }
+            else if (wt == 1) j += 8;
+            else if (wt == 5) j += 4;
+            else break;
+        }
+        return (name, (int)level, (int)color);
     }
 
     static async Task<string> Wbi(Dictionary<string, string> query)

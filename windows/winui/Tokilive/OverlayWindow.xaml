@@ -7,6 +7,16 @@
          字就跟着变小、变糊。1.2.0 的弹幕列表是底部对齐、溢出直接裁掉、
          字号固定不变的，这里改回底部对齐的 StackPanel，不再整体缩放。 -->
     <Grid x:Name="Root" Background="Transparent">
-        <StackPanel x:Name="Host" MinWidth="280" MaxWidth="560" Spacing="8" VerticalAlignment="Bottom" HorizontalAlignment="Stretch"/>
+        <!-- #24 顶部渐隐：1.2.0 的 #list 用 -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 40px)，
+             这里用 OpacityMask + 绝对坐标的线性渐变（0→40px 从透明到不透明）做同样的事。
+             注意：还没在真机上验证过 OpacityMask 在透明悬浮窗上是否生效，见 OverlayWindow.xaml.cs 的注释。 -->
+        <StackPanel x:Name="Host" MinWidth="280" MaxWidth="560" Spacing="8" VerticalAlignment="Bottom" HorizontalAlignment="Stretch">
+            <StackPanel.OpacityMask>
+                <LinearGradientBrush MappingMode="Absolute" StartPoint="0,0" EndPoint="0,40">
+                    <GradientStop Offset="0" Color="Transparent"/>
+                    <GradientStop Offset="1" Color="Black"/>
+                </LinearGradientBrush>
+            </StackPanel.OpacityMask>
+        </StackPanel>
     </Grid>
 </Window>

@@ -18,16 +18,17 @@ public static class NativeWin
     const int WS_EX_LAYERED = 0x00080000;
     const int WS_EX_TRANSPARENT = 0x00000020;
     const int WS_EX_TOOLWINDOW = 0x00000080;
+    const int WS_EX_APPWINDOW = 0x00040000;
     const int WS_EX_NOACTIVATE = 0x08000000;
     const uint SWP_NOSIZE = 0x0001;
     const uint SWP_NOMOVE = 0x0002;
     const uint SWP_NOACTIVATE = 0x0010;
     const uint SWP_SHOWWINDOW = 0x0040;
+    const uint SWP_FRAMECHANGED = 0x0020;
+    const uint WDA_NONE = 0;
     static readonly IntPtr HWND_TOPMOST = new(-1);
     static readonly IntPtr HWND_NOTOPMOST = new(-2);
-    const int SW_HIDE = 0;
-    const int SW_SHOWNA = 8;
-    const uint SRCCOPY = 0x00CC0020;
+    const int WM_NULL = 0x0000;
     const int NIF_MESSAGE = 0x1;
     const int NIF_ICON = 0x2;
     const int NIF_TIP = 0x4;
@@ -35,9 +36,30 @@ public static class NativeWin
     const int NIM_DELETE = 0x2;
     const int WM_LBUTTONUP = 0x0202;
     const int WM_LBUTTONDBLCLK = 0x0203;
+    const int WM_RBUTTONUP = 0x0205;
+    const int WM_HOTKEY = 0x0312;
     const int WM_APP = 0x8000;
     const uint WCA_ACCENT_POLICY = 19;
     const int ACCENT_ENABLE_TRANSPARENTGRADIENT = 2;
+    // 托盘右键菜单
+    const uint MF_STRING = 0x0000;
+    const uint MF_GRAYED = 0x0001;
+    const uint MF_DISABLED = 0x0002;
+    const uint MF_CHECKED = 0x0008;
+    const uint MF_SEPARATOR = 0x0800;
+    const uint TPM_LEFTALIGN = 0x0000;
+    const uint TPM_RIGHTBUTTON = 0x0002;
+    const uint TPM_RETURNCMD = 0x0100;
+    const uint TrayMenuStatus = 1000;
+    const uint TrayMenuSettings = 1001;
+    const uint TrayMenuLockAll = 1002;
+    const uint TrayMenuLockDanmaku = 1003;
+    const uint TrayMenuLockLive = 1004;
+    const uint TrayMenuDanmakuVisible = 1005;
+    const uint TrayMenuLiveVisible = 1006;
+    const uint TrayMenuTopmost = 1007;
+    const uint TrayMenuReconnect = 1008;
+    const uint TrayMenuExit = 1009;
 
     public static IntPtr Hwnd(Window window) => WindowNative.GetWindowHandle(window);
     public static AppWindow ForWindow(Window window) => AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(Hwnd(window)));
@@ -106,10 +128,17 @@ public static class NativeWin
         SetWindowLongPtr(hwnd, GWL_STYLE, new IntPtr(style));
 
         var ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
-        ex |= WS_EX_LAYERED | WS_EX_TOOLWINDOW;
+        // 1.2.0 capture-win.js / capture-style.js：OBS / 直播姬的窗口枚举会
+        // 跳过 WS_EX_TOOLWINDOW，所以去掉它、改加 WS_EX_APPWINDOW，让悬浮窗
+        // 能被窗口捕获枚举到。分层透明（WS_EX_LAYERED）保留，否则不是真透明。
+        // 代价：悬浮窗会出现在任务栏和 Alt-Tab 里，这是 1.2.0 就有的取舍。
+        ex |= WS_EX_LAYERED | WS_EX_APPWINDOW;
+        ex &= ~WS_EX_TOOLWINDOW;
         if (noActivate) ex |= WS_EX_NOACTIVATE; else ex &= ~WS_EX_NOACTIVATE;
         if (clickThrough) ex |= WS_EX_TRANSPARENT; else ex &= ~WS_EX_TRANSPARENT;
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex));
+        // WDA_EXCLUDEFROMCAPTURE (0x11) 会让系统直接拒绝采集，必须保持 WDA_NONE。
+        SetWindowDisplayAffinity(hwnd, WDA_NONE);
         var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
         DwmExtendFrameIntoClientArea(hwnd, ref margins);
         var accent = new ACCENT_POLICY { AccentState = ACCENT_ENABLE_TRANSPARENTGRADIENT };
@@ -122,7 +151,9 @@ public static class NativeWin
             SetWindowCompositionAttribute(hwnd, ref data);
         }
         finally { Marshal.FreeHGlobal(ptr); }
-        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        // SWP_FRAMECHANGED：扩展样式改了要让系统重算窗口帧，否则
+        // WS_EX_TOOLWINDOW 去掉 / WS_EX_APPWINDOW 加上可能不生效。
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
     }
 
     public static void PlaceBelow(IntPtr overlay, IntPtr main)
@@ -147,41 +178,46 @@ public static class NativeWin
         SetWindowPos(hwnd, overlays ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | (overlays ? SWP_NOACTIVATE : 0));
     }
 
-    /// <summary>短暂藏起自己的窗口，再从屏幕 DC 取窗口矩形里的像素。默认关闭，约 2 秒一次。</summary>
+    /// <summary>不隐藏窗口：直接从屏幕 DC 读窗口矩形外侧一圈的像素（上/下/左/右
+    /// 各取几点，像 1.2.0 adaptive.js 的 luminanceOutside），按亮度均值判断
+    /// 背景是亮是暗。窗口不再闪一下。默认约 2 秒调一次。</summary>
     public static bool? SampleBehindIsLight(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out var rect)) return null;
         int w = rect.right - rect.left;
         int h = rect.bottom - rect.top;
         if (w < 8 || h < 8) return null;
-        ShowWindow(hwnd, SW_HIDE);
+        var screen = GetDC(IntPtr.Zero);
+        if (screen == IntPtr.Zero) return null;
         long sum = 0;
         var count = 0;
-        var screen = GetDC(IntPtr.Zero);
-        var mem = CreateCompatibleDC(screen);
-        var bmp = CreateCompatibleBitmap(screen, 16, 16);
-        var old = SelectObject(mem, bmp);
         try
         {
-            if (!BitBlt(mem, 0, 0, 16, 16, screen, rect.left + w / 2 - 8, rect.top + h / 2 - 8, SRCCOPY)) return null;
-            for (var y = 0; y < 16; y += 4)
-            for (var x = 0; x < 16; x += 4)
+            // 窗口贴着屏幕边缘时，外侧点可能落在屏幕外，
+            // GetPixel 会返回 CLR_INVALID (0xFFFFFFFF)，直接跳过。
+            void Sample(int x, int y)
             {
-                var px = (uint)GetPixel(mem, x, y);
-                if (px == 0xFFFFFFFF) continue;
+                var px = GetPixel(screen, x, y);
+                if (px == 0xFFFFFFFF) return;
                 int r = (int)(px & 0xFF), g = (int)((px >> 8) & 0xFF), b = (int)((px >> 16) & 0xFF);
                 sum += (long)(0.2126 * r + 0.7152 * g + 0.0722 * b);
                 count++;
             }
+            // 上下两条边外 8px，各取 5 个点；左右两条边外 8px，各取 3 个点。
+            for (var i = 1; i <= 5; i++)
+            {
+                var x = rect.left + w * i / 6;
+                Sample(x, rect.top - 8);
+                Sample(x, rect.bottom + 8);
+            }
+            for (var i = 1; i <= 3; i++)
+            {
+                var y = rect.top + h * i / 4;
+                Sample(rect.left - 8, y);
+                Sample(rect.right + 8, y);
+            }
         }
-        finally
-        {
-            SelectObject(mem, old);
-            DeleteObject(bmp);
-            DeleteDC(mem);
-            ReleaseDC(IntPtr.Zero, screen);
-            ShowWindow(hwnd, SW_SHOWNA);
-        }
+        finally { ReleaseDC(IntPtr.Zero, screen); }
         if (count == 0) return null;
         return sum / count > 160;
     }
@@ -198,6 +234,71 @@ public static class NativeWin
     {
         var data = Notify(hwnd);
         Shell_NotifyIcon(NIM_DELETE, ref data);
+    }
+
+    // 托盘右键菜单：NativeWin 保持 UI 无关，菜单动作只通过事件发出去，
+    // 由 MainWindow 接线（设置窗口、锁定、显隐、置顶、重连、退出）。
+    // 状态文本/开关状态由下面这组 Func 提供，不提供时用默认值。
+    public static event Action? TrayShowSettings;
+    public static event Action? TrayToggleLockAll;
+    public static event Action? TrayToggleDanmakuLock;
+    public static event Action? TrayToggleLiveLock;
+    public static event Action? TrayToggleDanmakuVisible;
+    public static event Action? TrayToggleLiveVisible;
+    public static event Action? TrayToggleTopmost;
+    public static event Action? TrayReconnect;
+    public static event Action? TrayExit;
+
+    // 菜单打开时读一次，用来拼状态行和“锁定/解锁、显示/隐藏”的文案。
+    // 不设置时：状态行用 AppState.Current.Status，其余默认未锁定、已显示、不置顶。
+    public static Func<string>? TrayStatusText;
+    public static Func<bool>? TrayAllLocked;
+    public static Func<bool>? TrayDanmakuLocked;
+    public static Func<bool>? TrayLiveLocked;
+    public static Func<bool>? TrayDanmakuVisible;
+    public static Func<bool>? TrayLiveVisible;
+    public static Func<bool>? TrayTopmost;
+
+    static void ShowTrayMenu(IntPtr hwnd)
+    {
+        var menu = CreatePopupMenu();
+        if (menu == IntPtr.Zero) return;
+        try
+        {
+            var status = TrayStatusText?.Invoke() ?? AppState.Current.Status;
+            AppendMenu(menu, MF_STRING | MF_GRAYED | MF_DISABLED, TrayMenuStatus, status);
+            AppendMenu(menu, MF_SEPARATOR, 0, null);
+            AppendMenu(menu, MF_STRING, TrayMenuSettings, "设置");
+            AppendMenu(menu, MF_STRING, TrayMenuLockAll, (TrayAllLocked?.Invoke() ?? false) ? "解锁全部窗口" : "锁定全部窗口");
+            AppendMenu(menu, MF_STRING, TrayMenuLockDanmaku, (TrayDanmakuLocked?.Invoke() ?? false) ? "解锁弹幕窗" : "锁定弹幕窗");
+            AppendMenu(menu, MF_STRING, TrayMenuLockLive, (TrayLiveLocked?.Invoke() ?? false) ? "解锁实时窗" : "锁定实时窗");
+            AppendMenu(menu, MF_SEPARATOR, 0, null);
+            AppendMenu(menu, MF_STRING, TrayMenuDanmakuVisible, (TrayDanmakuVisible?.Invoke() ?? true) ? "隐藏弹幕窗" : "显示弹幕窗");
+            AppendMenu(menu, MF_STRING, TrayMenuLiveVisible, (TrayLiveVisible?.Invoke() ?? true) ? "隐藏实时窗" : "显示实时窗");
+            AppendMenu(menu, MF_STRING | ((TrayTopmost?.Invoke() ?? false) ? MF_CHECKED : 0), TrayMenuTopmost, "置顶");
+            AppendMenu(menu, MF_SEPARATOR, 0, null);
+            AppendMenu(menu, MF_STRING, TrayMenuReconnect, "重新连接");
+            AppendMenu(menu, MF_STRING, TrayMenuExit, "退出");
+            GetCursorPos(out var pt);
+            // TrackPopupMenu 要求调用前把窗口提到前台，结束后发一个 WM_NULL，
+            // 否则菜单可能点不掉、一直赖在屏幕上。
+            SetForegroundWindow(hwnd);
+            var cmd = (uint)TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, pt.x, pt.y, 0, hwnd, IntPtr.Zero);
+            PostMessage(hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
+            switch (cmd)
+            {
+                case TrayMenuSettings: TrayShowSettings?.Invoke(); break;
+                case TrayMenuLockAll: TrayToggleLockAll?.Invoke(); break;
+                case TrayMenuLockDanmaku: TrayToggleDanmakuLock?.Invoke(); break;
+                case TrayMenuLockLive: TrayToggleLiveLock?.Invoke(); break;
+                case TrayMenuDanmakuVisible: TrayToggleDanmakuVisible?.Invoke(); break;
+                case TrayMenuLiveVisible: TrayToggleLiveVisible?.Invoke(); break;
+                case TrayMenuTopmost: TrayToggleTopmost?.Invoke(); break;
+                case TrayMenuReconnect: TrayReconnect?.Invoke(); break;
+                case TrayMenuExit: TrayExit?.Invoke(); break;
+            }
+        }
+        finally { DestroyMenu(menu); }
     }
 
     static NOTIFYICONDATA Notify(IntPtr hwnd) => new()
@@ -227,8 +328,11 @@ public static class NativeWin
         {
             var code = lParam.ToInt32() & 0xFFFF;
             if (code is WM_LBUTTONUP or WM_LBUTTONDBLCLK) _click?.Invoke();
+            else if (code == WM_RBUTTONUP) ShowTrayMenu(hWnd);
         }
-        if (msg == 0x0312) global::Tokilive.App.UI(() => Hotkey.OnPressed?.Invoke());
+        // RegisterHotKey 到达的消息：wParam 是热键 id，Hotkey 按 id 分发
+        // 给输入热键（OnPressed）或锁定热键（LockHotkeyPressed）。
+        if (msg == WM_HOTKEY) global::Tokilive.App.UI(() => Hotkey.DispatchHotKey((int)wParam));
         return DefSubclassProc(hWnd, msg, wParam, lParam);
     }
 
@@ -243,6 +347,7 @@ public static class NativeWin
     }
 
     [StructLayout(LayoutKind.Sequential)] struct RECT { public int left, top, right, bottom; }
+    [StructLayout(LayoutKind.Sequential)] struct POINT { public int x, y; }
     [StructLayout(LayoutKind.Sequential)] struct MARGINS { public int cxLeftWidth, cxRightWidth, cyTopHeight, cyBottomHeight; }
     [StructLayout(LayoutKind.Sequential)] struct ACCENT_POLICY { public int AccentState, AccentFlags, GradientColor, AnimationId; }
     [StructLayout(LayoutKind.Sequential)] struct WINDOWCOMPOSITIONATTRIBDATA { public uint Attribute; public IntPtr Data; public int SizeOfData; }
@@ -266,16 +371,17 @@ public static class NativeWin
     [DllImport("user32.dll")] static extern bool ReleaseCapture();
     [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int cmd);
     [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hWnd);
     [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
-    [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr hdc);
-    [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr hdc);
-    [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int w, int h);
-    [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
-    [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr obj);
-    [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, uint rop);
     [DllImport("gdi32.dll")] static extern uint GetPixel(IntPtr hdc, int x, int y);
+    [DllImport("user32.dll")] static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+    [DllImport("user32.dll")] static extern IntPtr CreatePopupMenu();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool AppendMenu(IntPtr hMenu, uint uFlags, nuint uIDNewItem, string? lpNewItem);
+    [DllImport("user32.dll")] static extern nuint TrackPopupMenu(IntPtr hMenu, uint uFlags, int x, int y, int nReserved, IntPtr hWnd, IntPtr prcRect);
+    [DllImport("user32.dll")] static extern bool DestroyMenu(IntPtr hMenu);
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT lpPoint);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
     [DllImport("user32.dll")] static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOWCOMPOSITIONATTRIBDATA data);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern bool Shell_NotifyIcon(int message, ref NOTIFYICONDATA data);

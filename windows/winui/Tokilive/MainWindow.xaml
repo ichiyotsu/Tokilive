@@ -45,6 +45,13 @@
                         <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <Image x:Name="QrImage" Width="200" Height="200" Visibility="Collapsed"/>
                         <TextBlock Text="扫码只把 Cookie 留在本机配置里，不会写入仓库或日志。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBox x:Name="CookieBox" Header="Cookie（手动粘贴，SESSDATA=… 这样一整串）" PlaceholderText="SESSDATA=…; bili_jct=…; DedeUserID=…"/>
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="保存 Cookie" Click="SaveCookie_Click"/>
+                            <Button Content="退出登录" Click="Logout_Click"/>
+                        </StackPanel>
+                        </ScrollViewer>
                     </StackPanel>
                 </ScrollViewer>
                 <Grid x:Name="PageDanmaku" Visibility="Collapsed">
@@ -59,6 +66,17 @@
                             <Border x:Name="Preview" MinHeight="140" Padding="12" CornerRadius="12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                                 <StackPanel x:Name="PreviewList" Spacing="8"/>
                             </Border>
+                            <!-- 预览背景：1.2.0 settings.html 的 BGS 四项（棋盘格/白/深色/渐变），
+                                 只改预览这一块的底，不改真正的悬浮窗。默认棋盘格。 -->
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="预览背景：" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <Button Content="棋盘格" Tag="0" Click="PreviewBg_Click"/>
+                                <Button Content="白色" Tag="1" Click="PreviewBg_Click"/>
+                                <Button Content="深色" Tag="2" Click="PreviewBg_Click"/>
+                                <Button Content="渐变" Tag="3" Click="PreviewBg_Click"/>
+                            </StackPanel>
+                            </ScrollViewer>
                             <!-- 窗口拖窄时 9 个预设按钮横着排不下，包一层横向滚动，别被裁掉。 -->
                             <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
                             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -120,6 +138,59 @@
                                         <Button Tag="#E5484D" Click="TextColorChip_Click" MinWidth="28" MinHeight="28" Padding="0" ToolTipService.ToolTip="#E5484D"><Border Width="20" Height="20" CornerRadius="4" Background="#E5484D"/></Button>
                                     </StackPanel>
                                     </ScrollViewer>
+                                </StackPanel>
+                            </Expander>
+                            <Expander Header="停留、数量与主题" IsExpanded="True">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <NumberBox x:Name="LifetimeBox" Grid.Column="0" Header="弹幕停留（秒，0=不消失）" Minimum="0" Maximum="3600" SpinButtonPlacementMode="Inline"/>
+                                        <NumberBox x:Name="MaxMessagesBox" Grid.Column="1" Header="最多保留条数" Minimum="1" Maximum="200" SpinButtonPlacementMode="Inline"/>
+                                    </Grid>
+                                    <ComboBox x:Name="FontWeightBox" Header="弹幕字重" HorizontalAlignment="Stretch">
+                                        <ComboBoxItem Content="400" Tag="400"/>
+                                        <ComboBoxItem Content="500" Tag="500"/>
+                                        <ComboBoxItem Content="600" Tag="600"/>
+                                        <ComboBoxItem Content="700" Tag="700"/>
+                                        <ComboBoxItem Content="800" Tag="800"/>
+                                    </ComboBox>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Slider x:Name="TextShadowSlider" Grid.Column="0" Header="文字阴影" Minimum="0" Maximum="1" StepFrequency="0.05"/>
+                                        <Slider x:Name="CardBlurSlider" Grid.Column="1" Header="卡片磨砂" Minimum="0" Maximum="40"/>
+                                    </Grid>
+                                    <ComboBox x:Name="CardThemeBox" Header="卡片主题" HorizontalAlignment="Stretch">
+                                        <ComboBoxItem Content="跟随系统" Tag="system"/>
+                                        <ComboBoxItem Content="浅色" Tag="light"/>
+                                        <ComboBoxItem Content="深色" Tag="dark"/>
+                                        <ComboBoxItem Content="透明" Tag="transparent"/>
+                                    </ComboBox>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBox x:Name="SeedColorBox" Header="种子色（礼物/上舰/醒目留言等卡片的配色来源）"/>
+                                        <Button Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Bottom" MinWidth="36" MinHeight="32" Padding="4" ToolTipService.ToolTip="选种子色">
+                                            <Button.Flyout><Flyout><ColorPicker x:Name="SeedColorPicker" Tag="SeedColorBox" IsAlphaEnabled="False" IsHexInputVisible="True" ColorChanged="ColorPicker_ColorChanged"/></Flyout></Button.Flyout>
+                                            <Border x:Name="SeedColorSwatch" Width="20" Height="20" CornerRadius="4" Background="#6750A4"/>
+                                        </Button>
+                                    </Grid>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="8">
+                                            <ToggleSwitch x:Name="ShowMedalSwitch" Header="显示粉丝牌" OnContent="开" OffContent="关"/>
+                                            <ToggleSwitch x:Name="ScBiliColorSwitch" Header="醒目留言用 B 站底色" OnContent="开" OffContent="关"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="8">
+                                            <ComboBox x:Name="MedalStyleBox" Header="粉丝牌样式" HorizontalAlignment="Stretch">
+                                                <ComboBoxItem Content="统一" Tag="unified"/>
+                                                <ComboBoxItem Content="B 站" Tag="bilibili"/>
+                                            </ComboBox>
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBox x:Name="CjkFontBox" Header="中文字体"/>
+                                    <ComboBox x:Name="CjkFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="CjkFontPicker_SelectionChanged"/>
+                                    <TextBox x:Name="JpFontBox" Header="日文字体"/>
+                                    <ComboBox x:Name="JpFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="JpFontPicker_SelectionChanged"/>
+                                    <NumberBox x:Name="MinGiftPriceBox" Header="最低礼物价（元，0=不过滤）" Minimum="0" Maximum="100000" SpinButtonPlacementMode="Inline"/>
                                 </StackPanel>
                             </Expander>
                             <Expander Header="文字" IsExpanded="True">
@@ -225,6 +296,47 @@
                         <Border Padding="12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                             <TextBlock x:Name="LivePreview" TextWrapping="Wrap"/>
                         </Border>
+                        <ToggleSwitch x:Name="MiniStatsSwitch" Header="显示数据栏" OnContent="开" OffContent="关"/>
+                        <ComboBox x:Name="MiniLayoutBox" Header="数据栏布局" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="横条" Tag="h"/>
+                            <ComboBoxItem Content="竖条" Tag="v"/>
+                            <ComboBoxItem Content="自动" Tag="auto"/>
+                        </ComboBox>
+                        <ToggleSwitch x:Name="MiniPillsSwitch" Header="实时窗里显示互动气泡" OnContent="开" OffContent="关"/>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <NumberBox x:Name="MiniLifetimeBox" Grid.Column="0" Header="互动停留（秒，0=不消失）" Minimum="0" Maximum="3600" SpinButtonPlacementMode="Inline"/>
+                            <NumberBox x:Name="MiniMaxBox" Grid.Column="1" Header="互动最多条数" Minimum="1" Maximum="20" SpinButtonPlacementMode="Inline"/>
+                        </Grid>
+                        <TextBlock Text="进场、关注、点赞、分享去哪里：" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Grid ColumnSpacing="12" RowSpacing="8">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <ComboBox x:Name="RouteEnterBox" Grid.Column="0" Header="进场" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="实时窗" Tag="mini"/>
+                                <ComboBoxItem Content="弹幕窗" Tag="main"/>
+                                <ComboBoxItem Content="关闭" Tag="off"/>
+                            </ComboBox>
+                            <ComboBox x:Name="RouteFollowBox" Grid.Column="1" Header="关注" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="实时窗" Tag="mini"/>
+                                <ComboBoxItem Content="弹幕窗" Tag="main"/>
+                                <ComboBoxItem Content="关闭" Tag="off"/>
+                            </ComboBox>
+                            <ComboBox x:Name="RouteShareBox" Grid.Column="0" Grid.Row="1" Header="分享" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="实时窗" Tag="mini"/>
+                                <ComboBoxItem Content="弹幕窗" Tag="main"/>
+                                <ComboBoxItem Content="关闭" Tag="off"/>
+                            </ComboBox>
+                            <ComboBox x:Name="RouteLikeBox" Grid.Column="1" Grid.Row="1" Header="点赞" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="实时窗" Tag="mini"/>
+                                <ComboBoxItem Content="弹幕窗" Tag="main"/>
+                                <ComboBoxItem Content="关闭" Tag="off"/>
+                            </ComboBox>
+                        </Grid>
+                        <TextBlock Text="实时窗迷你预览（数据栏横条）：" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Padding="12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <TextBlock x:Name="MiniPreviewText" TextWrapping="Wrap"/>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
                 <Grid x:Name="PageLyrics" Visibility="Collapsed">
@@ -286,7 +398,7 @@
                             </ComboBox>
                             <ToggleSwitch x:Name="LyricClickSwitch" Header="桌面歌词穿透" OnContent="开" OffContent="关"/>
                             <ToggleSwitch x:Name="LyricLockSwitch" Header="锁定位置" OnContent="开" OffContent="关"/>
-                            <Slider x:Name="LyricOffsetSlider" Header="时间偏移（秒）" Minimum="-5" Maximum="5" StepFrequency="0.1"/>
+                            <Slider x:Name="LyricOffsetSlider" Header="时间偏移（秒）" Minimum="-10" Maximum="10" StepFrequency="0.1"/>
                             <Button Content="导入 LRC / TTML" Click="ImportLyrics_Click"/>
                         </StackPanel>
                     </ScrollViewer>
@@ -300,10 +412,13 @@
                                 <TextBlock x:Name="PlayerTitle" Style="{ThemeResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock x:Name="PlayerArtist" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock x:Name="PlayerLine" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="PlayerTime" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                                 <Button Content="上一首" Tag="prev" Click="LyricControl_Click"/>
-                                <Button Content="播放" Tag="toggle" Click="LyricControl_Click"/>
+                                <Button Content="播放" Tag="play" Click="LyricControl_Click"/>
+                                <Button Content="暂停" Tag="pause" Click="LyricControl_Click"/>
+                                <Button Content="切换播放" Tag="toggle" Click="LyricControl_Click"/>
                                 <Button Content="下一首" Tag="next" Click="LyricControl_Click"/>
                             </StackPanel>
                         </Grid>
@@ -339,10 +454,41 @@
                                 <Border x:Name="AccentSwatch" Width="20" Height="20" CornerRadius="4" Background="#6750A4"/>
                             </Button>
                         </Grid>
+                        <ComboBox x:Name="AdaptiveManualBox" Header="自适应采样失败时的文字颜色" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="浅色" Tag="light"/>
+                            <ComboBoxItem Content="深色" Tag="dark"/>
+                        </ComboBox>
+                        <ComboBox x:Name="AppMaterialBox" Header="设置窗口材质" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="Mica" Tag="mica"/>
+                            <ComboBoxItem Content="Acrylic" Tag="acrylic"/>
+                            <ComboBoxItem Content="Mica Alt（标签页风格）" Tag="tabbed"/>
+                            <ComboBoxItem Content="无（纯色）" Tag="none"/>
+                        </ComboBox>
+                        <TextBlock x:Name="AppBackgroundText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="选择背景图片" Click="PickBackground_Click"/>
+                            <Button Content="清除背景" Click="ClearBackground_Click"/>
+                        </StackPanel>
+                        </ScrollViewer>
+                        <Slider x:Name="AppBgOpacitySlider" Header="背景图不透明度" Minimum="0" Maximum="1" StepFrequency="0.05"/>
+                        <ComboBox x:Name="SidebarModeBox" Header="左侧导航栏" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="自动" Tag="auto"/>
+                            <ComboBoxItem Content="展开" Tag="left"/>
+                            <ComboBoxItem Content="收起" Tag="leftcompact"/>
+                        </ComboBox>
+                        <TextBox x:Name="LockHotkeyBox" Header="锁定窗口快捷键（例如 Control+Shift+L，留空则不注册）"/>
                         <TextBlock x:Name="MaterialText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock Text="更新" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <TextBlock x:Name="UpdateText" TextWrapping="Wrap"/>
                         <Button Content="检查更新" Click="Update_Click"/>
+                        <ProgressBar x:Name="UpdateProgress" Visibility="Collapsed" Minimum="0" Maximum="100"/>
+                        <TextBlock x:Name="UpdateProgressText" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <Expander x:Name="UpdateNotesExpander" Header="新版说明" Visibility="Collapsed" HorizontalAlignment="Stretch">
+                            <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                <TextBlock x:Name="UpdateNotesText" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
+                            </ScrollViewer>
+                        </Expander>
                         <TextBlock Text="关于" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <TextBlock Text="1.3.1" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <TextBlock Text="原生 WinUI 3，未打包，Windows 10 1809 和 Windows 11。应用 ID com.ichiyotsu.tokilive。" TextWrapping="Wrap"/>
