@@ -35,6 +35,11 @@ final class LiveModel: ObservableObject {
     }
     private var socket: URLSessionWebSocketTask?
     private var beat: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
+    private var reconnectAttempts = 0
+    private var connectionEpoch = 0
+    private var qrTask: Task<Void, Never>?
+    private var qrPollTask: Task<Void, Never>?
     private var cookie = ""
 
     func toggle() {
@@ -44,21 +49,33 @@ final class LiveModel: ObservableObject {
     func start() {
         let id = room.filter(\.isNumber)
         guard !id.isEmpty else { status = "请先填写房间号"; return }
-        stop()
+        connectionEpoch += 1
+        let epoch = connectionEpoch
+        beat?.cancel()
+        beat = nil
+        socket?.cancel(with: .goingAway, reason: nil)
+        socket = nil
         connected = true
+        stats = LiveNumbers()
         status = "正在解析房间号…"
         Task {
+            var roomResolved = false
             do {
                 let rid = try await Self.roomID(id)
+                roomResolved = true
+                guard epoch == connectionEpoch else { return }
                 let info = try await Self.danmuInfo(room: rid, cookie: cookie)
+                guard epoch == connectionEpoch else { return }
                 status = "正在连接…"
                 let task = URLSession.shared.webSocketTask(with: info.url)
                 socket = task
                 task.resume()
-                let auth: [String: Any] = ["uid": 0, "roomid": rid, "protover": 2, "platform": "web", "type": 2, "key": info.token]
+                let auth: [String: Any] = ["uid": authUID, "roomid": rid, "protover": 2, "platform": "web", "type": 2, "key": info.token]
                 let body = try JSONSerialization.data(withJSONObject: auth)
                 try await task.send(.data(Self.pack(op: 7, body: body)))
+                guard epoch == connectionEpoch else { return }
                 status = "已连接 · 房间 \(rid)"
+                reconnectAttempts = 0
                 beat?.cancel()
                 beat = Task { [weak self] in
                     while !Task.isCancelled {
@@ -68,13 +85,26 @@ final class LiveModel: ObservableObject {
                 }
                 receive(task)
             } catch {
-                status = "连接失败：\(error.localizedDescription)"
+                guard epoch == connectionEpoch else { return }
                 connected = false
+                if roomResolved {
+                    scheduleReconnect()
+                } else {
+                    status = "连接失败：\(error.localizedDescription)"
+                }
             }
         }
     }
 
     func stop() {
+        connectionEpoch += 1
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        reconnectAttempts = 0
+        qrTask?.cancel()
+        qrTask = nil
+        qrPollTask?.cancel()
+        qrPollTask = nil
         beat?.cancel()
         beat = nil
         socket?.cancel(with: .goingAway, reason: nil)
@@ -89,21 +119,87 @@ final class LiveModel: ObservableObject {
     }
 
     func startQr() {
+        qrTask?.cancel()
+        qrPollTask?.cancel()
+        qrPollTask = nil
         qrText = "正在获取二维码…"
-        Task {
+        qrTask = Task {
             do {
                 var req = URLRequest(url: URL(string: "https://passport.bilibili.com/x/passport-login/web/qrcode/generate")!)
                 req.setValue("tokilive/1.3.0", forHTTPHeaderField: "User-Agent")
                 let (data, _) = try await URLSession.shared.data(for: req)
+                guard !Task.isCancelled else { return }
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
                 let payload = json?["data"] as? [String: Any]
                 let url = payload?["url"] as? String ?? ""
+                let key = payload?["qrcode_key"] as? String ?? ""
+                guard !key.isEmpty, !url.isEmpty else { qrText = "获取二维码失败"; return }
                 qrImage = Self.qr(url)
                 qrText = "请用哔哩哔哩 App 扫码。确认后的 Cookie 只留在本机内存，不会写入仓库。"
+                pollQr(key: key)
             } catch {
-                qrText = "获取二维码失败"
+                if !Task.isCancelled { qrText = "获取二维码失败" }
             }
         }
+    }
+
+    /// 每 2 秒轮询扫码状态：86101 未扫码继续等；86090 已扫未确认；86038 过期停掉；
+    /// 0 成功时从 Set-Cookie 取 cookie（只放内存），随后停掉轮询。
+    private func pollQr(key: String) {
+        qrPollTask?.cancel()
+        qrPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, let self else { return }
+                let code: Int
+                let jar: String?
+                do {
+                    (code, jar) = try await Self.pollQrOnce(key: key)
+                } catch {
+                    continue
+                }
+                switch code {
+                case 0:
+                    if let jar, !jar.isEmpty { self.cookie = jar }
+                    self.qrText = "登录成功"
+                    return
+                case 86090:
+                    self.qrText = "已扫码，请在手机上确认"
+                case 86038:
+                    self.qrText = "二维码已过期，请重新获取"
+                    return
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    /// 轮询一次。返回 (code, cookie)：code 为 0 时 cookie 是 Set-Cookie 拼成的串。
+    private static func pollQrOnce(key: String) async throws -> (Int, String?) {
+        var req = URLRequest(url: URL(string: "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=\(key)")!)
+        req.setValue("tokilive/1.3.0", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let payload = json?["data"] as? [String: Any]
+        let code = payload?["code"] as? Int ?? -1
+        guard code == 0 else { return (code, nil) }
+        let fields = (response as? HTTPURLResponse)?.allHeaderFields as? [String: String] ?? [:]
+        var jar = HTTPCookie.cookies(withResponseHeaderFields: fields, for: req.url!)
+            .map { "\($0.name)=\($0.value)" }
+            .joined(separator: "; ")
+        if jar.isEmpty {
+            jar = fields.compactMap { key, value in
+                key.lowercased() == "set-cookie" ? value.split(separator: ";", maxSplits: 1).first.map(String.init) : nil
+            }.joined(separator: "; ")
+        }
+        return (0, jar.isEmpty ? nil : jar)
+    }
+
+    /// 从内存 cookie 里取 DedeUserID，作为鉴权 uid（与 Android / Windows 一致）。
+    private var authUID: Int {
+        guard let start = cookie.range(of: "DedeUserID=")?.upperBound else { return 0 }
+        return Int(cookie[start...].prefix(while: \.isNumber)) ?? 0
     }
 
     func checkUpdate() {
@@ -136,15 +232,42 @@ final class LiveModel: ObservableObject {
         task.receive { [weak self] result in
             Task { @MainActor in
                 guard let self else { return }
-                if case .success(let message) = result {
+                guard task === self.socket else { return }
+                switch result {
+                case .success(let message):
                     switch message {
                     case .string(let text): self.ingest(text)
                     case .data(let data): self.unpack(data)
                     @unknown default: break
                     }
+                    if self.connected { self.receive(task) }
+                case .failure:
+                    if self.connected { self.handleDisconnect() }
                 }
-                if self.connected { self.receive(task) }
             }
+        }
+    }
+
+    /// socket 出错或被服务端关闭：停心跳、断开状态、指数退避重连。
+    private func handleDisconnect() {
+        beat?.cancel()
+        beat = nil
+        socket?.cancel(with: .goingAway, reason: nil)
+        socket = nil
+        connected = false
+        scheduleReconnect()
+    }
+
+    /// 指数退避重连：2s、4s、8s… 上限 60s（与 Android 端一致）。
+    private func scheduleReconnect() {
+        reconnectTask?.cancel()
+        let delay = min(60, 2 << min(reconnectAttempts, 5))
+        reconnectAttempts += 1
+        status = "连接断开，\(delay) 秒后重连…"
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            self?.start()
         }
     }
 
@@ -166,6 +289,11 @@ final class LiveModel: ObservableObject {
             add("superchat", user?["uname"] as? String ?? "", data["message"] as? String ?? "")
         } else if name == "GUARD_BUY", let data = json["data"] as? [String: Any] {
             add("guard", data["username"] as? String ?? "", data["gift_name"] as? String ?? "上舰")
+        } else if name == "INTERACT_WORD", let data = json["data"] as? [String: Any] {
+            addInteract(uname: data["uname"] as? String ?? "", type: data["msg_type"] as? Int ?? 0)
+        } else if name == "INTERACT_WORD_V2", let data = json["data"] as? [String: Any], let pb = data["pb"] as? String, let raw = Data(base64Encoded: pb) {
+            let (uname, type) = Self.decodeInteract(raw)
+            addInteract(uname: uname, type: type)
         } else if name == "LIKE_INFO_V3_CLICK", let data = json["data"] as? [String: Any] {
             add("like", data["uname"] as? String ?? "", data["like_text"] as? String ?? "点赞了")
         } else if name == "LIKE_INFO_V3_UPDATE", let data = json["data"] as? [String: Any] {
@@ -175,6 +303,59 @@ final class LiveModel: ObservableObject {
         } else if name == "WATCHED_CHANGE", let data = json["data"] as? [String: Any] {
             stats.watched = data["text_large"] as? String ?? stats.watched
         }
+    }
+
+    /// 进场 / 关注：msg_type 1 进场，2 / 4 关注，5 互粉（与 Android 端一致；3 分享 iOS 没有对应开关，不显示）。
+    private func addInteract(uname: String, type: Int) {
+        switch type {
+        case 1: add("enter", uname, "进入直播间")
+        case 2, 4: add("follow", uname, "按下了关注")
+        case 5: add("follow", uname, "与主播互粉了")
+        default: break
+        }
+    }
+
+    /// 极简 protobuf：1 uid，2 uname，5 msg_type（与 Android 端 decodeInteract 对齐）。
+    private static func decodeInteract(_ bytes: Data) -> (String, Int) {
+        var index = bytes.startIndex
+        var name = ""
+        var type = 0
+        func varint() -> UInt64 {
+            var result: UInt64 = 0
+            var shift = 0
+            while index < bytes.endIndex, shift < 64 {
+                let byte = bytes[index]
+                index = bytes.index(after: index)
+                result |= UInt64(byte & 0x7f) << shift
+                shift += 7
+                if byte & 0x80 == 0 { return result }
+            }
+            return result
+        }
+        while index < bytes.endIndex {
+            let key = varint()
+            let field = Int(key >> 3)
+            switch key & 7 {
+            case 0:
+                let value = varint()
+                if field == 5 { type = Int(clamping: value) }
+            case 2:
+                let length = varint()
+                guard length <= UInt64(bytes.distance(from: index, to: bytes.endIndex)) else { return (name, type) }
+                let count = Int(length)
+                if field == 2 {
+                    name = String(decoding: bytes[index..<bytes.index(index, offsetBy: count)], as: UTF8.self)
+                }
+                index = bytes.index(index, offsetBy: count)
+            case 1:
+                index = bytes.index(index, offsetBy: 8, limitedBy: bytes.endIndex) ?? bytes.endIndex
+            case 5:
+                index = bytes.index(index, offsetBy: 4, limitedBy: bytes.endIndex) ?? bytes.endIndex
+            default:
+                return (name, type)
+            }
+        }
+        return (name, type)
     }
 
     private func add(_ type: String, _ name: String, _ text: String) {

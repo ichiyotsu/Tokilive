@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,7 +33,6 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import dev.chrisbanes.haze.*
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalHazeMaterialsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +41,14 @@ fun TokiApp(vm: LiveViewModel, initialTab: Int = 0) {
     val haze = rememberHazeState()
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         val expanded = maxWidth >= 840.dp
+        // 底栏占的高度：系统手势/导航条 + 12dp 间隙 + 64dp 胶囊，再留 12dp 余量，
+        // 让最后一条消息完整露在底栏上方。手势导航约 104dp，三键导航约 136dp，
+        // 比原来写死的 140dp 更贴底栏，内容一滚就经过底栏、模糊看得见。
+        val density = LocalDensity.current
+        val bottomInset = with(density) {
+            maxOf(WindowInsets.navigationBars.getBottom(this), WindowInsets.systemGestures.getBottom(this)).toDp()
+        }
+        val liveBottomPad = bottomInset + BottomBarCapsuleHeight + 24.dp
         val pages = @Composable {
             Box(Modifier.fillMaxSize().hazeSource(haze)) {
                 val ms = MaterialTheme.motionScheme
@@ -48,7 +56,7 @@ fun TokiApp(vm: LiveViewModel, initialTab: Int = 0) {
                 AnimatedContent(tab, transitionSpec = {
                     (fadeIn(eIn) + slideInVertically(sIn) { it / 12 }) togetherWith fadeOut(eOut)
                 }, label = "tab") { t: Int ->
-                    when (t) { 0 -> LiveScreen(vm, if (expanded) 24.dp else 140.dp); 1 -> StatsScreen(vm); else -> SettingsScreen(vm) }
+                    when (t) { 0 -> LiveScreen(vm, if (expanded) 24.dp else liveBottomPad); 1 -> StatsScreen(vm); else -> SettingsScreen(vm) }
                 }
             }
         }
