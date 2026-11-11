@@ -1,0 +1,81 @@
+name: Android APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Also attach the APK to this release tag (e.g. v1.4.0). Leave empty to only save a workflow artifact."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK platform 37
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          yes | "$SDKMANAGER" "platforms;android-37" "build-tools;37.0.0"
+
+      - name: Restore release keystore
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.TOKILIVE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/tokilive-release.jks"
+            echo "TOKILIVE_KEYSTORE=$RUNNER_TEMP/tokilive-release.jks" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Secret TOKILIVE_KEYSTORE_BASE64 is not set: the APK will be UNSIGNED and cannot be attached to a release."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release APK
+        env:
+          TOKILIVE_STORE_PASSWORD: ${{ secrets.TOKILIVE_STORE_PASSWORD }}
+          TOKILIVE_KEY_ALIAS: ${{ secrets.TOKILIVE_KEY_ALIAS }}
+          TOKILIVE_KEY_PASSWORD: ${{ secrets.TOKILIVE_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Name the APK
+        id: apk
+        run: |
+          version=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          src=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          dest="tokilive-${version}-android.apk"
+          cp "$src" "$RUNNER_TEMP/$dest"
+          echo "path=$RUNNER_TEMP/$dest" >> "$GITHUB_OUTPUT"
+          echo "name=$dest" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.path }}
+
+      - name: Attach APK to release
+        if: steps.keystore.outputs.signed == 'true' && (github.event_name == 'push' || inputs.release_tag != '')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: ${{ github.workspace }}
+        run: |
+          tag="${{ inputs.release_tag }}"
+          if [ -z "$tag" ]; then tag="${GITHUB_REF_NAME}"; fi
+          gh release upload "$tag" "${{ steps.apk.outputs.path }}" --clobber
