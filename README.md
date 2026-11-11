@@ -2,15 +2,15 @@
 
 Tokilive 是一款哔哩哔哩直播弹幕工具，Windows、Android 和 iOS / iPadOS 各有一份客户端。Windows 上是可以锁定和改大小的弹幕悬浮窗，旁边有实时数据小窗；登录后可以把弹幕发回当前直播间，也可以把本机页面交给 OBS 或直播姬的浏览器源。手机端用来连接直播间，并查看弹幕、点赞和在线人数。三个平台的应用内更新都只对照 GitHub Releases，默认只提示正式版。
 
-B站直播弹幕工具。当前开发版本 **1.3.0**。Windows、Android、iOS / iPadOS 的应用 ID 都是 `com.ichiyotsu.tokilive`。
+B站直播弹幕工具。当前开发版本 **1.4.0**。Windows、Android、iOS / iPadOS 的应用 ID 都是 `com.ichiyotsu.tokilive`。
 
 | 平台 | 版本 |
 | --- | --- |
-| Windows | `windows/winui/Tokilive/Tokilive.csproj` 的 `Version` 1.3.1。安装包名为 `tokilive-1.3.1-setup.exe`，便携包是 `tokilive-1.3.1-portable.zip`。 |
-| Android | `versionName` 1.3.0，`versionCode` 4。 |
-| iOS / iPadOS | `CFBundleShortVersionString` 1.3.0，`CFBundleVersion` 4。 |
+| Windows | `windows/winui/Tokilive/Tokilive.csproj` 的 `Version` 1.4.0。安装包名为 `tokilive-1.4.0-setup.exe`，便携包是 `tokilive-1.4.0-portable.zip`。 |
+| Android | `versionName` 1.4.0，`versionCode` 5。 |
+| iOS / iPadOS | `CFBundleShortVersionString` 1.4.0，`CFBundleVersion` 5。 |
 
-已发布的 [v1.0.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.0.0) 和 [v1.1.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.1.0) 仍保留。1.2.0 和 1.3.0 还没有发布。1.0.0，以及 1.1.0 里那套私人仓库授权，都需要手动安装一次。仓库现在是公开的，更新检查不再要令牌。
+已发布的 [v1.0.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.0.0) 和 [v1.1.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.1.0) 仍保留。1.2.0 和 1.3.0 还没有发布。1.4.0 正在发布。1.0.0，以及 1.1.0 里那套私人仓库授权，都需要手动安装一次。仓库现在是公开的，更新检查不再要令牌。
 
 签名钥匙不在这个仓库里。Android 正式包要在父机上用原来的钥匙签名。
 
@@ -22,7 +22,7 @@ B站直播弹幕工具。当前开发版本 **1.3.0**。Windows、Android、iOS 
 
 推送 `v*` tag 时，`.github/workflows/release.yml` 看 tag 里有没有 `-b`。带 `-b` 的发成 GitHub prerelease，并且不标成 latest。不带 `-b` 的发成正式 release，并标成 latest。这个工作流只设置发行类型，不在这里重新打包。
 
-应用内更新默认只提供正式版。正在使用正式版的人不会收到 `X.Y.Z-bN`。上面的开发版本仍是 **1.3.0**。Android `versionCode` 按每次发布加 1（1.0.0 是 1，1.1.0 是 2，1.2.0 是 3，1.3.0 是 4），测试版也继续加，不跟着 `versionName` 回退。
+应用内更新默认只提供正式版。正在使用正式版的人不会收到 `X.Y.Z-bN`。上面的开发版本仍是 **1.4.0**。Android `versionCode` 按每次发布加 1（1.0.0 是 1，1.1.0 是 2，1.2.0 是 3，1.3.0 是 4，1.4.0 是 5），测试版也继续加，不跟着 `versionName` 回退。
 
 ## 安装已发布的版本
 

@@ -241,7 +241,7 @@ public static class LyricsService
         try
         {
             using var http = new HttpClient();
-            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "tokilive/1.3.1 (https://github.com/ichiyotsu/Tokilive)");
+            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"tokilive/{AppState.Version} (https://github.com/ichiyotsu/Tokilive)");
             var url = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title) + "&artist_name=" + Uri.EscapeDataString(artist);
             using var res = await http.GetAsync(url);
             if ((int)res.StatusCode == 429) return new CachedLyrics { Error = "歌词服务限流，稍后再试", Cacheable = false };
