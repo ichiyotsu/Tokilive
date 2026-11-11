@@ -15,7 +15,7 @@ public static class UpdateService
         try
         {
             using var http = new HttpClient();
-            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "tokilive/1.3.0 (https://github.com/ichiyotsu/Tokilive)");
+            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "tokilive/1.3.1 (https://github.com/ichiyotsu/Tokilive)");
             http.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
             var list = JsonDocument.Parse(await http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases?per_page=20"));
             JsonElement? best = null;

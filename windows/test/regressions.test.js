@@ -34,7 +34,7 @@ test('versions are 1.3.0 on Windows and Android', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'windows', 'package.json'), 'utf8'));
   assert.equal(pkg.version, '1.3.0');
   const csproj = fs.readFileSync(path.join(root, 'windows', 'winui', 'Tokilive', 'Tokilive.csproj'), 'utf8');
-  assert.match(csproj, /<Version>1\.3\.0<\/Version>/);
+  assert.match(csproj, /<Version>1\.3\.1<\/Version>/);
   assert.equal(pkg.build.appId, 'com.ichiyotsu.tokilive');
   const gradle = fs.readFileSync(path.join(root, 'android', 'app', 'build.gradle.kts'), 'utf8');
   assert.match(gradle, /versionName = "1\.3\.0"/);

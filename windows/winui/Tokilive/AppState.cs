@@ -7,7 +7,7 @@ namespace Tokilive;
 
 public sealed class AppState : INotifyPropertyChanged
 {
-    public const string Version = "1.3.0";
+    public const string Version = "1.3.1";
     public static AppState Current { get; } = Load();
 
     static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never };
@@ -141,7 +141,7 @@ public sealed class AppState : INotifyPropertyChanged
     bool lyricDemo;
     string status = "未连接";
     string account = "未登录";
-    string updateMessage = "公开的 GitHub Releases。1.3.0 不需要令牌。";
+    string updateMessage = "公开的 GitHub Releases。不需要令牌。";
 
     public bool Allows(string type) => type switch
     {
@@ -166,11 +166,23 @@ public sealed class AppState : INotifyPropertyChanged
     {
         try
         {
-            if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<AppState>(File.ReadAllText(FilePath), JsonOpts) ?? new AppState();
+            // 旧 Electron 把 settings.json 放在 Roaming\Tokilive。这里不读那个文件。
+            if (!File.Exists(FilePath)) return new AppState();
+            var text = File.ReadAllText(FilePath);
+            if (!text.TrimStart().StartsWith('{')) return new AppState();
+            return JsonSerializer.Deserialize<AppState>(text, JsonOpts) ?? new AppState();
         }
-        catch { /* 损坏的本地配置用默认值，不中断启动 */ }
-        return new AppState();
+        catch (Exception ex)
+        {
+            try
+            {
+                var note = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Tokilive", "logs", "settings.log");
+                Directory.CreateDirectory(Path.GetDirectoryName(note)!);
+                File.AppendAllText(note, DateTimeOffset.Now + " " + ex.Message + Environment.NewLine);
+            }
+            catch { /* 配置打不开就用默认值 */ }
+            return new AppState();
+        }
     }
 
     void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)

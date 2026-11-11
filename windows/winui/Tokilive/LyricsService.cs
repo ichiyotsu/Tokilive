@@ -139,7 +139,7 @@ public static class LyricsService
             try
             {
                 using var http = new HttpClient();
-                http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "tokilive/1.3.0 (https://github.com/ichiyotsu/Tokilive)");
+                http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "tokilive/1.3.1 (https://github.com/ichiyotsu/Tokilive)");
                 var url = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title) + "&artist_name=" + Uri.EscapeDataString(artist);
                 var json = JsonDocument.Parse(await http.GetStringAsync(url));
                 text = json.RootElement.GetArrayLength() == 0 ? "" : json.RootElement[0].TryGetProperty("syncedLyrics", out var synced) ? synced.GetString() ?? "" : "";
