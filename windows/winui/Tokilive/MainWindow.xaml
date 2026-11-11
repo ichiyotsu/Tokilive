@@ -16,7 +16,7 @@
         <Grid x:Name="TitleBarRow" Background="Transparent" PointerPressed="TitleBarRow_PointerPressed">
             <TextBlock Text="tokilive · 设置" VerticalAlignment="Center" Margin="12,0,0,0" FontSize="12" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
         </Grid>
-        <NavigationView Grid.Row="1" x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Left" SelectionChanged="Nav_SelectionChanged" OpenPaneLength="200" CompactPaneLength="48">
+        <NavigationView Grid.Row="1" x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Auto" SelectionChanged="Nav_SelectionChanged" OpenPaneLength="200" CompactPaneLength="48">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="连接" Tag="conn"><NavigationViewItem.Icon><SymbolIcon Symbol="Link"/></NavigationViewItem.Icon></NavigationViewItem>
                 <NavigationViewItem Content="弹幕面板" Tag="danmaku"><NavigationViewItem.Icon><SymbolIcon Symbol="Message"/></NavigationViewItem.Icon></NavigationViewItem>
@@ -33,12 +33,15 @@
                         <TextBlock Text="连接" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <TextBlock x:Name="AccountText" Style="{ThemeResource BodyTextBlockStyle}"/>
                         <TextBox x:Name="RoomBox" Header="房间号" PlaceholderText="直播间号"/>
+                        <!-- 窗口拖窄时这四个按钮横着排不下，包一层横向滚动，别被裁掉。 -->
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Button Content="连接" Click="Connect_Click"/>
                             <Button Content="断开" Click="Disconnect_Click"/>
                             <Button Content="读取我的直播间" Click="OwnRoom_Click"/>
                             <Button Content="扫码登录" Click="Qr_Click"/>
                         </StackPanel>
+                        </ScrollViewer>
                         <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <Image x:Name="QrImage" Width="200" Height="200" Visibility="Collapsed"/>
                         <TextBlock Text="扫码只把 Cookie 留在本机配置里，不会写入仓库或日志。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -56,6 +59,8 @@
                             <Border x:Name="Preview" MinHeight="140" Padding="12" CornerRadius="12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                                 <StackPanel x:Name="PreviewList" Spacing="8"/>
                             </Border>
+                            <!-- 窗口拖窄时 9 个预设按钮横着排不下，包一层横向滚动，别被裁掉。 -->
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="默认" Tag="默认" Click="Preset_Click"/>
                                 <Button Content="紧凑" Tag="紧凑" Click="Preset_Click"/>
@@ -67,6 +72,7 @@
                                 <Button Content="导出主题" Click="ExportTheme_Click"/>
                                 <Button Content="导入主题" Click="ImportTheme_Click"/>
                             </StackPanel>
+                            </ScrollViewer>
                             <Expander Header="头像与颜色" IsExpanded="True">
                                 <StackPanel Spacing="8">
                                     <ToggleSwitch x:Name="AvatarSwitch" Header="显示头像" OnContent="开" OffContent="关"/>
@@ -100,6 +106,8 @@
                                             </Button>
                                         </Grid>
                                     </Grid>
+                                    <!-- 窗口拖窄时 8 个色块横着排不下，包一层横向滚动，别被裁掉。 -->
+                                    <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
                                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                         <TextBlock Text="文字颜色快捷：" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                         <Button Tag="#1A1A1A" Click="TextColorChip_Click" MinWidth="28" MinHeight="28" Padding="0" ToolTipService.ToolTip="#1A1A1A"><Border Width="20" Height="20" CornerRadius="4" Background="#1A1A1A"/></Button>
@@ -111,6 +119,7 @@
                                         <Button Tag="#2FB344" Click="TextColorChip_Click" MinWidth="28" MinHeight="28" Padding="0" ToolTipService.ToolTip="#2FB344"><Border Width="20" Height="20" CornerRadius="4" Background="#2FB344"/></Button>
                                         <Button Tag="#E5484D" Click="TextColorChip_Click" MinWidth="28" MinHeight="28" Padding="0" ToolTipService.ToolTip="#E5484D"><Border Width="20" Height="20" CornerRadius="4" Background="#E5484D"/></Button>
                                     </StackPanel>
+                                    </ScrollViewer>
                                 </StackPanel>
                             </Expander>
                             <Expander Header="文字" IsExpanded="True">
@@ -182,6 +191,7 @@
                         <ScrollViewer x:Name="TestBar" HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled" PointerWheelChanged="TestBar_Wheel">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Button Content="测试弹幕" Tag="danmaku" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
+                                <Button Content="测试表情" Tag="emote" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
                                 <Button Content="测试礼物" Tag="gift" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
                                 <Button Content="测试醒目留言" Tag="superchat" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
                                 <Button Content="测试上舰" Tag="guard" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>

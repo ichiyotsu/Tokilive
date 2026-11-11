@@ -67,8 +67,8 @@ public static class LiveService
     // 连接成功时据此报“未开播”。RunOnce 里记下来，Unpack 收到 op==8 时用。
     static int _liveStatus = 1;
 
-    public static void PushLocal(string type, string name, string text, bool force = false) =>
-        PushLine(new ChatLine { Type = type, Name = name, Text = text }, force);
+    public static void PushLocal(string type, string name, string text, bool force = false, string emote = "") =>
+        PushLine(new ChatLine { Type = type, Name = name, Text = text, Emote = emote }, force);
 
     public static void PushLine(ChatLine line, bool force = false)
     {

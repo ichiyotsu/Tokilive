@@ -483,6 +483,12 @@ public sealed partial class MainWindow : Window
     void Test_Click(object sender, RoutedEventArgs e)
     {
         var tag = (string)((Button)sender).Tag;
+        if (tag == "emote")
+        {
+            // 1.2.0 演示里的 [dog] 表情，不用进直播间就能看到行内表情的效果。
+            LiveService.PushLocal("danmaku", "预览", "[dog]", force: true, emote: "https://i0.hdslb.com/bfs/live/4428c84e694fbf4e0ef6c06e958d9352c3582740.png");
+            return;
+        }
         LiveService.PushLocal(tag, "预览", tag switch { "gift" => "小礼物 x1", "superchat" => "醒目留言", "guard" => "舰长", "enter" => "进入直播间", "follow" => "关注了", "like" => "点赞了", "share" => "分享了", _ => "这是一条测试弹幕" }, force: true);
     }
     void PreviewSpeech_Click(object sender, RoutedEventArgs e)

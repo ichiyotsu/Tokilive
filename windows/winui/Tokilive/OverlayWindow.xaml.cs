@@ -1,6 +1,8 @@
+using System.Text.RegularExpressions;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
@@ -249,14 +251,7 @@ public sealed partial class OverlayWindow : Window
         if (line.Type == "superchat" && line.Price > 0)
             head.Children.Add(new TextBlock { Text = $"¥{line.Price}", FontFamily = font, Foreground = new SolidColorBrush(ink), FontSize = nameSize, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) });
         panel.Children.Add(head);
-        panel.Children.Add(new TextBlock { Text = line.Text, FontFamily = font, Foreground = new SolidColorBrush(ink), FontSize = state.FontSize, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap });
-        if (line.Type == "danmaku" && Uri.TryCreate(line.Emote, UriKind.Absolute, out var emoteUri) && (emoteUri.Scheme == "http" || emoteUri.Scheme == "https"))
-        {
-            // 1.2.0 表情图高 3.6em、最宽 9em。加载失败就藏掉，不留破图。
-            var emoteImg = new Image { Height = state.FontSize * 3, MaxWidth = state.FontSize * 9, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left };
-            emoteImg.ImageFailed += (_, _) => emoteImg.Visibility = Visibility.Collapsed;
-            try { emoteImg.Source = new BitmapImage(emoteUri); panel.Children.Add(emoteImg); } catch { }
-        }
+        panel.Children.Add(MessageContent(line, state, font, ink));
         // 醒目留言用 B 站自己的底色（background_bottom_color），没有就用卡片色。
         var color = line.Type == "superchat" && TryParseHex(line.Color, out var scColor) ? scColor : Parse(state.CardColor);
         return new Border
@@ -267,6 +262,46 @@ public sealed partial class OverlayWindow : Window
             Child = panel,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
+    }
+
+    // B 站表情：行内显示，和字一样大（高 = 字号，宽按原图比例自动，
+    // Stretch.Uniform 不拉变形）。以前是高 3 倍的大贴纸贴在文字下面，
+    // "[xxx]" 那段文字还留在上面，现在图直接顶掉 token 的位置。
+    // 整条消息就是一个表情（"[dog]"）时只显示图；表情夹在文字中间时，
+    // 把文字在 token 处切开，图插进去。图加载失败就把 "[xxx]" 文字放
+    // 回去（和 1.2.0 的 onerror 回退一个意思），不留破图。
+    // 只有弹幕带表情（LiveService 从 DANMU_MSG 的 i[0][13].url 取），
+    // 其他类型不解析表情；一条消息最多一个表情图。
+    static UIElement MessageContent(ChatLine line, AppState state, FontFamily font, Color ink)
+    {
+        var text = line.Text ?? "";
+        var plain = new TextBlock { Text = text, FontFamily = font, Foreground = new SolidColorBrush(ink), FontSize = state.FontSize, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap };
+        if (line.Type != "danmaku"
+            || !Uri.TryCreate(line.Emote, UriKind.Absolute, out var emoteUri)
+            || (emoteUri.Scheme != "http" && emoteUri.Scheme != "https"))
+            return plain;
+        var token = Regex.Match(text, @"\[[^\[\]]{1,20}\]");
+        if (!token.Success) return plain;
+        var rich = new RichTextBlock { FontFamily = font, Foreground = new SolidColorBrush(ink), FontSize = state.FontSize, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap };
+        var para = new Paragraph();
+        if (token.Index > 0) para.Inlines.Add(new Run { Text = text[..token.Index] });
+        var img = new Image { Height = state.FontSize, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center };
+        var container = new InlineUIContainer { Child = img };
+        img.ImageFailed += (_, _) =>
+        {
+            var at = para.Inlines.IndexOf(container);
+            if (at >= 0)
+            {
+                para.Inlines.Insert(at, new Run { Text = token.Value });
+                para.Inlines.Remove(container);
+            }
+        };
+        try { img.Source = new BitmapImage(emoteUri); }
+        catch { return plain; }
+        para.Inlines.Add(container);
+        if (token.Index + token.Length < text.Length) para.Inlines.Add(new Run { Text = text[(token.Index + token.Length)..] });
+        rich.Blocks.Add(para);
+        return rich;
     }
 
     static bool TryParseHex(string? hex, out Color color)
