@@ -78,6 +78,12 @@ public sealed class AppState : INotifyPropertyChanged
     public bool LyricOutline { get => lyricOutline; set => Set(ref lyricOutline, value); }
     public double LyricBg { get => lyricBg; set => Set(ref lyricBg, value); }
     public int LyricLines { get => lyricLines; set => Set(ref lyricLines, value); }
+    // 歌词新字段：粗细（light/normal/bold/black）、单双行（single/double）、
+    // 横竖排（horizontal/vertical）、设计（default/cyberpunk/minecraft）。
+    public string LyricWeight { get => lyricWeight; set => Set(ref lyricWeight, value); }
+    public string LyricMode { get => lyricMode; set => Set(ref lyricMode, value); }
+    public string LyricDirection { get => lyricDirection; set => Set(ref lyricDirection, value); }
+    public string LyricDesign { get => lyricDesign; set => Set(ref lyricDesign, value); }
     public bool LyricClickThrough { get => lyricClickThrough; set => Set(ref lyricClickThrough, value); }
     public bool LyricLocked { get => lyricLocked; set => Set(ref lyricLocked, value); }
     public double LyricOffset { get => lyricOffset; set => Set(ref lyricOffset, value); }
@@ -137,7 +143,13 @@ public sealed class AppState : INotifyPropertyChanged
     bool lyricShadow = true;
     bool lyricOutline;
     double lyricBg = 0.35;
+    // 旧的行数滑杆（1-5）已被单行/双行取代：字段留着做迁移兼容，
+    // 渲染不再读它。
     int lyricLines = 1;
+    string lyricWeight = "normal";
+    string lyricMode = "single";
+    string lyricDirection = "horizontal";
+    string lyricDesign = "default";
     bool lyricClickThrough = true;
     bool lyricLocked;
     double lyricOffset;

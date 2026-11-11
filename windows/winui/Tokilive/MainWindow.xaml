@@ -212,11 +212,21 @@
                         <StackPanel Spacing="8" MaxWidth="760">
                             <TextBlock Text="歌词" Style="{ThemeResource TitleTextBlockStyle}"/>
                             <TextBlock Text="通过 Windows 系统媒体会话读取正在播放的曲目和时间轴，优先标出 QQ 音乐和网易云。不读播放器数据库，也不注入进程。没有时间轴就不会编造逐字时间。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <!-- 设计是预设不是锁定：选一个设计会把它的字体、颜色、字号、
+                                 粗细、阴影、描边、底色和对齐一次写进下面的控件，之后
+                                 再改单项也不会把设计改回去。 -->
+                            <ComboBox x:Name="LyricDesignBox" Header="歌词设计" HorizontalAlignment="Stretch" SelectionChanged="LyricDesignBox_SelectionChanged"/>
                             <ToggleSwitch x:Name="DesktopLyricsSwitch" Header="桌面歌词" OnContent="开" OffContent="关"/>
                             <ToggleSwitch x:Name="LyricDemoSwitch" Header="演示排版" OnContent="开" OffContent="关"/>
                             <TextBox x:Name="LyricFontBox" Header="字体"/>
                             <ComboBox x:Name="LyricFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="LyricFontPicker_SelectionChanged"/>
                             <Slider x:Name="LyricSizeSlider" Header="字号" Minimum="16" Maximum="64"/>
+                            <ComboBox x:Name="LyricWeightBox" Header="粗细" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="细" Tag="light"/>
+                                <ComboBoxItem Content="常规" Tag="normal"/>
+                                <ComboBoxItem Content="粗" Tag="bold"/>
+                                <ComboBoxItem Content="特粗" Tag="black"/>
+                            </ComboBox>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <TextBox x:Name="LyricColorBox" Header="文字颜色"/>
@@ -239,7 +249,17 @@
                             <ToggleSwitch x:Name="LyricShadowSwitch" Header="阴影" OnContent="开" OffContent="关"/>
                             <ToggleSwitch x:Name="LyricOutlineSwitch" Header="描边" OnContent="开" OffContent="关"/>
                             <Slider x:Name="LyricBgSlider" Header="底色不透明度" Minimum="0" Maximum="0.8" StepFrequency="0.05"/>
-                            <Slider x:Name="LyricLinesSlider" Header="行数" Minimum="1" Maximum="5" StepFrequency="1"/>
+                            <!-- 旧的行数滑杆（1-5）改成单行/双行：以前 TakeLast 是取全曲
+                                 最后几行，行数一多就显示歌的结尾；现在单行只显示当前行，
+                                 双行是当前行 + 翻译（没有翻译就显示下一行）。 -->
+                            <ComboBox x:Name="LyricModeBox" Header="行数" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="单行" Tag="single"/>
+                                <ComboBoxItem Content="双行" Tag="double"/>
+                            </ComboBox>
+                            <ComboBox x:Name="LyricDirectionBox" Header="排列" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="横排" Tag="horizontal"/>
+                                <ComboBoxItem Content="竖排" Tag="vertical"/>
+                            </ComboBox>
                             <ToggleSwitch x:Name="LyricClickSwitch" Header="桌面歌词穿透" OnContent="开" OffContent="关"/>
                             <ToggleSwitch x:Name="LyricLockSwitch" Header="锁定位置" OnContent="开" OffContent="关"/>
                             <Slider x:Name="LyricOffsetSlider" Header="时间偏移（秒）" Minimum="-5" Maximum="5" StepFrequency="0.1"/>

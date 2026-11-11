@@ -113,22 +113,49 @@ public sealed partial class OverlayWindow : Window
         }
         else
         {
-            var now = LyricsService.Current;
-            // 只取一次：以前这里 TakeLast 写了两遍。当前行按时间下标定——
-            // 取 shown 里 Time <= 当前播放位置的最后一行，不再按文本相等比，
-            // 歌词重复出现时前面那行不会被误标成当前行。
-            // （和 LyricsService.LineAt 同一个规则：Time <= 位置的最后一行。）
-            var shown = now.Lines.TakeLast(Math.Max(1, state.LyricLines)).ToList();
-            if (shown.Count == 0) shown.Add(new LyricLine { Text = string.IsNullOrEmpty(now.Current) ? now.Label : now.Current });
-            var currentIndex = -1;
-            for (var i = 0; i < shown.Count; i++)
-                if (shown[i].Time <= now.Position) currentIndex = i;
-            if (currentIndex < 0 && shown.Count == 1) currentIndex = 0;
-            for (var i = 0; i < shown.Count; i++)
+            // 这里不用 now：方法顶部已经有个 var now = DateTimeOffset.UtcNow，
+            // 嵌套块里再声明同名局部变量会被编译器拒掉。
+            var playing = LyricsService.Current;
+            var lines = playing.Lines;
+            if (lines.Count == 0)
             {
-                var line = shown[i];
-                var current = i == currentIndex;
-                Host.Children.Add(Lyric(current && now.Current.Length > 0 ? now.Current : line.Text, current, state));
+                Host.Children.Add(Lyric(string.IsNullOrEmpty(playing.Current) ? playing.Label : playing.Current, false, state));
+                return;
+            }
+            // 当前行 = Time <= 播放位置的最后一行（和 LyricsService.LineAt
+            // 同一个规则），先在全曲里定下标，再围着它取要显示的行。
+            // 以前是 TakeLast(LyricLines) 直接取全曲最后几行：行数 >1 时
+            // 显示的是歌的结尾，而不是当前行附近。
+            var currentIndex = -1;
+            for (var i = 0; i < lines.Count; i++)
+                if (lines[i].Time <= playing.Position) currentIndex = i; else break;
+            // 还没到第一行：显示第一行，不高亮。
+            if (currentIndex < 0) currentIndex = 0;
+            var currentLine = lines[currentIndex];
+            var shown = new List<(string Text, bool Current)>
+            {
+                (playing.Current.Length > 0 ? playing.Current : currentLine.Text, lines[currentIndex].Time <= playing.Position)
+            };
+            if (state.LyricMode == "double")
+            {
+                // 双行：第二行优先显示当前行的翻译（LRC 里用 | 分隔），
+                // 没有翻译就显示下一行；都没有就只留一行。
+                var second = currentLine.Translation;
+                if (string.IsNullOrWhiteSpace(second) && currentIndex + 1 < lines.Count)
+                    second = lines[currentIndex + 1].Text;
+                if (!string.IsNullOrWhiteSpace(second)) shown.Add((second, false));
+            }
+            if (state.LyricDirection == "vertical")
+            {
+                // 竖排：每行是一列字，几列横着排在一起放进 Host，
+                // 而不是上下叠两条竖列。当前行在左。
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 24, HorizontalAlignment = HorizontalAlignment.Center };
+                foreach (var (text, current) in shown) row.Children.Add(Lyric(text, current, state));
+                Host.Children.Add(row);
+            }
+            else
+            {
+                foreach (var (text, current) in shown) Host.Children.Add(Lyric(text, current, state));
             }
         }
     }
@@ -259,18 +286,34 @@ public sealed partial class OverlayWindow : Window
         var align = state.LyricAlign == "left" ? TextAlignment.Left : state.LyricAlign == "right" ? TextAlignment.Right : TextAlignment.Center;
         var hAlign = state.LyricAlign == "left" ? HorizontalAlignment.Left : state.LyricAlign == "right" ? HorizontalAlignment.Right : HorizontalAlignment.Center;
         var fill = new SolidColorBrush(Parse(current ? state.LyricHighlight : state.LyricColor));
+        var font = FontHelper.Family(state.LyricFont);
+        var weight = LyricsDesigns.WeightOf(state.LyricWeight);
+        var size = current ? state.LyricSize : Math.Max(14, state.LyricSize - 8);
         var stack = new Grid();
-        TextBlock Make(Color color, Thickness margin) => new()
+        // 横排是一行 TextBlock；竖排是一列字（每字一行，从上往下）。
+        // EnumerateRunes 按 Unicode 码点切，表情这类代理对不会被切成两半。
+        UIElement Make(Color color, Thickness margin)
         {
-            Text = text,
-            FontFamily = FontHelper.Family(state.LyricFont),
-            FontSize = current ? state.LyricSize : Math.Max(14, state.LyricSize - 8),
-            Foreground = new SolidColorBrush(color),
-            TextAlignment = align,
-            TextWrapping = TextWrapping.Wrap,
-            HorizontalAlignment = hAlign,
-            Margin = margin
-        };
+            if (state.LyricDirection == "vertical")
+            {
+                var column = new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center, Margin = margin };
+                foreach (var rune in text.EnumerateRunes())
+                    column.Children.Add(new TextBlock { Text = rune.ToString(), FontFamily = font, FontSize = size, FontWeight = weight, Foreground = new SolidColorBrush(color), TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center });
+                return column;
+            }
+            return new TextBlock
+            {
+                Text = text,
+                FontFamily = font,
+                FontSize = size,
+                FontWeight = weight,
+                Foreground = new SolidColorBrush(color),
+                TextAlignment = align,
+                TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = hAlign,
+                Margin = margin
+            };
+        }
         if (state.LyricOutline)
         {
             var edge = Parse("#000000");

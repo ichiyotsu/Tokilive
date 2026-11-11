@@ -28,6 +28,11 @@ public static class LyricsService
     public static NowPlaying Current { get; private set; } = new();
     public static event Action? Updated;
     static GlobalSystemMediaTransportControlsSessionManager? _manager;
+    // 当前订阅事件的会话：会话没了（播放器退出）就换一个重新订，
+    // 否则切歌/暂停只靠定时轮询才知道。
+    static GlobalSystemMediaTransportControlsSession? _session;
+    static bool _managerWired;
+    static readonly object _watchLock = new();
     static readonly Dictionary<string, string> Cache = new();
     const string Demo = "[00:00.00]这是 tokilive 自己写的演示词\n[00:03.00]不是你正在听的歌\n[00:06.00]用来看桌面歌词的排版";
 
@@ -45,6 +50,7 @@ public static class LyricsService
             _manager ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
             var sessions = _manager.GetSessions();
             var session = sessions.OrderBy(Rank).FirstOrDefault();
+            Watch(_manager, session);
             if (session == null)
             {
                 Current = new NowPlaying { Label = "没有系统媒体会话。QQ 音乐和网易云需要向系统报告正在播放的曲目。" };
@@ -72,6 +78,43 @@ public static class LyricsService
             Current = new NowPlaying { Label = "读不到系统媒体会话：" + ex.Message };
         }
         Updated?.Invoke();
+    }
+
+    // SMTC 事件：切歌、暂停、进度条拖动立刻触发 Refresh，不用等
+    // 下一次轮询。500ms 的定时器还留着做兜底（时间轴在走、事件丢了、
+    // 或者会话换了但 CurrentSessionChanged 没送到）。
+    // 事件在后台线程上触发，Refresh 里只改 Current 并发 Updated，
+    // 界面那边的订阅者（MainWindow）负责切回 UI 线程。
+    static void Watch(GlobalSystemMediaTransportControlsSessionManager manager, GlobalSystemMediaTransportControlsSession? session)
+    {
+        lock (_watchLock)
+        {
+            if (!_managerWired)
+            {
+                manager.CurrentSessionChanged += async (_, _) => { try { await Refresh(); } catch { } };
+                _managerWired = true;
+            }
+            // 同一个会话不要重复订：GetSessions 每次返回的包装通常是
+            // 同一个 RCW，ReferenceEquals 能认出来；认不出来就重订，
+            // 先退订旧的，不会越积越多。
+            if (ReferenceEquals(_session, session)) return;
+            if (_session != null)
+            {
+                _session.MediaPropertiesChanged -= OnSessionChanged;
+                _session.TimelinePropertiesChanged -= OnSessionChanged;
+                _session.PlaybackInfoChanged -= OnSessionChanged;
+            }
+            _session = session;
+            if (_session == null) return;
+            _session.MediaPropertiesChanged += OnSessionChanged;
+            _session.TimelinePropertiesChanged += OnSessionChanged;
+            _session.PlaybackInfoChanged += OnSessionChanged;
+        }
+    }
+
+    static async void OnSessionChanged(GlobalSystemMediaTransportControlsSession sender, object args)
+    {
+        try { await Refresh(); } catch { }
     }
 
     public static async Task Control(string action)

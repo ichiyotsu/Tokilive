@@ -65,6 +65,9 @@ public sealed partial class MainWindow : Window
         LiveService.Lines.CollectionChanged += (_, _) => App.UI(RefreshCards);
         LiveService.Pills.CollectionChanged += (_, _) => App.UI(RefreshCards);
         LiveService.StatsChanged += () => App.UI(RefreshCards);
+        // SMTC 事件（切歌/暂停/拖进度）触发的 Refresh 会发 Updated：
+        // 事件在后台线程上，App.UI 切回 UI 线程再刷新播放器栏和歌词窗。
+        LyricsService.Updated += () => App.UI(() => { ShowPlayer(); _lyrics.Render(); });
         _ = LiveService.RefreshAccount().ContinueWith(_ => App.UI(() => { if (AccountText != null) AccountText.Text = AppState.Current.Account; }));
         var hwnd = NativeWin.Hwnd(this);
         _tray = NativeWin.TryTray(hwnd, () => { Activate(); AppWindow.Show(); });
@@ -77,7 +80,9 @@ public sealed partial class MainWindow : Window
         _sample = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _sample.Tick += (_, _) => Sample();
         _sample.Start();
-        _lyricTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        // 歌词定时器从 1 秒改成 500ms：行切换更顺滑。切歌/暂停这些
+        // 大变化走 SMTC 事件立刻刷新，定时器只是兜底。
+        _lyricTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _lyricTimer.Tick += async (_, _) => { try { await LyricsService.Refresh(); ShowPlayer(); _lyrics.Render(); } catch { } };
         _lyricTimer.Start();
         // 弹幕 30 秒、实时窗互动 6 秒后过期，但没有新消息就不会有人触发
@@ -160,15 +165,22 @@ public sealed partial class MainWindow : Window
         LiveBorderSwitch.IsOn = s.ShowLiveBorder;
         DesktopLyricsSwitch.IsOn = s.ShowDesktopLyrics;
         LyricDemoSwitch.IsOn = s.LyricDemo;
+        // 设计下拉框从 LyricsDesigns.All 填，改表就自动多一项。
+        // LoadForm 时 _loading 还是 true，SelectionChanged 里的设计应用
+        // 会直接返回，不会把保存过的单项改动盖掉。
+        foreach (var design in LyricsDesigns.All) LyricDesignBox.Items.Add(new ComboBoxItem { Content = design.Name, Tag = design.Id });
+        SelectCombo(LyricDesignBox, s.LyricDesign);
         LyricFontBox.Text = s.LyricFont;
         LyricSizeSlider.Value = s.LyricSize;
+        SelectCombo(LyricWeightBox, s.LyricWeight);
         LyricColorBox.Text = s.LyricColor;
         LyricHiBox.Text = s.LyricHighlight;
         LyricAlignBox.SelectedIndex = s.LyricAlign == "left" ? 0 : s.LyricAlign == "right" ? 2 : 1;
         LyricShadowSwitch.IsOn = s.LyricShadow;
         LyricOutlineSwitch.IsOn = s.LyricOutline;
         LyricBgSlider.Value = s.LyricBg;
-        LyricLinesSlider.Value = s.LyricLines;
+        SelectCombo(LyricModeBox, s.LyricMode);
+        SelectCombo(LyricDirectionBox, s.LyricDirection);
         LyricClickSwitch.IsOn = s.LyricClickThrough;
         LyricLockSwitch.IsOn = s.LyricLocked;
         LyricOffsetSlider.Value = s.LyricOffset;
@@ -251,10 +263,13 @@ public sealed partial class MainWindow : Window
             box.TextChanged += (_, _) => Save(null, null);
         foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, GameTopSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, AccentSwitch })
             sw.Toggled += (_, _) => Save(null, null);
-        foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricLinesSlider, LyricOffsetSlider })
+        foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider })
             slider.ValueChanged += (_, _) => Save(null, null);
         ThemeBox.SelectionChanged += (_, _) => Save(null, null);
         LyricAlignBox.SelectionChanged += (_, _) => Save(null, null);
+        LyricWeightBox.SelectionChanged += (_, _) => Save(null, null);
+        LyricModeBox.SelectionChanged += (_, _) => Save(null, null);
+        LyricDirectionBox.SelectionChanged += (_, _) => Save(null, null);
         VoiceBox.SelectionChanged += (_, _) => Save(null, null);
         PortBox.ValueChanged += (_, _) => Save(null, null);
         TtsSwitch.Toggled += (_, _) => { if (!TtsSwitch.IsOn) SpeechService.Stop(); };
@@ -298,13 +313,16 @@ public sealed partial class MainWindow : Window
         s.LyricDemo = LyricDemoSwitch.IsOn;
         s.LyricFont = LyricFontBox.Text;
         s.LyricSize = LyricSizeSlider.Value;
+        s.LyricWeight = ComboValue(LyricWeightBox) ?? "normal";
         if (TryNormalizeHex(LyricColorBox.Text, out var lyricHex)) { s.LyricColor = lyricHex; if (LyricColorBox.Text != lyricHex) LyricColorBox.Text = lyricHex; }
         if (TryNormalizeHex(LyricHiBox.Text, out var lyricHiHex)) { s.LyricHighlight = lyricHiHex; if (LyricHiBox.Text != lyricHiHex) LyricHiBox.Text = lyricHiHex; }
         s.LyricAlign = (LyricAlignBox.SelectedItem as ComboBoxItem)?.Content as string ?? "center";
         s.LyricShadow = LyricShadowSwitch.IsOn;
         s.LyricOutline = LyricOutlineSwitch.IsOn;
         s.LyricBg = LyricBgSlider.Value;
-        s.LyricLines = (int)LyricLinesSlider.Value;
+        s.LyricMode = ComboValue(LyricModeBox) ?? "single";
+        s.LyricDirection = ComboValue(LyricDirectionBox) ?? "horizontal";
+        s.LyricDesign = ComboValue(LyricDesignBox) ?? "default";
         s.LyricClickThrough = LyricClickSwitch.IsOn;
         s.LyricLocked = LyricLockSwitch.IsOn;
         s.LyricOffset = LyricOffsetSlider.Value;
@@ -509,6 +527,44 @@ public sealed partial class MainWindow : Window
     void LyricFontPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (LyricFontPicker.SelectedItem is string font) LyricFontBox.Text = font;
+    }
+
+    // ComboBoxItem 的值优先读 Tag（细/常规/粗/特粗这种中文显示配英文值），
+    // 没有 Tag 就读 Content（对齐那组就是直接拿 Content 当值）。
+    static string? ComboValue(ComboBox box) =>
+        (box.SelectedItem as ComboBoxItem)?.Tag as string ?? (box.SelectedItem as ComboBoxItem)?.Content as string;
+
+    static void SelectCombo(ComboBox box, string value)
+    {
+        foreach (var item in box.Items)
+            if (item is ComboBoxItem ci && ((ci.Tag as string) ?? ci.Content as string) == value)
+            {
+                box.SelectedItem = item;
+                return;
+            }
+    }
+
+    // 选设计：把设计表里的值一次写进表单控件，再走 Pull() 保存并
+    // 刷新歌词窗。_loading 期间（LoadForm）直接返回，不盖掉已保存的单项。
+    // 选完之后再改单项设置，设计名还留在那，不会把改动弹回去。
+    void LyricDesignBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        if (LyricDesignBox.SelectedItem == null) return;
+        var design = LyricsDesigns.ById(ComboValue(LyricDesignBox));
+        _loading = true;
+        LyricFontBox.Text = design.Font;
+        LyricSizeSlider.Value = design.Size;
+        LyricColorBox.Text = design.Color;
+        LyricHiBox.Text = design.Highlight;
+        SelectCombo(LyricWeightBox, design.Weight);
+        LyricShadowSwitch.IsOn = design.Shadow;
+        LyricOutlineSwitch.IsOn = design.Outline;
+        LyricBgSlider.Value = design.Bg;
+        LyricAlignBox.SelectedIndex = design.Align == "left" ? 0 : design.Align == "right" ? 2 : 1;
+        _loading = false;
+        Pull();
+        _lyrics.Render();
     }
 
     // 1.2.0 settings.html:300-307 的 7 个预设。WinUI 没有 1.2.0 的
