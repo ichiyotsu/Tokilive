@@ -432,6 +432,8 @@
                         <Button Content="重置窗口位置" Click="ResetBounds_Click"/>
                         <TextBlock Text="窗口仍在托盘里。托盘创建失败时会留下任务栏按钮，避免程序消失。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ToggleSwitch x:Name="ObsSwitch" Header="启用本地浏览器源" OnContent="开" OffContent="关"/>
+                        <ToggleSwitch x:Name="ObsCaptureSwitch" Header="OBS 窗口捕获兼容" OnContent="开" OffContent="关"/>
+                        <TextBlock Text="开启后悬浮窗会出现在任务栏和 Alt-Tab 里，OBS 窗口捕获才能在列表里看到它；关闭时悬浮窗不出现在任务栏，程序只留在托盘。改完立即生效，不用重启。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <NumberBox x:Name="PortBox" Header="端口" Minimum="1024" Maximum="65535" SpinButtonPlacementMode="Inline"/>
                         <TextBox x:Name="OverlayUrl" Header="弹幕地址" IsReadOnly="True"/>
                         <TextBox x:Name="MiniUrl" Header="实时窗地址" IsReadOnly="True"/>

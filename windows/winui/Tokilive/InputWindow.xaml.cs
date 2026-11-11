@@ -100,6 +100,11 @@ public sealed partial class InputWindow : Window
         Box.Focus(FocusState.Programmatic);
     }
 
+    // 和 OverlayWindow.ApplyChrome() 一个作用：按当前设置重算窗口的
+    // 扩展样式（穿透、大小、OBS 捕获兼容的任务栏样式），改开关后不用重启。
+    public void ApplyChrome() =>
+        NativeWin.ApplyOverlay(this, "tokilive · 输入", false, !AppState.Current.InputLocked, false);
+
     public IntPtr Handle => NativeWin.Hwnd(this);
 
     void Pressed(object sender, PointerRoutedEventArgs e)
@@ -134,7 +139,7 @@ public sealed partial class InputWindow : Window
     void Lock_Click(object sender, RoutedEventArgs e)
     {
         AppState.Current.InputLocked = !AppState.Current.InputLocked;
-        NativeWin.ApplyOverlay(this, "tokilive · 输入", false, !AppState.Current.InputLocked, false);
+        ApplyChrome();
     }
 
     [DllImport("user32.dll")] static extern int GetSystemMetrics(int nIndex);

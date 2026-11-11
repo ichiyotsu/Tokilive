@@ -39,6 +39,11 @@ public sealed class AppState : INotifyPropertyChanged
     public string Hotkey { get => hotkey; set => Set(ref hotkey, value); }
     public bool InputLocked { get => inputLocked; set => Set(ref inputLocked, value); }
     public bool HideFromTaskbar { get => hideFromTaskbar; set => Set(ref hideFromTaskbar, value); }
+    // OBS 窗口捕获兼容：开 = 走 1.2.0 的做法（去掉 WS_EX_TOOLWINDOW、
+    // 加 WS_EX_APPWINDOW），悬浮窗出现在任务栏和 Alt-Tab，OBS 窗口捕获
+    // 能在列表里看到它；关（默认）= 保留 WS_EX_TOOLWINDOW，悬浮窗不进
+    // 任务栏和 Alt-Tab，程序只留在托盘。
+    public bool ObsCaptureCompat { get => obsCaptureCompat; set => Set(ref obsCaptureCompat, value); }
     public bool ObsEnabled { get => obsEnabled; set => Set(ref obsEnabled, value); }
     public int ObsPort { get => obsPort; set => Set(ref obsPort, value); }
     public bool ShowWindowBorder { get => showWindowBorder; set => Set(ref showWindowBorder, value); }
@@ -156,6 +161,7 @@ public sealed class AppState : INotifyPropertyChanged
     string hotkey = "/";
     bool inputLocked;
     bool hideFromTaskbar;
+    bool obsCaptureCompat;
     bool obsEnabled;
     int obsPort = 7788;
     bool showWindowBorder;
@@ -346,6 +352,9 @@ public sealed class AppState : INotifyPropertyChanged
             s.AdaptiveText = Bool("adaptiveText", s.AdaptiveText);
             s.ExperimentalTopmost = Bool("experimentalGameTopmost", s.ExperimentalTopmost);
             s.HideFromTaskbar = Bool("hideFromTaskbar", s.HideFromTaskbar);
+            // 1.2.0 没有这个设置，行为无条件是开；现在默认关，用户要
+            // OBS 窗口捕获兼容再自己开。
+            s.ObsCaptureCompat = Bool("obsCaptureCompat", s.ObsCaptureCompat);
             s.ShowAvatar = Bool("showAvatar", s.ShowAvatar);
             s.MinGiftPrice = Num("minGiftPrice", s.MinGiftPrice);
             s.TtsEnabled = Bool("tts", s.TtsEnabled);

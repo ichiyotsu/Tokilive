@@ -321,6 +321,7 @@ public sealed partial class MainWindow : Window
         DanmakuWindowSwitch.IsOn = s.ShowDanmaku;
         TaskbarSwitch.IsOn = s.HideFromTaskbar;
         ObsSwitch.IsOn = s.ObsEnabled;
+        ObsCaptureSwitch.IsOn = s.ObsCaptureCompat;
         PortBox.Value = s.ObsPort;
         ThemeBox.SelectedIndex = s.ThemeMode;
         AccentSwitch.IsOn = s.UseSystemAccent;
@@ -406,7 +407,7 @@ public sealed partial class MainWindow : Window
         void Save(object? _, object? __) { if (!_loading) Pull(); }
         foreach (var box in new TextBox[] { RoomBox, NameColorBox, CardColorBox, TextColorBox, CardFontBox, HotkeyBox, LyricFontBox, LyricColorBox, LyricHiBox, AccentBox, SeedColorBox, CjkFontBox, JpFontBox, LockHotkeyBox })
             box.TextChanged += (_, _) => Save(null, null);
-        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, GameTopSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
+        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, GameTopSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
             sw.Toggled += (_, _) => Save(null, null);
         foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider, AnimSpeedSlider, TextShadowSlider, CardBlurSlider, AppBgOpacitySlider })
             slider.ValueChanged += (_, _) => Save(null, null);
@@ -516,6 +517,7 @@ public sealed partial class MainWindow : Window
         s.ShowDanmaku = DanmakuWindowSwitch.IsOn;
         s.HideFromTaskbar = TaskbarSwitch.IsOn && _tray;
         s.ObsEnabled = ObsSwitch.IsOn;
+        s.ObsCaptureCompat = ObsCaptureSwitch.IsOn;
         s.ObsPort = (int)PortBox.Value;
         s.ThemeMode = ThemeBox.SelectedIndex < 0 ? 0 : ThemeBox.SelectedIndex;
         s.UseSystemAccent = AccentSwitch.IsOn;
@@ -666,6 +668,10 @@ public sealed partial class MainWindow : Window
         if (s.ShowDanmaku) _danmaku.AppWindow.Show(); else _danmaku.AppWindow.Hide();
         if (s.ShowLive) _live.AppWindow.Show(); else _live.AppWindow.Hide();
         if (s.ShowDesktopLyrics) _lyrics.AppWindow.Show(); else _lyrics.AppWindow.Hide();
+        // 输入窗平时是藏起来的，先重算它的扩展样式再藏：ApplyOverlay
+        // 末尾的 SWP_SHOWWINDOW 不能在 Hide 之后跑，否则可能把它重新
+        // 弹出来。弹幕/实时/歌词窗沿用已有的 Hide 后 ApplyChrome 顺序。
+        _input.ApplyChrome();
         _input.AppWindow.Hide();
         _danmaku.ApplyChrome();
         _live.ApplyChrome();

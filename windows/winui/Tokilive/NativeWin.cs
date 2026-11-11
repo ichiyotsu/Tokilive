@@ -132,8 +132,21 @@ public static class NativeWin
         // 跳过 WS_EX_TOOLWINDOW，所以去掉它、改加 WS_EX_APPWINDOW，让悬浮窗
         // 能被窗口捕获枚举到。分层透明（WS_EX_LAYERED）保留，否则不是真透明。
         // 代价：悬浮窗会出现在任务栏和 Alt-Tab 里，这是 1.2.0 就有的取舍。
-        ex |= WS_EX_LAYERED | WS_EX_APPWINDOW;
-        ex &= ~WS_EX_TOOLWINDOW;
+        // 默认关掉这个兼容：保留 WS_EX_TOOLWINDOW，悬浮窗不进任务栏和
+        // Alt-Tab，程序只留在托盘；只有 ObsCaptureCompat 开了才走 1.2.0
+        // 的做法。显示亲和性两种情况都保持 WDA_NONE（它只管采集本身
+        // 能不能进行，不管窗口在不在枚举列表里）。
+        ex |= WS_EX_LAYERED;
+        if (AppState.Current.ObsCaptureCompat)
+        {
+            ex |= WS_EX_APPWINDOW;
+            ex &= ~WS_EX_TOOLWINDOW;
+        }
+        else
+        {
+            ex |= WS_EX_TOOLWINDOW;
+            ex &= ~WS_EX_APPWINDOW;
+        }
         if (noActivate) ex |= WS_EX_NOACTIVATE; else ex &= ~WS_EX_NOACTIVATE;
         if (clickThrough) ex |= WS_EX_TRANSPARENT; else ex &= ~WS_EX_TRANSPARENT;
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex));
