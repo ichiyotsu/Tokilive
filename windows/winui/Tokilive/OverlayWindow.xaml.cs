@@ -733,11 +733,13 @@ public sealed partial class OverlayWindow : Window
         Brush? background;
         if (transparent) background = null;
         else if (state.CardBlur > 0)
-            // #5 磨砂：AcrylicBrush 采样窗后内容做系统级磨砂（Backdrop 模式），
+            // #5 磨砂：AcrylicBrush 采样窗后内容做系统级磨砂，
             // TintOpacity 跟 CardOpacity；AcrylicBrush 没有模糊半径属性，
             // CardBlur 的 px 数值映射不到它上面，>0 只做开关，==0 走实色。
+            // 注：BackgroundSource 是 UWP 版 AcrylicBrush 才有的属性，
+            // WinUI 3 版没有，这里用它默认的采样来源。
             // 透明悬浮窗上 Acrylic 到底出不出来，必须在 Windows 上验证。
-            background = new AcrylicBrush { TintColor = baseColor, TintOpacity = Math.Clamp(state.CardOpacity, 0, 1), FallbackColor = baseColor, BackgroundSource = AcrylicBackgroundSource.Backdrop };
+            background = new AcrylicBrush { TintColor = baseColor, TintOpacity = Math.Clamp(state.CardOpacity, 0, 1), FallbackColor = baseColor };
         else
             background = new SolidColorBrush(Color.FromArgb((byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255), baseColor.R, baseColor.G, baseColor.B));
         var card = new Border

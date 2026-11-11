@@ -388,11 +388,11 @@ public sealed partial class MainWindow : Window
     {
         if (_syncingColor) return;
         if (sender.Tag is not string boxName) return;
-        if (FindName(boxName) is not TextBox box) return;
+        if (Root.FindName(boxName) is not TextBox box) return;
         var color = sender.Color;
         var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
         // 色块名就是文本框名把 Box 换成 Swatch，例如 TextColorBox -> TextColorSwatch。
-        if (FindName(boxName.Replace("Box", "Swatch")) is Border swatch)
+        if (Root.FindName(boxName.Replace("Box", "Swatch")) is Border swatch)
             swatch.Background = new SolidColorBrush(color);
         // 写回文本框后走现成的 TextChanged -> Pull() 保存并刷新悬浮窗。
         box.Text = hex;

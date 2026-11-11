@@ -25,7 +25,7 @@ public sealed partial class SplashWindow : Window
             area.X + (area.Width - Width) / 2, area.Y + (area.Height - Height) / 2, Width, Height));
         // 2 秒内点住也能拖走，和 1.2.0 的 movable 一样。
         Root.PointerPressed += (_, _) => NativeWin.DragWindow(NativeWin.Hwnd(this));
-        Loaded += (_, _) => PlayEntrance();
+        Root.Loaded += (_, _) => PlayEntrance();
     }
 
     void PlayEntrance()
