@@ -1,11 +1,14 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
+using Windows.Foundation;
 using Windows.UI;
 
 namespace Tokilive;
@@ -15,6 +18,11 @@ public sealed partial class OverlayWindow : Window
     public enum Kind { Danmaku, Live, Lyrics }
     readonly Kind _kind;
     public static bool DarkText = true;
+    // 已经播过入场动画的弹幕行。ChatLine 没有重写 Equals/GetHashCode，
+    // HashSet 默认就是引用相等，正好按“同一条消息对象”去重。
+    // Render() 每次都会重建全部卡片，不记这一笔的话，每来一条新弹幕、
+    // 每次过期重绘，旧卡片都会再播一遍动画。
+    readonly HashSet<ChatLine> _animated = new();
 
     public OverlayWindow(Kind kind)
     {
@@ -104,7 +112,15 @@ public sealed partial class OverlayWindow : Window
             // 定时器触发重绘（见 HasExpired）。
             var lines = LiveService.Lines.Where(l => now - l.At <= LiveService.DanmakuLifetime).TakeLast(8).ToList();
             if (lines.Count == 0) Host.Children.Add(Card("等待弹幕", "连接后会显示在这里", state));
-            foreach (var line in lines) Host.Children.Add(Card(line, state));
+            // 已经不在列表里的行（过期、被顶掉）从已播集合里清掉，
+            // 免得集合一直长。只给第一次渲染的新行播入场动画。
+            _animated.RemoveWhere(l => !lines.Contains(l));
+            foreach (var line in lines)
+            {
+                var card = Card(line, state);
+                if (_animated.Add(line)) AnimateCard(card, line, state);
+                Host.Children.Add(card);
+            }
         }
         else if (_kind == Kind.Live)
         {
@@ -160,6 +176,139 @@ public sealed partial class OverlayWindow : Window
                 foreach (var (text, current) in shown) Host.Children.Add(Lyric(text, current, state));
             }
         }
+    }
+
+    // 弹幕入场动画。只在 OverlayWindow.Render() 里调：PreviewList 用的
+    // Card() 本身不带动画，设置页预览里的卡片永远不播；实时窗/歌词窗
+    // 也不走这里。关掉开关或选默认时直接返回，新弹幕直接出现，和现在一样。
+    // 时长：基础 350ms（缓慢上升 600ms），实际时长 = 基础 / 速度倍率，
+    // 速度 0.5x 时 700ms（上升 1200ms），2x 时 175ms（上升 300ms）。
+    void AnimateCard(Border card, ChatLine line, AppState state)
+    {
+        if (!state.DanmakuAnimEnabled) return;
+        var preset = state.DanmakuAnim;
+        if (preset.Length == 0 || preset == "default") return;
+        var speed = Math.Clamp(state.DanmakuAnimSpeed, 0.5, 2);
+        var baseMs = preset == "rise" ? 600.0 : 350.0;
+        var duration = TimeSpan.FromMilliseconds(baseMs / speed);
+        if (preset == "type")
+        {
+            TypeCard(card, baseMs, speed);
+            return;
+        }
+        // 先把起始状态设好再进树，避免 Loaded 前闪一下最终态；
+        // 动画在 Loaded 里起，卡片进树后立刻触发。
+        switch (preset)
+        {
+            case "blur":
+                // WinUI 3 没有不依赖 Win2D 的内容模糊（GaussianBlurEffect
+                // 在 Microsoft.Graphics.Canvas.Effects 里），这里不引新包，
+                // 用淡入 + 1.04 倍轻微缩放模拟“由虚到实”的柔焦感。
+                card.Opacity = 0;
+                card.RenderTransform = new ScaleTransform { ScaleX = 1.04, ScaleY = 1.04 };
+                card.RenderTransformOrigin = new Point(0.5, 0.5);
+                break;
+            case "pop":
+                card.Opacity = 0;
+                card.RenderTransform = new ScaleTransform { ScaleX = 0.8, ScaleY = 0.8 };
+                card.RenderTransformOrigin = new Point(0.5, 0.5);
+                break;
+            case "rise":
+                card.Opacity = 0;
+                card.RenderTransform = new CompositeTransform { TranslateY = 24 };
+                break;
+            default:
+                return;
+        }
+        card.Loaded += (_, _) => PlayCardStoryboard(card, preset, duration);
+    }
+
+    static void PlayCardStoryboard(Border card, string preset, TimeSpan duration)
+    {
+        var sb = new Storyboard();
+        var fade = new DoubleAnimation { From = 0, To = 1, Duration = new Duration(duration) };
+        Storyboard.SetTarget(fade, card);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        sb.Children.Add(fade);
+        switch (preset)
+        {
+            case "blur":
+                AddScale(sb, card, 1.04, 1, duration, new CubicEase { EasingMode = EasingMode.EaseOut });
+                break;
+            case "pop":
+                // 回弹：先冲到 1 再轻微回落，BackEase 的 EaseOut 自带这个过冲。
+                AddScale(sb, card, 0.8, 1, duration, new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 1.5 });
+                break;
+            case "rise":
+                var rise = new DoubleAnimation { From = 24, To = 0, Duration = new Duration(duration), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+                Storyboard.SetTarget(rise, card);
+                Storyboard.SetTargetProperty(rise, "(UIElement.RenderTransform).(CompositeTransform.TranslateY)");
+                sb.Children.Add(rise);
+                break;
+        }
+        sb.Begin();
+    }
+
+    static void AddScale(Storyboard sb, Border card, double from, double to, TimeSpan duration, EasingFunctionBase? ease)
+    {
+        // X 和 Y 各要一个独立的 DoubleAnimation 实例，不能共用。
+        foreach (var prop in new[] { "(UIElement.RenderTransform).(ScaleTransform.ScaleX)", "(UIElement.RenderTransform).(ScaleTransform.ScaleY)" })
+        {
+            var a = new DoubleAnimation { From = from, To = to, Duration = new Duration(duration) };
+            if (ease != null) a.EasingFunction = ease;
+            Storyboard.SetTarget(a, card);
+            Storyboard.SetTargetProperty(a, prop);
+            sb.Children.Add(a);
+        }
+    }
+
+    // 逐字显示：只动消息正文，名字/头像/粉丝牌一开始就全在。
+    // 按 Unicode 码点（Rune）逐字放，表情这类代理对不会被切成两半。
+    // 有表情图时图一开始就显示，只逐字打文字部分。
+    // 卡片被移出（Unloaded）或打完字就停表，不留后台计时器。
+    static void TypeCard(Border card, double baseMs, double speed)
+    {
+        if (card.Child is not StackPanel panel || panel.Children.Count < 2) return;
+        var segments = new List<(Run Run, List<Rune> Runes)>();
+        if (panel.Children[1] is TextBlock tb)
+        {
+            var text = tb.Text ?? "";
+            if (text.Length == 0) return;
+            tb.Text = "";
+            var run = new Run();
+            tb.Inlines.Add(run);
+            segments.Add((run, text.EnumerateRunes().ToList()));
+        }
+        else if (panel.Children[1] is RichTextBlock rich
+            && rich.Blocks.FirstOrDefault() is Paragraph para)
+        {
+            foreach (var run in para.Inlines.OfType<Run>().ToList())
+            {
+                var text = run.Text ?? "";
+                if (text.Length == 0) continue;
+                segments.Add((run, text.EnumerateRunes().ToList()));
+                run.Text = "";
+            }
+            if (segments.Count == 0) return;
+        }
+        else return;
+        var total = segments.Sum(s => s.Runes.Count);
+        if (total == 0) return;
+        // 总时长 = 基础 / 速度，每字一跳；太长的句子单跳不低于 8ms。
+        var interval = Math.Max(8.0, baseMs / speed / total);
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(interval) };
+        var seg = 0;
+        var pos = 0;
+        timer.Tick += (_, _) =>
+        {
+            if (seg >= segments.Count) { timer.Stop(); return; }
+            var (run, runes) = segments[seg];
+            run.Text += runes[pos].ToString();
+            if (++pos >= runes.Count) { seg++; pos = 0; }
+            if (seg >= segments.Count) timer.Stop();
+        };
+        card.Unloaded += (_, _) => timer.Stop();
+        timer.Start();
     }
 
     // 1.2.0 overlay.js 的 fmt：>= 10 万显示 x.x 万。

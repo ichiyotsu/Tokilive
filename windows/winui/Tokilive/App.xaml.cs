@@ -24,12 +24,30 @@ public partial class App : Application
         InitializeComponent();
     }
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        _queue = DispatcherQueue.GetForCurrentThread();
+        SplashWindow? splash = null;
         try
         {
-            _queue = DispatcherQueue.GetForCurrentThread();
+            // 1.2.0 启动时先出启动画面（384x256，约 2 秒），主窗口建好后
+            // 再淡出。启动画面出问题就直接进主窗口，和 1.2.0 在 createSplash
+            // 外包 try/catch 的做法一样，不因此崩掉。
+            try
+            {
+                splash = new SplashWindow();
+                splash.Activate();
+            }
+            catch { splash = null; }
+            var shownAt = DateTimeOffset.Now;
             Shell = new MainWindow();
+            if (splash != null)
+            {
+                var wait = TimeSpan.FromSeconds(2) - (DateTimeOffset.Now - shownAt);
+                if (wait > TimeSpan.Zero) await Task.Delay(wait);
+                try { await splash.PlayExitAsync(); } catch { }
+                try { splash.Close(); } catch { }
+            }
             Shell.Activate();
         }
         catch (Exception ex)

@@ -50,6 +50,11 @@ public sealed class AppState : INotifyPropertyChanged
     public bool ShowFollow { get => showFollow; set => Set(ref showFollow, value); }
     public bool ShowLike { get => showLike; set => Set(ref showLike, value); }
     public bool ShowShare { get => showShare; set => Set(ref showShare, value); }
+    // 弹幕动画：总开关、预设（default/blur/pop/rise/type）、速度倍率。
+    // 关掉或选默认时，新弹幕直接出现，和现在一样，没有入场动画。
+    public bool DanmakuAnimEnabled { get => danmakuAnimEnabled; set => Set(ref danmakuAnimEnabled, value); }
+    public string DanmakuAnim { get => danmakuAnim; set => Set(ref danmakuAnim, value); }
+    public double DanmakuAnimSpeed { get => danmakuAnimSpeed; set => Set(ref danmakuAnimSpeed, value); }
     // 1.2.0 main.js 默认 minGiftPrice: 0（元）。>0 时按 overlay.js 的规则
     // 过滤便宜礼物；没有给它做设置 UI，先只留字段和过滤逻辑。
     public double MinGiftPrice { get => minGiftPrice; set => Set(ref minGiftPrice, value); }
@@ -127,6 +132,9 @@ public sealed class AppState : INotifyPropertyChanged
     bool showFollow = true;
     bool showLike = true;
     bool showShare = true;
+    bool danmakuAnimEnabled = true;
+    string danmakuAnim = "default";
+    double danmakuAnimSpeed = 1;
     double minGiftPrice;
     double ttsVolume = 1;
     string cardFont = "Segoe UI Variable";

@@ -152,6 +152,9 @@ public sealed partial class MainWindow : Window
         MsgFollow.IsOn = s.ShowFollow;
         MsgLike.IsOn = s.ShowLike;
         MsgShare.IsOn = s.ShowShare;
+        AnimSwitch.IsOn = s.DanmakuAnimEnabled;
+        SelectCombo(AnimBox, s.DanmakuAnim);
+        AnimSpeedSlider.Value = s.DanmakuAnimSpeed;
         HotkeyBox.Text = s.Hotkey;
         TtsSwitch.IsOn = s.TtsEnabled;
         RateSlider.Value = s.TtsRate;
@@ -261,11 +264,12 @@ public sealed partial class MainWindow : Window
         void Save(object? _, object? __) { if (!_loading) Pull(); }
         foreach (var box in new TextBox[] { RoomBox, NameColorBox, CardColorBox, TextColorBox, CardFontBox, HotkeyBox, LyricFontBox, LyricColorBox, LyricHiBox, AccentBox })
             box.TextChanged += (_, _) => Save(null, null);
-        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, GameTopSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, AccentSwitch })
+        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, GameTopSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, AccentSwitch })
             sw.Toggled += (_, _) => Save(null, null);
-        foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider })
+        foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider, AnimSpeedSlider })
             slider.ValueChanged += (_, _) => Save(null, null);
         ThemeBox.SelectionChanged += (_, _) => Save(null, null);
+        AnimBox.SelectionChanged += (_, _) => Save(null, null);
         LyricAlignBox.SelectionChanged += (_, _) => Save(null, null);
         LyricWeightBox.SelectionChanged += (_, _) => Save(null, null);
         LyricModeBox.SelectionChanged += (_, _) => Save(null, null);
@@ -302,6 +306,9 @@ public sealed partial class MainWindow : Window
         s.ShowFollow = MsgFollow.IsOn;
         s.ShowLike = MsgLike.IsOn;
         s.ShowShare = MsgShare.IsOn;
+        s.DanmakuAnimEnabled = AnimSwitch.IsOn;
+        s.DanmakuAnim = ComboValue(AnimBox) ?? "default";
+        s.DanmakuAnimSpeed = AnimSpeedSlider.Value;
         s.Hotkey = HotkeyBox.Text;
         s.TtsEnabled = TtsSwitch.IsOn;
         s.TtsRate = RateSlider.Value;

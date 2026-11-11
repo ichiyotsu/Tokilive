@@ -152,6 +152,20 @@
                                     <TextBlock Text="只反复把 tokilive 自己的窗口抬到普通置顶层，设置窗口仍然在悬浮窗上面。不注入游戏，也不保证盖住独占全屏。无边框窗口化更有机会。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
                             </Expander>
+                            <Expander Header="弹幕动画" IsExpanded="True">
+                                <StackPanel Spacing="8">
+                                    <ToggleSwitch x:Name="AnimSwitch" Header="弹幕动画" OnContent="开" OffContent="关"/>
+                                    <ComboBox x:Name="AnimBox" Header="动画预设" HorizontalAlignment="Stretch">
+                                        <ComboBoxItem Content="默认" Tag="default"/>
+                                        <ComboBoxItem Content="模糊" Tag="blur"/>
+                                        <ComboBoxItem Content="弹出" Tag="pop"/>
+                                        <ComboBoxItem Content="缓慢上升" Tag="rise"/>
+                                        <ComboBoxItem Content="逐字显示" Tag="type"/>
+                                    </ComboBox>
+                                    <Slider x:Name="AnimSpeedSlider" Header="动画速度" Minimum="0.5" Maximum="2" StepFrequency="0.1"/>
+                                    <TextBlock Text="只给新弹幕播入场动画，旧弹幕不会因为刷新重播。关闭或选默认时，新弹幕直接出现，和现在一样。速度 0.5x 最慢、2x 最快。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Expander>
                             <Expander Header="显示的消息" IsExpanded="True">
                                 <StackPanel Spacing="8">
                                     <!-- 1.3.1 是 8 个开关竖着一行一个，占了大半页。
