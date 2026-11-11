@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Tokilive.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="tokilive · 设置">
+    <Grid x:Name="Root" Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" PaneDisplayMode="Left" SelectionChanged="Nav_SelectionChanged" OpenPaneLength="200" CompactPaneLength="48">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="连接" Tag="conn"><NavigationViewItem.Icon><SymbolIcon Symbol="Link"/></NavigationViewItem.Icon></NavigationViewItem>
+                <NavigationViewItem Content="弹幕面板" Tag="danmaku"><NavigationViewItem.Icon><SymbolIcon Symbol="Message"/></NavigationViewItem.Icon></NavigationViewItem>
+                <NavigationViewItem Content="实时窗" Tag="live"><NavigationViewItem.Icon><SymbolIcon Symbol="View"/></NavigationViewItem.Icon></NavigationViewItem>
+                <NavigationViewItem Content="歌词" Tag="lyrics"><NavigationViewItem.Icon><SymbolIcon Symbol="Audio"/></NavigationViewItem.Icon></NavigationViewItem>
+                <NavigationViewItem Content="窗口源" Tag="source"><NavigationViewItem.Icon><SymbolIcon Symbol="SlideShow"/></NavigationViewItem.Icon></NavigationViewItem>
+            </NavigationView.MenuItems>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem Content="设置" Tag="settings"><NavigationViewItem.Icon><SymbolIcon Symbol="Setting"/></NavigationViewItem.Icon></NavigationViewItem>
+            </NavigationView.FooterMenuItems>
+            <Grid>
+                <ScrollViewer x:Name="PageConn" Padding="{StaticResource PagePadding}">
+                    <StackPanel Spacing="12" MaxWidth="760">
+                        <TextBlock Text="连接" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock x:Name="AccountText" Style="{ThemeResource BodyTextBlockStyle}"/>
+                        <TextBox x:Name="RoomBox" Header="房间号" PlaceholderText="直播间号"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="连接" Click="Connect_Click"/>
+                            <Button Content="断开" Click="Disconnect_Click"/>
+                            <Button Content="读取我的直播间" Click="OwnRoom_Click"/>
+                            <Button Content="扫码登录" Click="Qr_Click"/>
+                        </StackPanel>
+                        <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <Image x:Name="QrImage" Width="200" Height="200" Visibility="Collapsed"/>
+                        <TextBlock Text="扫码只把 Cookie 留在本机配置里，不会写入仓库或日志。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </ScrollViewer>
+                <Grid x:Name="PageDanmaku" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <ScrollViewer Padding="{StaticResource PagePadding}">
+                        <StackPanel Spacing="8" MaxWidth="880">
+                            <TextBlock Text="弹幕面板" Style="{ThemeResource TitleTextBlockStyle}"/>
+                            <TextBlock Text="这一页只有一个预览。下面的分组改的是同一块预览和真正的悬浮窗。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <Border x:Name="Preview" MinHeight="140" Padding="12" CornerRadius="12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                <StackPanel x:Name="PreviewList" Spacing="8"/>
+                            </Border>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="默认" Tag="默认" Click="Preset_Click"/>
+                                <Button Content="大字" Tag="大字" Click="Preset_Click"/>
+                                <Button Content="安静" Tag="安静" Click="Preset_Click"/>
+                                <Button Content="导出主题" Click="ExportTheme_Click"/>
+                                <Button Content="导入主题" Click="ImportTheme_Click"/>
+                            </StackPanel>
+                            <Expander Header="头像与颜色" IsExpanded="True">
+                                <StackPanel Spacing="8">
+                                    <ToggleSwitch x:Name="AvatarSwitch" Header="显示头像" OnContent="开" OffContent="关"/>
+                                    <TextBox x:Name="NameColorBox" Header="名字颜色"/>
+                                    <TextBox x:Name="CardColorBox" Header="卡片颜色"/>
+                                </StackPanel>
+                            </Expander>
+                            <Expander Header="文字" IsExpanded="True">
+                                <StackPanel Spacing="8">
+                                    <TextBox x:Name="TextColorBox" Header="文字颜色"/>
+                                    <TextBox x:Name="CardFontBox" Header="字体"/>
+                                    <Slider x:Name="FontSlider" Header="字号" Minimum="12" Maximum="32"/>
+                                    <ToggleSwitch x:Name="AdaptiveSwitch" Header="文字颜色自适应" OnContent="开" OffContent="关"/>
+                                    <TextBlock Text="默认关闭。打开后大约每 2 秒把悬浮窗藏起一瞬，采样它挡住的那一块屏幕。不上传。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Expander>
+                            <Expander Header="圆角与边框" IsExpanded="True">
+                                <StackPanel Spacing="8">
+                                    <Slider x:Name="CornerSlider" Header="圆角" Minimum="0" Maximum="28"/>
+                                    <Slider x:Name="OpacitySlider" Header="卡片不透明度" Minimum="0.2" Maximum="1" StepFrequency="0.05"/>
+                                    <ToggleSwitch x:Name="BorderSwitch" Header="窗口边框（强调色）" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="ClickSwitch" Header="鼠标穿透" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="GameTopSwitch" Header="实验性游戏置顶" OnContent="开" OffContent="关"/>
+                                    <TextBlock Text="只反复把 tokilive 自己的窗口抬到普通置顶层，设置窗口仍然在悬浮窗上面。不注入游戏，也不保证盖住独占全屏。无边框窗口化更有机会。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Expander>
+                            <Expander Header="显示的消息" IsExpanded="True">
+                                <StackPanel Spacing="8">
+                                    <ToggleSwitch x:Name="MsgDanmaku" Header="弹幕" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgGift" Header="礼物" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgSc" Header="醒目留言" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgGuard" Header="上舰" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgEnter" Header="进场" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgFollow" Header="关注" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgLike" Header="点赞" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgShare" Header="分享" OnContent="开" OffContent="关"/>
+                                    <TextBlock Text="进场、关注、点赞和分享进实时窗。弹幕、礼物、醒目留言和上舰进弹幕窗。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Expander>
+                            <Expander Header="输入与语音" IsExpanded="True">
+                                <StackPanel Spacing="8">
+                                    <TextBox x:Name="HotkeyBox" Header="打开输入窗的快捷键"/>
+                                    <TextBlock Text="单独的 / 只在没有其他输入光标时才会被拿走，避免在游戏和文本框里永远吞掉斜杠。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <ToggleSwitch x:Name="TtsSwitch" Header="语音播报" OnContent="开" OffContent="关"/>
+                                    <ComboBox x:Name="VoiceBox" Header="语音" HorizontalAlignment="Stretch"/>
+                                    <Slider x:Name="RateSlider" Header="语速" Minimum="0.5" Maximum="2" StepFrequency="0.1"/>
+                                    <Slider x:Name="VolumeSlider" Header="音量" Minimum="0" Maximum="1" StepFrequency="0.05"/>
+                                    <Button Content="试听" Click="PreviewSpeech_Click"/>
+                                </StackPanel>
+                            </Expander>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <Border Grid.Row="1" Margin="16" Padding="8" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <ScrollViewer x:Name="TestBar" HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled" PointerWheelChanged="TestBar_Wheel">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="测试弹幕" Tag="danmaku" Click="Test_Click"/>
+                                <Button Content="测试礼物" Tag="gift" Click="Test_Click"/>
+                                <Button Content="测试醒目留言" Tag="superchat" Click="Test_Click"/>
+                                <Button Content="测试上舰" Tag="guard" Click="Test_Click"/>
+                                <Button Content="测试进场" Tag="enter" Click="Test_Click"/>
+                                <Button Content="测试关注" Tag="follow" Click="Test_Click"/>
+                                <Button Content="测试点赞" Tag="like" Click="Test_Click"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+                <ScrollViewer x:Name="PageLive" Visibility="Collapsed" Padding="{StaticResource PagePadding}">
+                    <StackPanel Spacing="12" MaxWidth="760">
+                        <TextBlock Text="实时窗" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <ToggleSwitch x:Name="LiveSwitch" Header="显示实时窗" OnContent="开" OffContent="关"/>
+                        <ToggleSwitch x:Name="LiveBorderSwitch" Header="实时窗边框（强调色）" OnContent="开" OffContent="关"/>
+                        <TextBlock Text="点赞、弹幕数、在线和看过人数。隐藏不断开连接。预览和悬浮窗用同一份数字。" TextWrapping="Wrap"/>
+                        <Border Padding="12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <TextBlock x:Name="LivePreview" TextWrapping="Wrap"/>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+                <Grid x:Name="PageLyrics" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <ScrollViewer Padding="24,16,24,12">
+                        <StackPanel Spacing="8" MaxWidth="760">
+                            <TextBlock Text="歌词" Style="{ThemeResource TitleTextBlockStyle}"/>
+                            <TextBlock Text="通过 Windows 系统媒体会话读取正在播放的曲目和时间轴，优先标出 QQ 音乐和网易云。不读播放器数据库，也不注入进程。没有时间轴就不会编造逐字时间。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <ToggleSwitch x:Name="DesktopLyricsSwitch" Header="桌面歌词" OnContent="开" OffContent="关"/>
+                            <ToggleSwitch x:Name="LyricDemoSwitch" Header="演示排版" OnContent="开" OffContent="关"/>
+                            <TextBox x:Name="LyricFontBox" Header="字体"/>
+                            <Slider x:Name="LyricSizeSlider" Header="字号" Minimum="16" Maximum="64"/>
+                            <TextBox x:Name="LyricColorBox" Header="文字颜色"/>
+                            <TextBox x:Name="LyricHiBox" Header="当前行颜色"/>
+                            <ComboBox x:Name="LyricAlignBox" Header="对齐" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="left"/><ComboBoxItem Content="center"/><ComboBoxItem Content="right"/>
+                            </ComboBox>
+                            <ToggleSwitch x:Name="LyricShadowSwitch" Header="阴影" OnContent="开" OffContent="关"/>
+                            <ToggleSwitch x:Name="LyricOutlineSwitch" Header="描边" OnContent="开" OffContent="关"/>
+                            <Slider x:Name="LyricBgSlider" Header="底色不透明度" Minimum="0" Maximum="0.8" StepFrequency="0.05"/>
+                            <Slider x:Name="LyricLinesSlider" Header="行数" Minimum="1" Maximum="5" StepFrequency="1"/>
+                            <ToggleSwitch x:Name="LyricClickSwitch" Header="桌面歌词穿透" OnContent="开" OffContent="关"/>
+                            <ToggleSwitch x:Name="LyricLockSwitch" Header="锁定位置" OnContent="开" OffContent="关"/>
+                            <Slider x:Name="LyricOffsetSlider" Header="时间偏移（秒）" Minimum="-5" Maximum="5" StepFrequency="0.1"/>
+                            <Button Content="导入 LRC / TTML" Click="ImportLyrics_Click"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <Border Grid.Row="1" Margin="24,0,24,16" Padding="16" CornerRadius="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock x:Name="PlayerTitle" Style="{ThemeResource BodyStrongTextBlockStyle}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="PlayerArtist" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="PlayerLine" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <Button Content="上一首" Tag="prev" Click="LyricControl_Click"/>
+                                <Button Content="播放" Tag="toggle" Click="LyricControl_Click"/>
+                                <Button Content="下一首" Tag="next" Click="LyricControl_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+                <ScrollViewer x:Name="PageSource" Visibility="Collapsed" Padding="{StaticResource PagePadding}">
+                    <StackPanel Spacing="12" MaxWidth="760">
+                        <TextBlock Text="窗口源" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <ToggleSwitch x:Name="DanmakuWindowSwitch" Header="显示弹幕窗" OnContent="开" OffContent="关"/>
+                        <ToggleSwitch x:Name="TaskbarSwitch" Header="在任务栏隐藏" OnContent="开" OffContent="关"/>
+                        <Button Content="重置窗口位置" Click="ResetBounds_Click"/>
+                        <TextBlock Text="窗口仍在托盘里。托盘创建失败时会留下任务栏按钮，避免程序消失。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <ToggleSwitch x:Name="ObsSwitch" Header="启用本地浏览器源" OnContent="开" OffContent="关"/>
+                        <NumberBox x:Name="PortBox" Header="端口" Minimum="1024" Maximum="65535" SpinButtonPlacementMode="Inline"/>
+                        <TextBox x:Name="OverlayUrl" Header="弹幕地址" IsReadOnly="True"/>
+                        <TextBox x:Name="MiniUrl" Header="实时窗地址" IsReadOnly="True"/>
+                        <TextBlock Text="标题分别是「tokilive · 弹幕」和「tokilive · 实时窗」。透明窗口在传统窗口捕获里常常是捕不到的。浏览器源是保持透明的办法。这里没有用真实的 OBS 核对过画面。" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </ScrollViewer>
+                <ScrollViewer x:Name="PageSettings" Visibility="Collapsed" Padding="{StaticResource PagePadding}">
+                    <StackPanel Spacing="12" MaxWidth="760">
+                        <TextBlock Text="外观" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock Text="只改变这个设置窗口。弹幕卡片颜色不跟着变。浅色和深色都使用系统画笔，避免浅色模式下字和底色糊在一起。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <ComboBox x:Name="ThemeBox" Header="主题" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="跟随系统"/><ComboBoxItem Content="浅色"/><ComboBoxItem Content="深色"/>
+                        </ComboBox>
+                        <ToggleSwitch x:Name="AccentSwitch" Header="使用 Windows 强调色" OnContent="开" OffContent="关"/>
+                        <TextBox x:Name="AccentBox" Header="自定义强调色（读不到系统色时使用）"/>
+                        <TextBlock x:Name="MaterialText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="更新" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock x:Name="UpdateText" TextWrapping="Wrap"/>
+                        <Button Content="检查更新" Click="Update_Click"/>
+                        <TextBlock Text="关于" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock Text="1.3.0" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock Text="原生 WinUI 3，未打包，Windows 10 1809 和 Windows 11。应用 ID com.ichiyotsu.tokilive。" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </NavigationView>
+    </Grid>
+</Window>

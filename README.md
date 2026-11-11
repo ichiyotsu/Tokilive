@@ -2,15 +2,15 @@
 
 Tokilive 是一款哔哩哔哩直播弹幕工具，Windows、Android 和 iOS / iPadOS 各有一份客户端。Windows 上是可以锁定和改大小的弹幕悬浮窗，旁边有实时数据小窗；登录后可以把弹幕发回当前直播间，也可以把本机页面交给 OBS 或直播姬的浏览器源。手机端用来连接直播间，并查看弹幕、点赞和在线人数。三个平台的应用内更新都只对照 GitHub Releases，默认只提示正式版。
 
-B站直播弹幕工具。当前开发版本 **1.2.0**。Windows、Android、iOS / iPadOS 的应用 ID 都是 `com.ichiyotsu.tokilive`。
+B站直播弹幕工具。当前开发版本 **1.3.0**。Windows、Android、iOS / iPadOS 的应用 ID 都是 `com.ichiyotsu.tokilive`。
 
 | 平台 | 版本 |
 | --- | --- |
-| Windows | `windows/package.json` 的 `version` 1.2.0。安装包名为 `tokilive-1.2.0-setup.exe`、`tokilive-1.2.0-portable.exe`。 |
-| Android | `versionName` 1.2.0，`versionCode` 3。 |
-| iOS / iPadOS | `CFBundleShortVersionString` 1.2.0，`CFBundleVersion` 3。 |
+| Windows | `windows/winui/Tokilive/Tokilive.csproj` 的 `Version` 1.3.0。安装包名为 `tokilive-1.3.0-setup.exe`，便携包是 `tokilive-1.3.0-portable.zip`。 |
+| Android | `versionName` 1.3.0，`versionCode` 4。 |
+| iOS / iPadOS | `CFBundleShortVersionString` 1.3.0，`CFBundleVersion` 4。 |
 
-已发布的 [v1.0.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.0.0) 和 [v1.1.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.1.0) 仍保留。1.2.0 还没有发布。1.0.0，以及 1.1.0 里那套私人仓库授权，都需要手动安装 1.2.0 一次。仓库现在是公开的，1.2.0 的更新检查不再要令牌。
+已发布的 [v1.0.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.0.0) 和 [v1.1.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.1.0) 仍保留。1.2.0 和 1.3.0 还没有发布。1.0.0，以及 1.1.0 里那套私人仓库授权，都需要手动安装一次。仓库现在是公开的，更新检查不再要令牌。
 
 签名钥匙不在这个仓库里。Android 正式包要在父机上用原来的钥匙签名。
 
@@ -22,7 +22,7 @@ B站直播弹幕工具。当前开发版本 **1.2.0**。Windows、Android、iOS 
 
 推送 `v*` tag 时，`.github/workflows/release.yml` 看 tag 里有没有 `-b`。带 `-b` 的发成 GitHub prerelease，并且不标成 latest。不带 `-b` 的发成正式 release，并标成 latest。这个工作流只设置发行类型，不在这里重新打包。
 
-应用内更新默认只提供正式版。正在使用正式版的人不会收到 `X.Y.Z-bN`。上面的开发版本仍是 **1.2.0**。Android `versionCode` 按每次发布加 1（1.0.0 是 1，1.1.0 是 2，1.2.0 是 3），测试版也继续加，不跟着 `versionName` 回退。
+应用内更新默认只提供正式版。正在使用正式版的人不会收到 `X.Y.Z-bN`。上面的开发版本仍是 **1.3.0**。Android `versionCode` 按每次发布加 1（1.0.0 是 1，1.1.0 是 2，1.2.0 是 3，1.3.0 是 4），测试版也继续加，不跟着 `versionName` 回退。
 
 ## 安装已发布的版本
 
@@ -31,7 +31,7 @@ B站直播弹幕工具。当前开发版本 **1.2.0**。Windows、Android、iOS 
 ## 从源码构建
 
 ```bash
-cd windows && npm ci && npm test && npm run dist
+dotnet publish windows/winui/Tokilive/Tokilive.csproj -c Release -r win-x64 --self-contained true
 cd android && ./gradlew :app:assembleRelease
 ```
 
@@ -41,7 +41,7 @@ iOS 工程在 `ios/Tokilive.xcodeproj`。这台 Linux 环境不能编出 IPA。`
 
 ## Windows 说明
 
-设置界面按 [WinUI 设计原则](https://learn.microsoft.com/zh-cn/windows/apps/design/design-principles) 安排导航、间距、键盘焦点、主题、高对比和高窄窗口，但进程仍是 Electron，不是原生 WinUI 3。原生迁移会丢掉现有的 CSS 主题和透明悬浮窗，所以没有改运行时。体积大头是 Electron 和内置字体（思源黑体、苹方等仍保留，因为它们是可选字体功能）。性能模式和进程结束功能已删除。
+设置窗口是原生 WinUI 3（C# / .NET 8，Windows App SDK，未打包），按 [WinUI 设计原则](https://learn.microsoft.com/zh-cn/windows/apps/design/design-principles) 安排导航、间距、键盘焦点、主题和高对比。目标是 Windows 10 1809 和 Windows 11。Mica 不可用时退回 Acrylic 或纯色。安装包由 `.github/workflows/windows.yml` 在 `windows-latest` 上生成，可以选择安装目录。性能模式和进程结束功能已删除。
 
 歌词只读 Windows 系统媒体会话（Windows 10 / 11 的 SMTC）。QQ 音乐和网易云如果向系统报告了正在播放的曲目，会优先标出来。不读取它们的本地数据库，也不注入进程。歌词来自你导入的 LRC / TTML，或 [LRCLIB](https://lrclib.net/docs.txt) 这个公开歌词库。没有时间轴就不会显示逐字效果。BetterLyrics 是 GPL-3.0，这里没有复制它的代码。
 

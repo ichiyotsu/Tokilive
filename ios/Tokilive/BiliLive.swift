@@ -1,9 +1,11 @@
 import Foundation
 import SwiftUI
 import CoreImage.CIFilterBuiltins
+import Compression
 
 struct LiveMessage: Identifiable, Equatable {
     let id = UUID()
+    var type = "danmaku"
     var uname: String
     var text: String
 }
@@ -25,8 +27,14 @@ final class LiveModel: ObservableObject {
     @Published var theme = 0
     @Published var qrImage: Image?
     @Published var qrText = ""
-    @Published var updateMessage = "1.2.0。检查的是公开的 GitHub Releases。"
+    @Published var show: [String: Bool] = ["danmaku": true, "gift": true, "superchat": true, "guard": true, "enter": true, "follow": true, "like": true]
+    @Published var updateMessage = "1.3.0。检查的是公开的 GitHub Releases。"
+
+    func binding(_ key: String) -> Binding<Bool> {
+        Binding(get: { self.show[key] ?? true }, set: { self.show[key] = $0 })
+    }
     private var socket: URLSessionWebSocketTask?
+    private var beat: Task<Void, Never>?
     private var cookie = ""
 
     func toggle() {
@@ -47,10 +55,17 @@ final class LiveModel: ObservableObject {
                 let task = URLSession.shared.webSocketTask(with: info.url)
                 socket = task
                 task.resume()
-                let auth: [String: Any] = ["uid": 0, "roomid": rid, "protover": 0, "platform": "web", "type": 2, "key": info.token]
+                let auth: [String: Any] = ["uid": 0, "roomid": rid, "protover": 2, "platform": "web", "type": 2, "key": info.token]
                 let body = try JSONSerialization.data(withJSONObject: auth)
                 try await task.send(.data(Self.pack(op: 7, body: body)))
                 status = "已连接 · 房间 \(rid)"
+                beat?.cancel()
+                beat = Task { [weak self] in
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(30))
+                        await self?.sendBeat()
+                    }
+                }
                 receive(task)
             } catch {
                 status = "连接失败：\(error.localizedDescription)"
@@ -60,10 +75,17 @@ final class LiveModel: ObservableObject {
     }
 
     func stop() {
+        beat?.cancel()
+        beat = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         connected = false
         status = "未连接"
+    }
+
+    private func sendBeat() async {
+        guard let socket else { return }
+        try? await socket.send(.data(Self.pack(op: 2, body: Data())))
     }
 
     func startQr() {
@@ -71,7 +93,7 @@ final class LiveModel: ObservableObject {
         Task {
             do {
                 var req = URLRequest(url: URL(string: "https://passport.bilibili.com/x/passport-login/web/qrcode/generate")!)
-                req.setValue("tokilive/1.2.0", forHTTPHeaderField: "User-Agent")
+                req.setValue("tokilive/1.3.0", forHTTPHeaderField: "User-Agent")
                 let (data, _) = try await URLSession.shared.data(for: req)
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
                 let payload = json?["data"] as? [String: Any]
@@ -87,8 +109,8 @@ final class LiveModel: ObservableObject {
     func checkUpdate() {
         updateMessage = "正在检查…"
         Task {
-            var req = URLRequest(url: URL(string: "https://api.github.com/repos/ichiyotsu/tokilive/releases?per_page=20")!)
-            req.setValue("tokilive/1.2.0 (https://github.com/ichiyotsu/tokilive)", forHTTPHeaderField: "User-Agent")
+            var req = URLRequest(url: URL(string: "https://api.github.com/repos/ichiyotsu/Tokilive/releases?per_page=20")!)
+            req.setValue("tokilive/1.3.0 (https://github.com/ichiyotsu/Tokilive)", forHTTPHeaderField: "User-Agent")
             req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             do {
                 let (data, response) = try await URLSession.shared.data(for: req)
@@ -97,7 +119,7 @@ final class LiveModel: ObservableObject {
                     updateMessage = "检查失败：HTTP \(code)"
                     return
                 }
-                let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.2.0"
+                let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.3.0"
                 let version = Self.latestStable(list)
                 if Self.isNewer(version, than: current) {
                     updateMessage = "发现 \(version)。请到 GitHub Releases 下载后，用 SideStore 重新签名安装。本 App 不会静默安装 IPA。"
@@ -114,8 +136,12 @@ final class LiveModel: ObservableObject {
         task.receive { [weak self] result in
             Task { @MainActor in
                 guard let self else { return }
-                if case .success(let message) = result, case .string(let text) = message {
-                    self.ingest(text)
+                if case .success(let message) = result {
+                    switch message {
+                    case .string(let text): self.ingest(text)
+                    case .data(let data): self.unpack(data)
+                    @unknown default: break
+                    }
                 }
                 if self.connected { self.receive(task) }
             }
@@ -131,9 +157,17 @@ final class LiveModel: ObservableObject {
             let body = info[1] as? String ?? ""
             let user = info[2] as? [Any]
             let uname = user?.dropFirst().first as? String ?? "观众"
-            messages.append(LiveMessage(uname: uname, text: body))
-            if messages.count > 200 { messages.removeFirst(messages.count - 200) }
+            add("danmaku", uname, body)
             stats.danmaku += 1
+        } else if name == "SEND_GIFT", let data = json["data"] as? [String: Any] {
+            add("gift", data["uname"] as? String ?? "", "\((data["giftName"] as? String) ?? "") x\((data["num"] as? Int) ?? 1)")
+        } else if name == "SUPER_CHAT_MESSAGE", let data = json["data"] as? [String: Any] {
+            let user = data["user_info"] as? [String: Any]
+            add("superchat", user?["uname"] as? String ?? "", data["message"] as? String ?? "")
+        } else if name == "GUARD_BUY", let data = json["data"] as? [String: Any] {
+            add("guard", data["username"] as? String ?? "", data["gift_name"] as? String ?? "上舰")
+        } else if name == "LIKE_INFO_V3_CLICK", let data = json["data"] as? [String: Any] {
+            add("like", data["uname"] as? String ?? "", data["like_text"] as? String ?? "点赞了")
         } else if name == "LIKE_INFO_V3_UPDATE", let data = json["data"] as? [String: Any] {
             stats.likes = data["click_count"] as? Int ?? stats.likes
         } else if name == "ONLINE_RANK_COUNT" || name == "ONLINE_RANK_V2", let data = json["data"] as? [String: Any] {
@@ -141,6 +175,43 @@ final class LiveModel: ObservableObject {
         } else if name == "WATCHED_CHANGE", let data = json["data"] as? [String: Any] {
             stats.watched = data["text_large"] as? String ?? stats.watched
         }
+    }
+
+    private func add(_ type: String, _ name: String, _ text: String) {
+        guard show[type] != false else { return }
+        messages.append(LiveMessage(type: type, uname: name, text: text))
+        if messages.count > 200 { messages.removeFirst(messages.count - 200) }
+    }
+
+    private func unpack(_ data: Data) {
+        var offset = 0
+        while offset + 16 <= data.count {
+            let len = Int(be32(data, offset))
+            let header = Int(be16(data, offset + 4))
+            let ver = be16(data, offset + 6)
+            let op = be32(data, offset + 8)
+            guard len >= 16, offset + len <= data.count else { return }
+            let body = data.subdata(in: (offset + header)..<(offset + len))
+            offset += len
+            if op == 5, ver == 0, let text = String(data: body, encoding: .utf8) { ingest(text) }
+            else if op == 5, ver == 2, let inflated = inflate(body) { unpack(inflated) }
+        }
+    }
+
+    private func be32(_ data: Data, _ offset: Int) -> UInt32 {
+        (UInt32(data[offset]) << 24) | (UInt32(data[offset + 1]) << 16) | (UInt32(data[offset + 2]) << 8) | UInt32(data[offset + 3])
+    }
+    private func be16(_ data: Data, _ offset: Int) -> UInt16 { (UInt16(data[offset]) << 8) | UInt16(data[offset + 1]) }
+
+    private func inflate(_ data: Data) -> Data? {
+        let capacity = 1 << 20
+        let dst = UnsafeMutablePointer<UInt8>.allocate(capacity: capacity)
+        defer { dst.deallocate() }
+        let count = data.withUnsafeBytes { raw -> Int in
+            guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+            return compression_decode_buffer(dst, capacity, base, data.count, nil, COMPRESSION_ZLIB)
+        }
+        return count > 0 ? Data(bytes: dst, count: count) : nil
     }
 
     static func latestStable(_ releases: [[String: Any]]) -> String {

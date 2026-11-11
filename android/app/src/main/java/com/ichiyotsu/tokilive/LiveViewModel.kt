@@ -43,17 +43,29 @@ class LiveViewModel(app: Application) : AndroidViewModel(app) {
     private var pending: RemoteRelease? = null
     private var apkFile: java.io.File? = null
 
-    init { runCatching { TokenStore.clear(getApplication()) } }
-
     fun checkUpdate() = viewModelScope.launch {
         updateBusy = true
+        updateMessage = "正在检查…"
         val result = withContext(Dispatchers.IO) { runCatching { GithubUpdate().latest(BuildConfig.VERSION_NAME) } }
+        val rel = result.getOrElse { updateBusy = false; updateMessage = UpdateLogic.redact(it.message); return@launch }
+        if (rel == null) { updateBusy = false; updateMessage = "已经是最新正式版 ${BuildConfig.VERSION_NAME}。"; return@launch }
+        pending = rel
+        if (rel.digest.length != 64) { updateBusy = false; updateMessage = UpdateLogic.decisionMessage("NO_CHECKSUM"); return@launch }
+        val dest = java.io.File(getApplication<Application>().cacheDir, "updates/tokilive-update.apk")
+        updateProgress = 0
+        updateMessage = "正在下载 ${rel.version}…"
+        val downloaded = withContext(Dispatchers.IO) {
+            runCatching { GithubUpdate().download(rel.assetId, dest) { read, total ->
+                viewModelScope.launch { updateProgress = if (total > 0) ((read * 100) / total).toInt() else 0 }
+            } }
+        }
         updateBusy = false
-        result.onSuccess { rel ->
-            pending = rel
-            apkFile = null
-            updateMessage = if (rel == null) "已经是最新正式版 ${BuildConfig.VERSION_NAME}。" else "可以更新到 ${rel.version}。"
-        }.onFailure { updateMessage = UpdateLogic.redact(it.message) }
+        downloaded.onSuccess { sha ->
+            if (!UpdateLogic.constantTimeEquals(sha, rel.digest)) { dest.delete(); updateMessage = UpdateLogic.decisionMessage("CHECKSUM"); return@onSuccess }
+            apkFile = dest
+            updateProgress = 100
+            installUpdate()
+        }.onFailure { dest.delete(); updateMessage = UpdateLogic.redact(it.message) }
     }
     fun downloadUpdate() = viewModelScope.launch {
         val rel = pending ?: run { updateMessage = "先检查更新。"; return@launch }

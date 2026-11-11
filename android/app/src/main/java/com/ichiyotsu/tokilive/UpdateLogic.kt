@@ -4,7 +4,7 @@ enum class SignatureVerdict { MATCH, MISMATCH, UNSIGNED_PACKAGE, NO_BASELINE }
 
 object UpdateLogic {
     const val PACKAGE_ID = "com.ichiyotsu.tokilive"
-    const val FIRST_UPGRADE = "1.0.0 没有应用内更新。请先手动安装 1.1.0。之后的版本才能在这里下载私人仓库的安装包。令牌只保存在系统密钥库里，不会显示。"
+    const val FIRST_UPGRADE = "公开的 GitHub Releases。点一次「检查更新」。有新正式版时会下载并交给系统安装界面，不会静默安装。"
 
     private val tokenPattern = Regex("""(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9_]+""")
 
@@ -61,7 +61,7 @@ object UpdateLogic {
         return "Bearer $token"
     }
 
-    fun assetApi(id: Long) = if (id > 0) "https://api.github.com/repos/ichiyotsu/tokilive/releases/assets/$id" else null
+    fun assetApi(id: Long) = if (id > 0) "https://api.github.com/repos/ichiyotsu/Tokilive/releases/assets/$id" else null
 
     fun pickApk(names: List<String>) = names.firstOrNull { it.contains("android", true) && it.endsWith(".apk", true) }
         ?: names.firstOrNull { it.endsWith(".apk", true) }

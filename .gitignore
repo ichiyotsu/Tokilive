@@ -19,3 +19,6 @@ captures/
 *.apk
 *.exe
 *.blockmap
+**/bin/
+**/obj/
+publish/

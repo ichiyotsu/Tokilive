@@ -28,7 +28,7 @@ class UpdateLogicTest {
         assertEquals("Bearer abc", UpdateLogic.authorizationHeader("abc", redirected = false))
         assertNull(UpdateLogic.authorizationHeader("abc", redirected = true))
         assertNull(UpdateLogic.authorizationHeader("", redirected = false))
-        assertEquals("https://api.github.com/repos/ichiyotsu/tokilive/releases/assets/9", UpdateLogic.assetApi(9))
+        assertEquals("https://api.github.com/repos/ichiyotsu/Tokilive/releases/assets/9", UpdateLogic.assetApi(9))
         assertEquals("tokilive-1.1.0-android.apk", UpdateLogic.pickApk(listOf("tokilive-1.1.0-setup.exe", "tokilive-1.1.0-android.apk")))
     }
 

@@ -30,17 +30,19 @@ const { buildScript } = require('../src/capture-win');
 
 const root = path.join(__dirname, '..', '..');
 
-test('versions are 1.2.0 on Windows and Android', () => {
+test('versions are 1.3.0 on Windows and Android', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'windows', 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '1.2.0');
+  assert.equal(pkg.version, '1.3.0');
+  const csproj = fs.readFileSync(path.join(root, 'windows', 'winui', 'Tokilive', 'Tokilive.csproj'), 'utf8');
+  assert.match(csproj, /<Version>1\.3\.0<\/Version>/);
   assert.equal(pkg.build.appId, 'com.ichiyotsu.tokilive');
   const gradle = fs.readFileSync(path.join(root, 'android', 'app', 'build.gradle.kts'), 'utf8');
-  assert.match(gradle, /versionName = "1\.2\.0"/);
-  assert.match(gradle, /versionCode = 3/);
+  assert.match(gradle, /versionName = "1\.3\.0"/);
+  assert.match(gradle, /versionCode = 4/);
   assert.match(gradle, /minSdk = 31/);
   const plist = fs.readFileSync(path.join(root, 'ios', 'Tokilive', 'Info.plist'), 'utf8');
-  assert.match(plist, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.2\.0<\/string>/);
-  assert.match(plist, /<key>CFBundleVersion<\/key>\s*<string>3<\/string>/);
+  assert.match(plist, /<key>CFBundleShortVersionString<\/key>\s*<string>1\.3\.0<\/string>/);
+  assert.match(plist, /<key>CFBundleVersion<\/key>\s*<string>4<\/string>/);
   assert.match(gradle, /applicationId = "com\.ichiyotsu\.tokilive"/);
   assert.doesNotMatch(gradle, /storePassword\s*=\s*"/);
   assert.doesNotMatch(gradle, /keyPassword\s*=\s*"/);
@@ -176,7 +178,7 @@ test('private update compares versions and will not fetch anonymously', () => {
   const picked = pickUpdate(releases, '1.0.0', 'setup');
   assert.equal(picked.state, 'available');
   assert.equal(picked.asset.name, 'tokilive-1.1.0-setup.exe');
-  assert.equal(assetApiUrl(picked.asset.id), 'https://api.github.com/repos/ichiyotsu/tokilive/releases/assets/9');
+  assert.equal(assetApiUrl(picked.asset.id), 'https://api.github.com/repos/ichiyotsu/Tokilive/releases/assets/9');
   assert.equal(pickUpdate(releases, '1.0.0', 'portable').asset.id, 10);
   assert.equal(pickUpdate(releases, '1.1.0', 'setup').state, 'uptodate');
   const redir = redirectPlan(302, 'https://objects.githubusercontent.com/x');
@@ -229,7 +231,7 @@ test('public downloads never send an authorization header', async () => {
     return { status: 200, headers: { get: () => '0' }, body: { getReader: () => ({ read: async () => ({ done: true }) }) } };
   };
   const fsMock = { createWriteStream: () => ({ write() {}, on() {}, end(cb) { cb(); } }) };
-  await downloadToFile({ fetchImpl, fs: fsMock, file: 'x.bin', url: 'https://api.github.com/repos/ichiyotsu/tokilive/releases/assets/9' });
+  await downloadToFile({ fetchImpl, fs: fsMock, file: 'x.bin', url: 'https://api.github.com/repos/ichiyotsu/Tokilive/releases/assets/9' });
   assert.equal(calls.every(c => c.auth === '' && !c.keys.includes('Authorization')), true);
   const removed = [];
   forgetSavedToken({ existsSync: () => true, unlinkSync: p => removed.push(p) }, 'user/github-auth.bin');
