@@ -28,32 +28,52 @@ public static class UpdateService
             using var http = new HttpClient();
             http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "tokilive/1.3.1 (https://github.com/ichiyotsu/Tokilive)");
             http.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
-            var list = JsonDocument.Parse(await http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases?per_page=20"));
+            using var list = JsonDocument.Parse(await http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases?per_page=20"));
+            if (list.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                // 限流等错误时 GitHub 返回的是 {"message": ...} 而不是数组，
+                // 以前 EnumerateArray() 直接抛异常，用户只看到一句英文报错。
+                state.UpdateMessage = "检查失败：GitHub 返回异常（可能触发限流），请稍后再试。";
+                return;
+            }
             JsonElement? best = null;
+            string bestVersion = "";
             foreach (var rel in list.RootElement.EnumerateArray())
             {
-                if (rel.GetProperty("draft").GetBoolean() || rel.GetProperty("prerelease").GetBoolean()) continue;
-                var version = rel.GetProperty("tag_name").GetString()?.TrimStart('v', 'V') ?? "";
+                // 缺字段或字段类型不对的发行版直接跳过，不能让它抛异常把整个检查拖垮。
+                if (!TryFlag(rel, "draft", out var isDraft) || !TryFlag(rel, "prerelease", out var isPre)) continue;
+                if (isDraft || isPre) continue;
+                if (!rel.TryGetProperty("tag_name", out var tag) || tag.ValueKind != JsonValueKind.String) continue;
+                var version = tag.GetString()?.Trim().TrimStart('v', 'V') ?? "";
                 if (version.Contains('-') || Compare(version, AppState.Version) <= 0) continue;
-                if (best == null || Compare(version, best.Value.GetProperty("tag_name").GetString()!.TrimStart('v', 'V')) > 0) best = rel;
+                if (best == null || Compare(version, bestVersion) > 0) { best = rel; bestVersion = version; }
             }
             if (best == null) { state.UpdateMessage = "已经是最新正式版 " + AppState.Version + "。"; return; }
             var release = best.Value;
             LatestNotes = release.TryGetProperty("body", out var body) && body.ValueKind == JsonValueKind.String ? body.GetString() : null;
-            if (LatestNotes?.Length > 2000) LatestNotes = LatestNotes[..2000];
-            var asset = Pick(release.GetProperty("assets"));
+            if (LatestNotes?.Length > 2000)
+            {
+                LatestNotes = LatestNotes[..2000];
+                // 别在代理对中间截断，否则新版说明里会多一个孤立代理项（显示为乱码）。
+                if (char.IsHighSurrogate(LatestNotes[^1])) LatestNotes = LatestNotes[..^1];
+            }
+            if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array) { state.UpdateMessage = "发现新版本，但没有 Windows 安装包。"; return; }
+            var asset = Pick(assets);
             if (asset == null) { state.UpdateMessage = "发现新版本，但没有 Windows 安装包。"; return; }
-            var name = asset.Value.GetProperty("name").GetString() ?? "setup.exe";
-            var versionName = release.GetProperty("tag_name").GetString();
+            var name = AssetName(asset.Value) ?? "setup.exe";
+            var versionName = release.TryGetProperty("tag_name", out var tagName) && tagName.ValueKind == JsonValueKind.String ? tagName.GetString() : bestVersion;
             if (!download) { state.UpdateMessage = "可以更新到 " + versionName + "（" + name + "）。再点一次开始下载。"; return; }
-            var sums = await Sums(http, release.GetProperty("assets"));
-            var expected = asset.Value.TryGetProperty("digest", out var digest) ? digest.GetString()?.Replace("sha256:", "") : null;
+            var sums = await Sums(http, assets);
+            var expected = asset.Value.TryGetProperty("digest", out var digest) && digest.ValueKind == JsonValueKind.String ? digest.GetString() : null;
+            if (expected != null && expected.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)) expected = expected[7..];
             if (string.IsNullOrWhiteSpace(expected) && sums.TryGetValue(name, out var fromFile)) expected = fromFile;
-            if (string.IsNullOrWhiteSpace(expected) || expected.Length != 64) { state.UpdateMessage = "发行版没有 SHA-256，已拒绝下载。"; return; }
-            var id = asset.Value.GetProperty("id").GetInt64();
+            // 只看长度不够：64 位非 hex 也会在 FromHexString 抛异常，变成一句英文报错。
+            if (string.IsNullOrWhiteSpace(expected) || !IsHex64(expected.Trim())) { state.UpdateMessage = "发行版没有 SHA-256，已拒绝下载。"; return; }
+            expected = expected.Trim().ToLowerInvariant();
+            if (!asset.Value.TryGetProperty("id", out var assetId) || assetId.ValueKind != JsonValueKind.Number || !assetId.TryGetInt64(out var id)) { state.UpdateMessage = "发现新版本，但没有 Windows 安装包。"; return; }
             var dest = Path.Combine(Path.GetTempPath(), "tokilive-" + name);
             var actual = await Download(http, $"https://api.github.com/repos/{Repo}/releases/assets/{id}", dest);
-            if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(actual), Convert.FromHexString(expected.ToLowerInvariant())))
+            if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(actual), Convert.FromHexString(expected)))
             {
                 File.Delete(dest);
                 state.UpdateMessage = "校验和不匹配，安装包已删除。";
@@ -99,6 +119,22 @@ public static class UpdateService
         catch (Exception ex) { state.UpdateMessage = ex.Message; }
     }
 
+    // 缺字段或类型不对的 asset 直接跳过，不抛异常。
+    static string? AssetName(JsonElement asset)
+        => asset.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String ? name.GetString() : null;
+
+    // 读 draft / prerelease 这类布尔字段：缺字段或不是布尔值时返回 false，
+    // 调用方把该发行版整个跳过。
+    static bool TryFlag(JsonElement el, string name, out bool value)
+    {
+        value = false;
+        if (!el.TryGetProperty(name, out var prop)) return false;
+        if (prop.ValueKind == JsonValueKind.True) { value = true; return true; }
+        return prop.ValueKind == JsonValueKind.False;
+    }
+
+    static bool IsHex64(string s) => s.Length == 64 && s.All(Uri.IsHexDigit);
+
     // 优先顺序：安装器 > MSIX > 其他 exe 安装器 > 单文件便携版 exe
     // > 便携版 zip。1.2.0 的 pickAsset 也是按类型挑，不是谁先出现挑谁；
     // 以前 setup ?? zip 会把“-setup.exe”和便携版 zip 之外的 msix、
@@ -108,7 +144,7 @@ public static class UpdateService
         JsonElement? setup = null, msix = null, installer = null, portableExe = null, zip = null;
         foreach (var asset in assets.EnumerateArray())
         {
-            var name = asset.GetProperty("name").GetString() ?? "";
+            var name = AssetName(asset) ?? "";
             if (name.EndsWith("-setup.exe", StringComparison.OrdinalIgnoreCase)) setup ??= asset;
             else if (name.EndsWith(".msix", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".msixbundle", StringComparison.OrdinalIgnoreCase)) msix ??= asset;
             else if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
@@ -125,7 +161,7 @@ public static class UpdateService
     // 必须走自替换脚本，不能 UseShellExecute 打开。
     static bool IsPortable(JsonElement asset)
     {
-        var name = asset.GetProperty("name").GetString() ?? "";
+        var name = AssetName(asset) ?? "";
         return name.Contains("portable", StringComparison.OrdinalIgnoreCase)
             || name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
     }
@@ -188,13 +224,23 @@ public static class UpdateService
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var asset in assets.EnumerateArray())
         {
-            var name = asset.GetProperty("name").GetString() ?? "";
+            var name = AssetName(asset) ?? "";
             if (!name.StartsWith("SHA256SUMS", StringComparison.OrdinalIgnoreCase)) continue;
-            var text = await http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases/assets/{asset.GetProperty("id").GetInt64()}");
+            if (!asset.TryGetProperty("id", out var assetId) || assetId.ValueKind != JsonValueKind.Number || !assetId.TryGetInt64(out var id)) continue;
+            // GitHub 的 asset API 默认返回 JSON 元数据（Accept 是 vnd.github+json），
+            // 必须显式要 application/octet-stream 才会返回文件内容。
+            // 以前直接 GetStringAsync 拿到的是 JSON，解析不出任何一行，sums 表
+            // 一直是空的，只能靠 asset 自带的 digest；没有 digest 的发行版
+            // 就会被误判“没有 SHA-256，已拒绝下载”。
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{Repo}/releases/assets/{id}");
+            req.Headers.TryAddWithoutValidation("Accept", "application/octet-stream");
+            using var res = await http.SendAsync(req);
+            if (res.StatusCode != HttpStatusCode.OK) continue;
+            var text = await res.Content.ReadAsStringAsync();
             foreach (var line in text.Split('\n'))
             {
                 var parts = line.Trim().Split([' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 2 && parts[0].Length == 64) map[parts[1].TrimStart('*').Trim()] = parts[0].ToLowerInvariant();
+                if (parts.Length == 2 && IsHex64(parts[0])) map[parts[1].TrimStart('*').Trim()] = parts[0].ToLowerInvariant();
             }
         }
         return map;

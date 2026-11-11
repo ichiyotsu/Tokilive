@@ -332,6 +332,7 @@ public sealed partial class MainWindow : Window
         AppBgOpacitySlider.Value = s.AppBgOpacity;
         SelectCombo(SidebarModeBox, s.SidebarMode);
         UpdateText.Text = s.UpdateMessage;
+        VersionText.Text = AppState.Version;
         UpdateProgress.Visibility = Visibility.Collapsed;
         UpdateProgressText.Visibility = Visibility.Collapsed;
         UpdateNotesExpander.Visibility = Visibility.Collapsed;
