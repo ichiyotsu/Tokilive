@@ -39,7 +39,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -52,15 +54,43 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 
 /**
  * 底部导航按 Material 3 Expressive 的选中展开来做：未选中只有图标，选中项用弹簧展开出文字，
  * 操作按钮脱离胶囊，圆角 18dp。手势条和导航条谁更高就避让谁。
  * 视觉关系参考用户自己的 TokiNote 浮动底栏。TokiNote 源码是 GPL-3.0，这里是重新写的，没有复制它的源码。
  */
+
+/** 底栏胶囊本身的高度；LiveScreen 的底部留白按它 + 系统手势/导航条高度来算。 */
+internal val BottomBarCapsuleHeight = 64.dp
+
+/**
+ * 底栏玻璃配方，按 TokiNote 浮动底栏的参数重新实现：
+ * 30dp 大模糊半径、两层很淡的 tint（黑 3%/16% + 白 10%/8%）、0.02 噪点；
+ * 不支持模糊的设备用黑色 30%/55% 兜底。
+ * 关键是不设 backgroundColor、不再叠实色背景：以前 HazeMaterials.thin() 自带
+ * 半透明底色，外面又盖了一层 0.72 alpha 的 surface，叠加后约 86% 不透明，
+ * 模糊被埋在下面看不见。
+ * 深浅按当前 surface 的亮度判断，不直接读系统深色模式——设置里可以强制浅色/深色。
+ */
+@Composable
+private fun bottomBarGlass(): HazeStyle {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val smoke = if (dark) Color.Black.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.03f)
+    val frost = Color.White.copy(alpha = if (dark) 0.08f else 0.10f)
+    val fallback = Color.Black.copy(alpha = if (dark) 0.55f else 0.30f)
+    return HazeStyle(
+        backgroundColor = Color.Unspecified,
+        tints = listOf(HazeTint(smoke), HazeTint(frost)),
+        blurRadius = 30.dp,
+        noiseFactor = 0.02f,
+        fallbackTint = HazeTint(fallback),
+    )
+}
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun ExpressiveBottomBar(
@@ -85,10 +115,9 @@ fun ExpressiveBottomBar(
         Row(
             Modifier
                 .animateContentSize(if (reduce) snap() else spring(dampingRatio = 0.72f, stiffness = 380f))
-                .height(64.dp)
+                .height(BottomBarCapsuleHeight)
                 .clip(RoundedCornerShape(28.dp))
-                .hazeEffect(haze, HazeMaterials.thin(MaterialTheme.colorScheme.surfaceContainer))
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f))
+                .hazeEffect(haze, bottomBarGlass())
                 .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

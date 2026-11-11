@@ -12,6 +12,7 @@ struct RootView: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .tint(.purple)
+        .preferredColorScheme(model.theme == 1 ? .light : model.theme == 2 ? .dark : nil)
     }
 }
 
@@ -28,12 +29,24 @@ struct LiveScreen: View {
                         .disabled(model.room.isEmpty && !model.connected)
                 }
                 Text(model.status).font(.footnote).foregroundStyle(.secondary)
-                List(model.messages) { msg in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(msg.uname).font(.caption).foregroundStyle(.secondary)
-                        Text(msg.text).font(.body)
+                ScrollViewReader { proxy in
+                    List(model.messages) { msg in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(msg.uname).font(.caption).foregroundStyle(.secondary)
+                            Text(msg.text).font(.body)
+                        }
+                        .accessibilityElement(children: .combine)
                     }
-                    .accessibilityElement(children: .combine)
+                    .onChange(of: model.messages) { _, _ in
+                        if let last = model.messages.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
+                    }
+                    .onAppear {
+                        if let last = model.messages.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
                 }
             }
             .padding()
@@ -84,8 +97,8 @@ struct SettingsScreen: View {
                     Text("扫码登录使用 B 站网页二维码，不收集 Apple 账号。")
                     if let image = model.qrImage {
                         image.resizable().scaledToFit().frame(width: 180, height: 180)
-                        Text(model.qrText)
                     }
+                    Text(model.qrText)
                     Button("获取登录二维码") { model.startQr() }
                 }
                 Section("显示的消息") {
@@ -97,22 +110,19 @@ struct SettingsScreen: View {
                     Toggle("关注", isOn: model.binding("follow"))
                     Toggle("点赞", isOn: model.binding("like"))
                 }
-                Section("更新") {
+                Section("关于") {
+                    Text(LiveModel.appVersion)
+                        .font(.largeTitle.weight(.bold))
+                    Text("iPhone 与 iPad 使用同一 Bundle ID：com.ichiyotsu.tokilive。不能像桌面端那样盖住其他 App。")
+                        .font(.footnote)
                     Text(model.updateMessage)
                     Button("检查更新") { model.checkUpdate() }
                     Text("不会在 App 里静默安装。新版本需要用 SideStore 重新签名安装。")
                         .font(.footnote)
                 }
-                Section("关于") {
-                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.3.0")
-                        .font(.largeTitle.weight(.bold))
-                    Text("iPhone 与 iPad 使用同一 Bundle ID：com.ichiyotsu.tokilive。不能像桌面端那样盖住其他 App。")
-                        .font(.footnote)
-                }
             }
             .navigationTitle("设置")
         }
-        .preferredColorScheme(model.theme == 1 ? .light : model.theme == 2 ? .dark : nil)
         .accessibilityHint(colorScheme == .dark ? "深色" : "浅色")
     }
 }

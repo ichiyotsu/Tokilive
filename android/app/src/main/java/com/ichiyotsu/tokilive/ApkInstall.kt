@@ -28,6 +28,12 @@ object ApkInstall {
         return arr.map { cert -> MessageDigest.getInstance("SHA-256").digest(cert.toByteArray()).joinToString("") { "%02x".format(it) } }
     }
 
+    /** 下载到的安装包自带的版本号；读不到时返回 null。 */
+    fun apkVersionName(context: Context, apk: File): String? {
+        if (Build.VERSION.SDK_INT < 28) return null
+        return context.packageManager.getPackageArchiveInfo(apk.path, 0)?.versionName
+    }
+
     fun decide(context: Context, apk: File, expectedSha: String, userConfirmed: Boolean): String {
         val pm = context.packageManager
         val flags = PackageManager.GET_SIGNING_CERTIFICATES

@@ -32,6 +32,16 @@ class UpdateLogicTest {
         assertEquals("tokilive-1.1.0-android.apk", UpdateLogic.pickApk(listOf("tokilive-1.1.0-setup.exe", "tokilive-1.1.0-android.apk")))
     }
 
+    @Test fun assetVersionFromApkName() {
+        assertEquals("1.3.0", UpdateLogic.assetVersion("tokilive-1.3.0-android.apk"))
+        assertEquals("1.3.2", UpdateLogic.assetVersion("tokilive-1.3.2-android.apk"))
+        assertNull(UpdateLogic.assetVersion("tokilive-1.3.1-setup.exe"))
+        assertNull(UpdateLogic.assetVersion("tokilive-1.3.0-ios.ipa"))
+        assertNull(UpdateLogic.assetVersion("SHA256SUMS"))
+        assertNull(UpdateLogic.assetVersion("tokilive-android.apk"))
+        assertNull(UpdateLogic.assetVersion("tokilive-1.3.0-android-arm64.apk"))
+    }
+
     @Test fun installRequiresChecksumSignatureAndConfirmation() {
         assertEquals(SignatureVerdict.MATCH, UpdateLogic.signaturesCompatible(listOf("aa"), listOf("aa")))
         assertEquals(SignatureVerdict.MISMATCH, UpdateLogic.signaturesCompatible(listOf("aa"), listOf("bb")))
