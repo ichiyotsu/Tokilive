@@ -110,16 +110,14 @@ struct SettingsScreen: View {
                     Toggle("关注", isOn: model.binding("follow"))
                     Toggle("点赞", isOn: model.binding("like"))
                 }
-                Section("更新") {
+                Section("关于") {
+                    Text(LiveModel.appVersion)
+                        .font(.largeTitle.weight(.bold))
+                    Text("iPhone 与 iPad 使用同一 Bundle ID：com.ichiyotsu.tokilive。不能像桌面端那样盖住其他 App。")
+                        .font(.footnote)
                     Text(model.updateMessage)
                     Button("检查更新") { model.checkUpdate() }
                     Text("不会在 App 里静默安装。新版本需要用 SideStore 重新签名安装。")
-                        .font(.footnote)
-                }
-                Section("关于") {
-                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.3.0")
-                        .font(.largeTitle.weight(.bold))
-                    Text("iPhone 与 iPad 使用同一 Bundle ID：com.ichiyotsu.tokilive。不能像桌面端那样盖住其他 App。")
                         .font(.footnote)
                 }
             }

@@ -233,7 +233,10 @@ private fun UpdateCard(vm: LiveViewModel) {
                 Text(vm.updateMessage, style = MaterialTheme.typography.bodyMedium)
                 Text("公开的 GitHub Releases。核对 SHA-256、包名和签名后，打开系统安装界面。", style = MaterialTheme.typography.bodySmall)
                 if (vm.updateProgress >= 0) LinearProgressIndicator(progress = { vm.updateProgress / 100f }, modifier = Modifier.fillMaxWidth())
-                TextButton({ vm.checkUpdate() }, enabled = !vm.updateBusy) { Text("检查更新") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton({ vm.checkUpdate() }, enabled = !vm.updateBusy) { Text("检查更新") }
+                    if (vm.updateReady) TextButton({ vm.installUpdate() }, enabled = !vm.updateBusy) { Text("安装") }
+                }
             }
         }
     }

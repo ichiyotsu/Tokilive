@@ -40,14 +40,18 @@ class LiveViewModel(app: Application) : AndroidViewModel(app) {
     var updateMessage by mutableStateOf(UpdateLogic.FIRST_UPGRADE)
     var updateProgress by mutableIntStateOf(-1)
     var updateBusy by mutableStateOf(false)
+    var updateReady by mutableStateOf(false); private set
     private var pending: RemoteRelease? = null
     private var apkFile: java.io.File? = null
 
     fun checkUpdate() = viewModelScope.launch {
         updateBusy = true
+        updateProgress = -1
+        updateReady = false
         updateMessage = "正在检查…"
-        val result = withContext(Dispatchers.IO) { runCatching { GithubUpdate().latest(BuildConfig.VERSION_NAME) } }
-        val rel = result.getOrElse { updateBusy = false; updateMessage = UpdateLogic.redact(it.message); return@launch }
+        val updater = GithubUpdate()
+        val result = withContext(Dispatchers.IO) { runCatching { updater.latest(BuildConfig.VERSION_NAME) } }
+        val rel = result.getOrElse { updateBusy = false; updateMessage = UpdateLogic.redact(it.message).ifBlank { "检查失败，请稍后重试。" }; return@launch }
         if (rel == null) { updateBusy = false; updateMessage = "已经是最新正式版 ${BuildConfig.VERSION_NAME}。"; return@launch }
         pending = rel
         if (rel.digest.length != 64) { updateBusy = false; updateMessage = UpdateLogic.decisionMessage("NO_CHECKSUM"); return@launch }
@@ -55,36 +59,25 @@ class LiveViewModel(app: Application) : AndroidViewModel(app) {
         updateProgress = 0
         updateMessage = "正在下载 ${rel.version}…"
         val downloaded = withContext(Dispatchers.IO) {
-            runCatching { GithubUpdate().download(rel.assetId, dest) { read, total ->
+            runCatching { updater.download(rel.assetId, dest) { read, total ->
                 viewModelScope.launch { updateProgress = if (total > 0) ((read * 100) / total).toInt() else 0 }
             } }
         }
         updateBusy = false
         downloaded.onSuccess { sha ->
-            if (!UpdateLogic.constantTimeEquals(sha, rel.digest)) { dest.delete(); updateMessage = UpdateLogic.decisionMessage("CHECKSUM"); return@onSuccess }
+            if (!UpdateLogic.constantTimeEquals(sha, rel.digest)) { dest.delete(); updateProgress = -1; updateMessage = UpdateLogic.decisionMessage("CHECKSUM"); return@onSuccess }
+            // 再以安装包自带的版本号兜底：文件名里的版本也可能和包内实际版本不一致。
+            val apkVersion = ApkInstall.apkVersionName(getApplication(), dest)
+            if (apkVersion != null && !UpdateLogic.isNewer(apkVersion, BuildConfig.VERSION_NAME)) {
+                dest.delete(); updateProgress = -1
+                updateMessage = "已经是最新正式版 ${BuildConfig.VERSION_NAME}。"
+                return@onSuccess
+            }
             apkFile = dest
             updateProgress = 100
+            updateReady = true
             installUpdate()
-        }.onFailure { dest.delete(); updateMessage = UpdateLogic.redact(it.message) }
-    }
-    fun downloadUpdate() = viewModelScope.launch {
-        val rel = pending ?: run { updateMessage = "先检查更新。"; return@launch }
-        if (rel.digest.length != 64) { updateMessage = UpdateLogic.decisionMessage("NO_CHECKSUM"); return@launch }
-        val dest = java.io.File(getApplication<Application>().cacheDir, "updates/tokilive-update.apk")
-        updateBusy = true
-        updateProgress = 0
-        val result = withContext(Dispatchers.IO) {
-            runCatching { GithubUpdate().download(rel.assetId, dest) { read, total ->
-                viewModelScope.launch { updateProgress = if (total > 0) ((read * 100) / total).toInt() else 0 }
-            } }
-        }
-        updateBusy = false
-        result.onSuccess { sha ->
-            if (!UpdateLogic.constantTimeEquals(sha, rel.digest)) { dest.delete(); updateMessage = UpdateLogic.decisionMessage("CHECKSUM"); return@onSuccess }
-            apkFile = dest
-            updateProgress = 100
-            updateMessage = "已校验 ${rel.assetName}。还没有安装。"
-        }.onFailure { dest.delete(); updateMessage = UpdateLogic.redact(it.message) }
+        }.onFailure { dest.delete(); updateProgress = -1; updateMessage = UpdateLogic.redact(it.message).ifBlank { "下载失败，请稍后重试。" } }
     }
     fun installUpdate() {
         val file = apkFile ?: run { updateMessage = "还没有已校验的安装包。"; return }
@@ -94,6 +87,8 @@ class LiveViewModel(app: Application) : AndroidViewModel(app) {
         when (code) {
             "OK" -> ApkInstall.launchSystemInstaller(getApplication(), file)
             "UNKNOWN_SOURCES" -> ApkInstall.openUnknownSources(getApplication())
+            // 这个包永远装不上（校验、包名、签名有问题），清掉已下载的文件，别留一个永远失败的“安装”按钮。
+            else -> { file.delete(); apkFile = null; updateReady = false; updateProgress = -1 }
         }
     }
 }

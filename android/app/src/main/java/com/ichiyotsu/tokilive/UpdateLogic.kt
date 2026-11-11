@@ -66,6 +66,12 @@ object UpdateLogic {
     fun pickApk(names: List<String>) = names.firstOrNull { it.contains("android", true) && it.endsWith(".apk", true) }
         ?: names.firstOrNull { it.endsWith(".apk", true) }
 
+    /** 从 tokilive-<版本>-android.apk 这类文件名里取版本；名字不合惯例时返回 null，调用方按 tag 版本处理。 */
+    fun assetVersion(name: String): String? {
+        val match = Regex("""^tokilive-(.+)-android\.apk$""", RegexOption.IGNORE_CASE).matchEntire(name.trim()) ?: return null
+        return match.groupValues[1].takeIf { parse(it) != null }
+    }
+
     fun signaturesCompatible(current: List<String>, incoming: List<String>): SignatureVerdict {
         if (incoming.isEmpty()) return SignatureVerdict.UNSIGNED_PACKAGE
         if (current.isEmpty()) return SignatureVerdict.NO_BASELINE

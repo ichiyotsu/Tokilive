@@ -28,7 +28,7 @@ final class LiveModel: ObservableObject {
     @Published var qrImage: Image?
     @Published var qrText = ""
     @Published var show: [String: Bool] = ["danmaku": true, "gift": true, "superchat": true, "guard": true, "enter": true, "follow": true, "like": true]
-    @Published var updateMessage = "1.3.0。检查的是公开的 GitHub Releases。"
+    @Published var updateMessage = "\(Self.appVersion)。检查的是公开的 GitHub Releases。"
 
     func binding(_ key: String) -> Binding<Bool> {
         Binding(get: { self.show[key] ?? true }, set: { self.show[key] = $0 })
@@ -40,7 +40,13 @@ final class LiveModel: ObservableObject {
     private var connectionEpoch = 0
     private var qrTask: Task<Void, Never>?
     private var qrPollTask: Task<Void, Never>?
+    private var checkingUpdate = false
     private var cookie = ""
+
+    /// 应用版本号，只从 Bundle 取；取不到时才用 1.3.0 兜底。
+    static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.3.0"
+    }
 
     func toggle() {
         if connected { stop() } else { start() }
@@ -126,7 +132,7 @@ final class LiveModel: ObservableObject {
         qrTask = Task {
             do {
                 var req = URLRequest(url: URL(string: "https://passport.bilibili.com/x/passport-login/web/qrcode/generate")!)
-                req.setValue("tokilive/1.3.0", forHTTPHeaderField: "User-Agent")
+                req.setValue("tokilive/\(Self.appVersion)", forHTTPHeaderField: "User-Agent")
                 let (data, _) = try await URLSession.shared.data(for: req)
                 guard !Task.isCancelled else { return }
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -178,7 +184,7 @@ final class LiveModel: ObservableObject {
     /// 轮询一次。返回 (code, cookie)：code 为 0 时 cookie 是 Set-Cookie 拼成的串。
     private static func pollQrOnce(key: String) async throws -> (Int, String?) {
         var req = URLRequest(url: URL(string: "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=\(key)")!)
-        req.setValue("tokilive/1.3.0", forHTTPHeaderField: "User-Agent")
+        req.setValue("tokilive/\(Self.appVersion)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: req)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let payload = json?["data"] as? [String: Any]
@@ -203,10 +209,13 @@ final class LiveModel: ObservableObject {
     }
 
     func checkUpdate() {
+        guard !checkingUpdate else { return }
+        checkingUpdate = true
         updateMessage = "正在检查…"
         Task {
+            defer { checkingUpdate = false }
             var req = URLRequest(url: URL(string: "https://api.github.com/repos/ichiyotsu/Tokilive/releases?per_page=20")!)
-            req.setValue("tokilive/1.3.0 (https://github.com/ichiyotsu/Tokilive)", forHTTPHeaderField: "User-Agent")
+            req.setValue("tokilive/\(Self.appVersion) (https://github.com/ichiyotsu/Tokilive)", forHTTPHeaderField: "User-Agent")
             req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             do {
                 let (data, response) = try await URLSession.shared.data(for: req)
@@ -215,7 +224,7 @@ final class LiveModel: ObservableObject {
                     updateMessage = "检查失败：HTTP \(code)"
                     return
                 }
-                let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.3.0"
+                let current = Self.appVersion
                 let version = Self.latestStable(list)
                 if Self.isNewer(version, than: current) {
                     updateMessage = "发现 \(version)。请到 GitHub Releases 下载后，用 SideStore 重新签名安装。本 App 不会静默安装 IPA。"
@@ -395,6 +404,10 @@ final class LiveModel: ObservableObject {
         return count > 0 ? Data(bytes: dst, count: count) : nil
     }
 
+    /// 最新正式版里 iOS 能装的版本号：取 Release 里 .ipa 文件名中的版本。
+    /// tag 是全平台版本，某端可能仍是旧版（例如 v1.3.1 里的 ipa 仍是 1.3.0），
+    /// 直接拿 tag 比会误报“发现新版”。没有 .ipa 的 Release 跳过；
+    /// 文件名不合惯例时退回用 tag 版本。
     static func latestStable(_ releases: [[String: Any]]) -> String {
         var best = ""
         for item in releases {
@@ -403,9 +416,19 @@ final class LiveModel: ObservableObject {
             var version = tag.trimmingCharacters(in: .whitespacesAndNewlines)
             if version.hasPrefix("v") || version.hasPrefix("V") { version.removeFirst() }
             guard isStable(version) else { continue }
-            if best.isEmpty || compare(version, best) > 0 { best = version }
+            let assets = item["assets"] as? [[String: Any]] ?? []
+            guard let ipaName = assets.compactMap({ $0["name"] as? String }).first(where: { $0.hasSuffix(".ipa") }) else { continue }
+            let offered = ipaVersion(ipaName) ?? version
+            if best.isEmpty || compare(offered, best) > 0 { best = offered }
         }
         return best
+    }
+
+    /// tokilive-1.3.0-ios.ipa -> 1.3.0；不合惯例返回 nil。
+    static func ipaVersion(_ name: String) -> String? {
+        guard name.hasPrefix("tokilive-"), name.hasSuffix("-ios.ipa") else { return nil }
+        let version = String(name.dropFirst("tokilive-".count).dropLast("-ios.ipa".count))
+        return isStable(version) ? version : nil
     }
 
     private static func jsonBool(_ value: Any?) -> Bool {
