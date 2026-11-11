@@ -11,7 +11,7 @@ public static class UpdateService
     // #35(a) 下载进度：收到字节数 / 总字节数（总字节数未知时为 0，
     // 界面应显示为不确定进度）。设置页订阅它就能画进度条。
     // 回调抛异常也不会断下载，见 Download 里的 Report。
-    public static event Action<long received, long total>? Progress;
+    public static event Action<long, long>? Progress;
 
     // #35(b) 最新正式版的发行说明（GitHub release body，截到 2000 字，
     // 和 1.2.0 pickUpdate 一样）。每次 Check 开始时清掉，Check 失败或
