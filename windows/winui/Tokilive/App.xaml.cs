@@ -38,7 +38,7 @@ public partial class App : Application
         }
     }
 
-    static void OnUnhandled(object sender, UnhandledExceptionEventArgs e)
+    static void OnUnhandled(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         if (e.Exception is Exception ex) Report(ex);
         e.Handled = true;
