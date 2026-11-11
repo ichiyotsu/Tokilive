@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Tokilive.SplashWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 启动动画：1.2.0 的 splash.html 是 384x256 无边框窗口，"tokilive"
+         大字，进场淡入 + 0.86 倍缩放（.55s），约 2 秒后淡出 + 0.94 倍
+         缩放（.3s）。底色按要求改成左上 #06344b 到右下 #420937 的渐变。
+         字体是系统默认粗体，1.2.0 用的 Google Sans 没有打包进 WinUI。 -->
+    <Grid x:Name="Root" Background="Transparent">
+        <Border x:Name="Card" Margin="8" CornerRadius="36">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#06344b" Offset="0"/>
+                    <GradientStop Color="#420937" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <TextBlock x:Name="SplashTitle" Text="tokilive" FontSize="56" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+    </Grid>
+</Window>

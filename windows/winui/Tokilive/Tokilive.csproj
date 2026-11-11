@@ -5,7 +5,7 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>Tokilive</RootNamespace>
     <AssemblyName>Tokilive</AssemblyName>
-    <Version>1.3.1</Version>
+    <Version>1.4.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x64</Platforms>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
@@ -18,9 +18,13 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.240923002" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
+    <!-- Win2D 1.3.2：与 WinAppSDK 1.6 同代的稳定版（1.4.0 要求更新的 WinAppSDK）。
+         用途：弹幕“模糊”入场动画的真高斯模糊（Composition GaussianBlurEffect），
+         以及卡片磨砂效果。只用 Composition 效果 API，不用 Canvas 控件。 -->
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.3.2" />
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
