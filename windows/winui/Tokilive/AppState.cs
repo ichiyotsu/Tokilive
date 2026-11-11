@@ -50,6 +50,9 @@ public sealed class AppState : INotifyPropertyChanged
     public bool ShowFollow { get => showFollow; set => Set(ref showFollow, value); }
     public bool ShowLike { get => showLike; set => Set(ref showLike, value); }
     public bool ShowShare { get => showShare; set => Set(ref showShare, value); }
+    // 1.2.0 main.js 默认 minGiftPrice: 0（元）。>0 时按 overlay.js 的规则
+    // 过滤便宜礼物；没有给它做设置 UI，先只留字段和过滤逻辑。
+    public double MinGiftPrice { get => minGiftPrice; set => Set(ref minGiftPrice, value); }
     public double TtsVolume { get => ttsVolume; set => Set(ref ttsVolume, value); }
     public string CardFont { get => cardFont; set => Set(ref cardFont, value); }
     public bool ExperimentalTopmost { get => experimentalTopmost; set => Set(ref experimentalTopmost, value); }
@@ -89,7 +92,7 @@ public sealed class AppState : INotifyPropertyChanged
     int themeMode;
     bool useSystemAccent = true;
     string accentHex = "#6750A4";
-    bool clickThrough = true;
+    bool clickThrough;
     bool showDanmaku = true;
     bool showLive = true;
     bool showDesktopLyrics;
@@ -98,7 +101,7 @@ public sealed class AppState : INotifyPropertyChanged
     string textColor = "#1A1A1A";
     string cardColor = "#F5F5F5";
     double corner = 16;
-    double fontSize = 16;
+    double fontSize = 18;
     double cardOpacity = 0.86;
     bool adaptiveText;
     bool ttsEnabled;
@@ -108,7 +111,7 @@ public sealed class AppState : INotifyPropertyChanged
     bool inputLocked;
     bool hideFromTaskbar;
     bool obsEnabled;
-    int obsPort = 9977;
+    int obsPort = 7788;
     bool showWindowBorder;
     bool showDanmakuMsg = true;
     bool showGift = true;
@@ -118,6 +121,7 @@ public sealed class AppState : INotifyPropertyChanged
     bool showFollow = true;
     bool showLike = true;
     bool showShare = true;
+    double minGiftPrice;
     double ttsVolume = 1;
     string cardFont = "Segoe UI Variable";
     bool experimentalTopmost;
@@ -126,7 +130,7 @@ public sealed class AppState : INotifyPropertyChanged
     int lyricX, lyricY, lyricW, lyricH;
     bool showLiveBorder;
     string lyricFont = "Segoe UI Variable";
-    double lyricSize = 28;
+    double lyricSize = 22;
     string lyricColor = "#FFFFFF";
     string lyricHighlight = "#FFFFFF";
     string lyricAlign = "center";
@@ -166,8 +170,17 @@ public sealed class AppState : INotifyPropertyChanged
     {
         try
         {
-            // 旧 Electron 把 settings.json 放在 Roaming\Tokilive。这里不读那个文件。
-            if (!File.Exists(FilePath)) return new AppState();
+            // 1.3.0 换 WinUI 时把旧 Electron 的设置丢了：这里明确写着
+            // “不读那个文件”，所以从 1.2.0 升级上来房间号、Cookie、字体、
+            // 字号、颜色、窗口位置全没了。Electron 的 userData 在
+            // %APPDATA%\Tokilive\settings.json，第一次启动时按 1.2.0 的
+            // 字段名做一次尽力迁移，之后就只读 WinUI 自己的 config.json。
+            if (!File.Exists(FilePath))
+            {
+                var migrated = TryMigrateFromElectron();
+                if (migrated != null) { migrated.Save(); return migrated; }
+                return new AppState();
+            }
             var text = File.ReadAllText(FilePath);
             if (!text.TrimStart().StartsWith('{')) return new AppState();
             return JsonSerializer.Deserialize<AppState>(text, JsonOpts) ?? new AppState();
@@ -183,6 +196,66 @@ public sealed class AppState : INotifyPropertyChanged
             catch { /* 配置打不开就用默认值 */ }
             return new AppState();
         }
+    }
+
+    static AppState? TryMigrateFromElectron()
+    {
+        try
+        {
+            var oldPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Tokilive", "settings.json");
+            if (!File.Exists(oldPath)) return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(oldPath));
+            var root = doc.RootElement;
+            var s = new AppState();
+            string Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+            double Num(string name, double fallback) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : fallback;
+            bool Bool(string name, bool fallback) => root.TryGetProperty(name, out var v) && (v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False) ? v.GetBoolean() : fallback;
+            s.Room = Str("roomId");
+            s.Cookie = Str("cookie");
+            // 1.2.0 是三路字体：fontFamily（拉丁）+ cjkFont + jpFont。
+            // WinUI 只有一个 CardFont，中文用户优先用 cjkFont，
+            // FontHelper.Resolve 会在后面补上拉丁和系统回退。
+            var cjk = Str("cjkFont");
+            s.CardFont = cjk.Length > 0 ? cjk : Str("fontFamily");
+            s.FontSize = Num("fontSize", s.FontSize);
+            s.CardOpacity = Num("opacity", s.CardOpacity);
+            s.Corner = Num("radius", s.Corner);
+            s.Hotkey = Str("hotkey").Length > 0 ? Str("hotkey") : s.Hotkey;
+            s.ObsPort = (int)Num("obsPort", s.ObsPort);
+            s.ShowWindowBorder = Bool("showWindowBorder", s.ShowWindowBorder);
+            s.ShowLiveBorder = Bool("showLiveBorder", s.ShowLiveBorder);
+            s.AdaptiveText = Bool("adaptiveText", s.AdaptiveText);
+            s.ExperimentalTopmost = Bool("experimentalGameTopmost", s.ExperimentalTopmost);
+            s.HideFromTaskbar = Bool("hideFromTaskbar", s.HideFromTaskbar);
+            s.ShowAvatar = Bool("showAvatar", s.ShowAvatar);
+            s.MinGiftPrice = Num("minGiftPrice", s.MinGiftPrice);
+            s.TtsEnabled = Bool("tts", s.TtsEnabled);
+            s.TtsRate = Num("ttsRate", s.TtsRate);
+            s.TtsVolume = Num("ttsVolume", s.TtsVolume);
+            s.TtsVoice = Str("ttsVoice");
+            s.LyricOffset = Num("lyricsOffset", s.LyricOffset);
+            s.LyricSize = Num("lyricsSize", s.LyricSize);
+            if (root.TryGetProperty("show", out var show))
+            {
+                bool Show(string n, bool fb) => show.TryGetProperty(n, out var v) && (v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False) ? v.GetBoolean() : fb;
+                s.ShowDanmakuMsg = Show("danmaku", s.ShowDanmakuMsg);
+                s.ShowGift = Show("gift", s.ShowGift);
+                s.ShowSuperchat = Show("superchat", s.ShowSuperchat);
+                s.ShowGuard = Show("guard", s.ShowGuard);
+                s.ShowEnter = Show("enter", s.ShowEnter);
+            }
+            void Bounds(string name, Action<int, int, int, int> set)
+            {
+                if (!root.TryGetProperty(name, out var b) || b.ValueKind != JsonValueKind.Object) return;
+                int I(string n) => b.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0;
+                var (x, y, w, h) = (I("x"), I("y"), I("width"), I("height"));
+                if (w > 0 && h > 0) set(x, y, w, h);
+            }
+            Bounds("bounds", (x, y, w, h) => { s.DanmakuX = x; s.DanmakuY = y; s.DanmakuW = w; s.DanmakuH = h; });
+            Bounds("miniBounds", (x, y, w, h) => { s.LiveX = x; s.LiveY = y; s.LiveW = w; s.LiveH = h; });
+            return s;
+        }
+        catch { return null; }
     }
 
     void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)

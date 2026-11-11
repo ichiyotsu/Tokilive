@@ -92,8 +92,18 @@ public static class NativeWin
     public static void PlaceBelow(IntPtr overlay, IntPtr main)
     {
         if (overlay == IntPtr.Zero || main == IntPtr.Zero) return;
-        SetWindowPos(main, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        // 1.3.1 的 bug：这里先把主窗口顶到 HWND_TOPMOST，设置窗口就被
+        // 永久顶在所有窗口之上，切到游戏/浏览器后 400ms 内又被盖回来。
+        // 悬浮窗自己已经是 AlwaysOnTop，只需要把它插到主窗口下面。
         SetWindowPos(overlay, main, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
+    // 无标题栏窗口的拖动：松开鼠标捕获，模拟按住标题栏。
+    public static void DragWindow(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        ReleaseCapture();
+        SendMessage(hwnd, 0x00A1 /* WM_NCLBUTTONDOWN */, (IntPtr)2 /* HTCAPTION */, IntPtr.Zero);
     }
 
     public static void RaiseAbove(IntPtr hwnd, bool overlays)
@@ -217,6 +227,8 @@ public static class NativeWin
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int cmd);
     [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hWnd);

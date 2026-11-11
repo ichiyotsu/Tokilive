@@ -13,6 +13,26 @@ public sealed class ChatLine
     public string Type { get; init; } = "danmaku";
     public string Name { get; init; } = "";
     public string Text { get; init; } = "";
+    // 1.2.0 里弹幕默认 30 秒后淡出、实时窗互动默认 6 秒后淡出。
+    // 1.3.1 把时间戳丢了，消息会一直留在列表里（上限 200 条），
+    // 悬浮窗只取最后几条，看起来像卡住不动。
+    public DateTimeOffset At { get; init; } = DateTimeOffset.UtcNow;
+    // 1.2.0 overlay.js render() / bili.js handle() 里的卡片字段：
+    // 头像只用消息里自带的 face（不另外调接口查头像，免得每条弹幕都打一次 API），
+    // 粉丝牌来自 medal / medal_info，舰长等级来自 guard / guard_level，
+    // 表情来自 DANMU_MSG 的 i[0][13].url，醒目留言的价格和底色来自
+    // SUPER_CHAT_MESSAGE 的 price / background_bottom_color。
+    // Price 的单位跟 1.2.0 一样按类型走：醒目留言是元，礼物是金瓜子
+    //（total_coin），只用来显示醒目留言价格和算礼物最低价。
+    public string Face { get; init; } = "";
+    public string MedalName { get; init; } = "";
+    public int MedalLevel { get; init; }
+    public string MedalColor { get; init; } = "";
+    public bool Admin { get; init; }
+    public int GuardLevel { get; init; }
+    public string Emote { get; init; } = "";
+    public int Price { get; init; }
+    public string Color { get; init; } = "";
 }
 
 public static class LiveService
@@ -20,24 +40,46 @@ public static class LiveService
     public static ObservableCollection<ChatLine> Lines { get; } = new();
     public static ObservableCollection<ChatLine> Pills { get; } = new();
     public static event Action<string>? Status;
+    // 1.3.1 的 bug：点赞 / 在线 / 看过人数变了只改了这几个 int，
+    // 没有任何事件通知界面，MainWindow 只订阅了 Lines/Pills 的
+    // CollectionChanged，所以实况窗数字要等下一条弹幕来了才刷新。
+    public static event Action? StatsChanged;
     public static int Likes, Danmaku, Online;
     public static string Watched = "";
+
+    // 对齐 1.2.0 的默认值：弹幕 lifetime 30 秒，实时窗互动 miniLifetime 6 秒。
+    public static readonly TimeSpan DanmakuLifetime = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan PillLifetime = TimeSpan.FromSeconds(6);
+
+    static bool IsExpired(ChatLine line, TimeSpan lifetime) =>
+        DateTimeOffset.UtcNow - line.At > lifetime;
+
+    public static bool HasExpired() =>
+        Lines.TakeLast(8).Any(l => IsExpired(l, DanmakuLifetime)) ||
+        Pills.TakeLast(4).Any(l => IsExpired(l, PillLifetime));
 
     static readonly HttpClient Http = new(new HttpClientHandler { UseCookies = false }) { Timeout = TimeSpan.FromSeconds(20) };
     static readonly int[] Mixin = [46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52];
     static CancellationTokenSource? _run;
     static DateTime _nextSend = DateTime.MinValue;
     static string? _mix;
+    // 1.2.0 bili.js resolveRoom() 读 room_init 的 data.live_status（1=开播），
+    // 连接成功时据此报“未开播”。RunOnce 里记下来，Unpack 收到 op==8 时用。
+    static int _liveStatus = 1;
 
-    public static void PushLocal(string type, string name, string text, bool force = false)
+    public static void PushLocal(string type, string name, string text, bool force = false) =>
+        PushLine(new ChatLine { Type = type, Name = name, Text = text }, force);
+
+    public static void PushLine(ChatLine line, bool force = false)
     {
-        if (!force && !AppState.Current.Allows(type)) return;
-        var pills = type is "enter" or "follow" or "like" or "share";
+        if (!force && !AppState.Current.Allows(line.Type)) return;
+        var pills = line.Type is "enter" or "follow" or "like" or "share";
         App.UI(() =>
         {
             var list = pills ? Pills : Lines;
-            list.Add(new ChatLine { Type = type, Name = name, Text = text });
-            while (list.Count > 200) list.RemoveAt(0);
+            list.Add(line);
+            // 1.2.0 maxMessages 默认 30；1.3.1 放到 200 条，旧消息一直占着列表。
+            while (list.Count > 30) list.RemoveAt(0);
         });
     }
 
@@ -157,15 +199,41 @@ public static class LiveService
         return code == 0 ? "已发送" : (json.RootElement.TryGetProperty("message", out var m) ? m.GetString() ?? "发送失败" : "发送失败");
     }
 
+    // 1.2.0 断线后指数退避重连（2 秒起，最长 60 秒）；1.3.1 断一次就停了。
     static async Task Run(string roomText, CancellationToken token)
     {
-        try
+        var retry = 0;
+        while (!token.IsCancellationRequested)
         {
+            try
+            {
+                await RunOnce(roomText, token);
+                retry = 0;
+                // RunOnce 正常返回说明服务器关了连接，不是用户主动断开就重连。
+                if (token.IsCancellationRequested) return;
+            }
+            catch (OperationCanceledException) { Report("未连接"); return; }
+            catch (Exception ex)
+            {
+                if (token.IsCancellationRequested) { Report("未连接"); return; }
+                // 指数退避：2、4、8、16、32、60、60……秒。
+                var wait = Math.Min(60, (int)Math.Pow(2, Math.Min(++retry, 6)));
+                Report($"连接失败：{ex.Message}，{wait} 秒后重连…");
+                try { await Task.Delay(TimeSpan.FromSeconds(wait), token); }
+                catch (OperationCanceledException) { Report("未连接"); return; }
+            }
+        }
+    }
+
+    static async Task RunOnce(string roomText, CancellationToken token)
+    {
             Report("正在解析房间号…");
             var id = new string(roomText.Where(char.IsDigit).ToArray());
             var init = await GetJson("https://api.live.bilibili.com/room/v1/Room/room_init?id=" + id, AppState.Current.Cookie);
             if (init.RootElement.GetProperty("code").GetInt32() != 0) throw new InvalidOperationException("直播间不存在");
-            var roomId = init.RootElement.GetProperty("data").GetProperty("room_id").GetInt32();
+            var initData = init.RootElement.GetProperty("data");
+            _liveStatus = initData.TryGetProperty("live_status", out var ls) && ls.ValueKind == JsonValueKind.Number ? ls.GetInt32() : 1;
+            var roomId = initData.GetProperty("room_id").GetInt32();
             var signed = await Wbi(new Dictionary<string, string> { ["id"] = roomId.ToString(), ["type"] = "0", ["web_location"] = "444.8" });
             var info = await GetJson("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo?" + signed, AppState.Current.Cookie);
             var data = info.RootElement.GetProperty("data");
@@ -182,14 +250,20 @@ public static class LiveService
             var beat = Task.Run(async () => { while (await timer.WaitForNextTickAsync(token)) await ws.SendAsync(Pack(2, ""), WebSocketMessageType.Binary, true, token); }, token);
             while (!token.IsCancellationRequested && ws.State == WebSocketState.Open)
             {
-                var result = await ws.ReceiveAsync(buf, token);
+                // 1.3.1 只读一帧就解析，分片的大帧会被当成不完整包丢掉。
+                // 读到 EndOfMessage 为止再解析。
+                using var ms = new MemoryStream();
+                WebSocketReceiveResult result;
+                do
+                {
+                    result = await ws.ReceiveAsync(buf, token);
+                    if (result.MessageType == WebSocketMessageType.Close) break;
+                    ms.Write(buf, 0, result.Count);
+                } while (!result.EndOfMessage);
                 if (result.MessageType == WebSocketMessageType.Close) break;
-                Unpack(buf.AsMemory(0, result.Count), roomId);
+                Unpack(ms.ToArray(), roomId);
             }
             await beat;
-        }
-        catch (OperationCanceledException) { Report("未连接"); }
-        catch (Exception ex) { Report("连接失败：" + ex.Message); }
     }
 
     static void Unpack(ReadOnlyMemory<byte> buf, int roomId)
@@ -205,10 +279,24 @@ public static class LiveService
             if (len < 16 || off + len > span.Length) break;
             var body = buf.Slice(off + hl, len - hl);
             off += len;
-            if (op == 8) Report("已连接 · 房间 " + roomId);
+            if (op == 8) Report("已连接 · 房间 " + roomId + (_liveStatus == 1 ? "" : "（未开播，开播后自动显示弹幕）"));
             else if (op == 5 && ver == 2)
             {
                 try { Unpack(Inflate(body), roomId); } catch { }
+            }
+            else if (op == 5 && ver == 3)
+            {
+                // 1.2.0 用 protover 3，服务器会发 brotli 压缩包；1.3.1 只处理了
+                // zlib（ver 2），ver 3 的包会被直接丢掉。BrotliStream 在 .NET 里自带。
+                try
+                {
+                    using var input = new MemoryStream(body.ToArray());
+                    using var brotli = new System.IO.Compression.BrotliStream(input, System.IO.Compression.CompressionMode.Decompress);
+                    using var output = new MemoryStream();
+                    brotli.CopyTo(output);
+                    Unpack(output.ToArray(), roomId);
+                }
+                catch { }
             }
             else if (op == 5 && ver == 0)
             {
@@ -219,28 +307,216 @@ public static class LiveService
 
     static void Handle(string json)
     {
+        // 1.3.1 的 bug：这里用无保护的 GetProperty / 索引访问，一条坏消息
+        // 抛异常就会一路冒泡到 Run() 的 catch，整个连接断掉还不重连。
+        // 1.2.0 是逐条 .catch(()=>{}) 兜底 + 指数退避重连。
+        try { HandleCore(json); }
+        catch { /* 单条消息坏了只丢这一条 */ }
+    }
+
+    // 下面几个小帮手都是为了按 1.2.0 bili.js 的结构安全地读 B 站包：
+    // DANMU_MSG 的 info 是数组，越界直接索引会抛异常（外层 Handle 会吞掉整条）。
+    static JsonElement? ArrAt(JsonElement el, int i) =>
+        el.ValueKind == JsonValueKind.Array && i >= 0 && i < el.GetArrayLength() ? el[i] : null;
+    static string GetStr(JsonElement el, string name) =>
+        el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+    static int GetInt(JsonElement el, string name, int fallback = 0) =>
+        el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : fallback;
+    static string HexColor(int n) => "#" + (n & 0xffffff).ToString("X6");
+    // 粉丝牌：medal_info / fans_medal 都是 { medal_name, medal_level, medal_color(整数) }。
+    static (string name, int level, string color) MedalFrom(JsonElement el, string container)
+    {
+        if (!el.TryGetProperty(container, out var m) || m.ValueKind != JsonValueKind.Object) return ("", 0, "");
+        var name = GetStr(m, "medal_name");
+        var level = GetInt(m, "medal_level");
+        if (name.Length == 0 || level == 0) return ("", 0, "");
+        var color = m.TryGetProperty("medal_color", out var c) && c.ValueKind == JsonValueKind.Number ? HexColor(c.GetInt32()) : "";
+        return (name, level, color);
+    }
+
+    static void HandleCore(string json)
+    {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         var cmd = root.TryGetProperty("cmd", out var c) ? c.GetString() ?? "" : "";
         cmd = cmd.Split(':')[0];
         if (cmd == "DANMU_MSG")
         {
+            // 1.2.0 bili.js：i[1]=文本，i[2]=用户[uid,名字,是否房管,…]，
+            // i[3]=粉丝牌[等级,名字,主播,房间,颜色]，i[7]=舰长等级，
+            // i[0][13].url=表情图，i[0][15].user.base.face=头像。
+            // 头像只用包里自带的 face，不另外调接口查（每条弹幕查一次会打爆 API）。
             var info = root.GetProperty("info");
-            var user = info[2];
-            var name = user[1].GetString() ?? "观众";
-            var text = info[1].GetString() ?? "";
+            var user = ArrAt(info, 2);
+            var name = user is { } u2 && u2.ValueKind == JsonValueKind.Array && u2.GetArrayLength() > 1
+                ? u2[1].GetString() ?? "观众" : "观众";
+            var text = ArrAt(info, 1) is { } t && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "" : "";
+            string face = "", emote = "", medalName = "", medalColor = "";
+            int medalLevel = 0, guard = 0;
+            var admin = false;
+            if (ArrAt(info, 0) is { } i0 && i0.ValueKind == JsonValueKind.Array)
+            {
+                if (ArrAt(i0, 13) is { } emo && emo.ValueKind == JsonValueKind.Object)
+                    emote = GetStr(emo, "url");
+                if (ArrAt(i0, 15) is { } ext && ext.ValueKind == JsonValueKind.Object
+                    && ext.TryGetProperty("user", out var eu) && eu.ValueKind == JsonValueKind.Object
+                    && eu.TryGetProperty("base", out var eb) && eb.ValueKind == JsonValueKind.Object)
+                    face = GetStr(eb, "face");
+            }
+            if (user is { } u && u.ValueKind == JsonValueKind.Array && u.GetArrayLength() > 2
+                && u[2].ValueKind == JsonValueKind.True) admin = true;
+            if (ArrAt(info, 3) is { } med && med.ValueKind == JsonValueKind.Array && med.GetArrayLength() > 1
+                && med[1].ValueKind == JsonValueKind.String && (med[1].GetString() ?? "").Length > 0)
+            {
+                medalLevel = med[0].ValueKind == JsonValueKind.Number ? med[0].GetInt32() : 0;
+                medalName = med[1].GetString() ?? "";
+                if (med.GetArrayLength() > 4 && med[4].ValueKind == JsonValueKind.Number)
+                    medalColor = HexColor(med[4].GetInt32());
+            }
+            if (ArrAt(info, 7) is { } g && g.ValueKind == JsonValueKind.Number) guard = g.GetInt32();
             Danmaku++;
-            PushLocal("danmaku", name, text);
+            PushLine(new ChatLine { Type = "danmaku", Name = name, Text = text, Face = face, Emote = emote, MedalName = medalName, MedalLevel = medalLevel, MedalColor = medalColor, Admin = admin, GuardLevel = guard });
             if (AppState.Current.TtsEnabled) SpeechService.Speak(name + "说" + text);
         }
         else if (cmd == "SEND_GIFT" && root.TryGetProperty("data", out var gift))
-            PushLocal("gift", gift.GetProperty("uname").GetString() ?? "", (gift.TryGetProperty("giftName", out var gn) ? gn.GetString() : "") + " x" + (gift.TryGetProperty("num", out var n) ? n.GetInt32() : 1));
+        {
+            var gName = GetStr(gift, "uname");
+            var num = GetInt(gift, "num", 1);
+            var gGift = GetStr(gift, "giftName") + " x" + num;
+            // 1.2.0 overlay.js：minGiftPrice>0 时，非金瓜子礼物直接不显示，
+            // 金瓜子礼物按 price/1000（元）和最低价比。price 在这里是 total_coin。
+            var coin = GetStr(gift, "coin_type");
+            var price = gift.TryGetProperty("total_coin", out var tc) && tc.ValueKind == JsonValueKind.Number
+                ? tc.GetInt32() : GetInt(gift, "price") * num;
+            if (AppState.Current.MinGiftPrice > 0)
+            {
+                if (coin != "gold") return;
+                if (price / 1000.0 < AppState.Current.MinGiftPrice) return;
+            }
+            var (mName, mLevel, mColor) = MedalFrom(gift, "medal_info");
+            PushLine(new ChatLine { Type = "gift", Name = gName, Text = gGift, Face = GetStr(gift, "face"), MedalName = mName, MedalLevel = mLevel, MedalColor = mColor, Price = price });
+            // 1.2.0 播报覆盖弹幕/礼物/醒目留言/上舰，1.3.1 只播弹幕。
+            if (AppState.Current.TtsEnabled) SpeechService.Speak($"感谢{gName}投喂的{gGift}");
+        }
+        else if (cmd == "SUPER_CHAT_MESSAGE" && root.TryGetProperty("data", out var sc))
+        {
+            var price = GetInt(sc, "price");
+            var uname = sc.TryGetProperty("user_info", out var u) ? GetStr(u, "uname") : "";
+            var text = GetStr(sc, "message");
+            // 1.2.0：color 取 background_bottom_color，没有再取 background_color。
+            var color = GetStr(sc, "background_bottom_color");
+            if (color.Length == 0) color = GetStr(sc, "background_color");
+            var (mName, mLevel, mColor) = MedalFrom(sc, "medal_info");
+            PushLine(new ChatLine { Type = "superchat", Name = uname, Text = text, Face = sc.TryGetProperty("user_info", out var uu) ? GetStr(uu, "face") : "", MedalName = mName, MedalLevel = mLevel, MedalColor = mColor, Price = price, Color = color });
+            if (AppState.Current.TtsEnabled) SpeechService.Speak($"{uname}的醒目留言：{text}");
+        }
+        else if (cmd == "GUARD_BUY" && root.TryGetProperty("data", out var guard))
+        {
+            var level = GetInt(guard, "guard_level");
+            var giftName = GetStr(guard, "gift_name");
+            if (giftName.Length == 0) giftName = level switch { 1 => "总督", 2 => "提督", 3 => "舰长", _ => "上舰" };
+            var num = GetInt(guard, "num", 1);
+            var guardName = GetStr(guard, "username");
+            // 1.2.0：price/1000（元）。face 用包里自带的，不另外查。
+            PushLine(new ChatLine { Type = "guard", Name = guardName, Text = $"{giftName} x{num}", Face = GetStr(guard, "face"), GuardLevel = level, Price = GetInt(guard, "price") / 1000 });
+            if (AppState.Current.TtsEnabled) SpeechService.Speak($"感谢{guardName}开通{giftName}");
+        }
+        else if (cmd == "INTERACT_WORD" && root.TryGetProperty("data", out var iw))
+            PushInteract(iw);
+        else if (cmd == "INTERACT_WORD_V2" && root.TryGetProperty("data", out var iw2) &&
+                 iw2.TryGetProperty("pb", out var pb) && pb.GetString() is string b64 && b64.Length > 0)
+        {
+            // 1.2.0 的 decodeInteract：protobuf 字段 1=uid、2=uname、5=msg_type。
+            try { PushInteract(DecodeInteract(Convert.FromBase64String(b64))); }
+            catch { /* V2 解不出来就丢掉这一条，不让整个连接崩掉 */ }
+        }
+        else if (cmd == "LIKE_INFO_V3_CLICK" && root.TryGetProperty("data", out var click))
+        {
+            var (mName, mLevel, mColor) = MedalFrom(click, "fans_medal");
+            var likeText = GetStr(click, "like_text");
+            PushLine(new ChatLine { Type = "like", Name = GetStr(click, "uname"), Text = likeText.Length > 0 ? likeText : "点赞了", MedalName = mName, MedalLevel = mLevel, MedalColor = mColor });
+        }
         else if (cmd == "LIKE_INFO_V3_UPDATE" && root.TryGetProperty("data", out var like))
+        {
             Likes = like.TryGetProperty("click_count", out var clicks) ? clicks.GetInt32() : Likes;
+            StatsChanged?.Invoke();
+        }
         else if ((cmd == "ONLINE_RANK_COUNT" || cmd == "ONLINE_RANK_V2") && root.TryGetProperty("data", out var online))
+        {
             Online = online.TryGetProperty("online_count", out var oc) ? oc.GetInt32() : online.TryGetProperty("count", out var cc) ? cc.GetInt32() : Online;
+            StatsChanged?.Invoke();
+        }
         else if (cmd == "WATCHED_CHANGE" && root.TryGetProperty("data", out var watched))
+        {
             Watched = watched.TryGetProperty("text_large", out var t) ? t.GetString() ?? Watched : Watched;
+            StatsChanged?.Invoke();
+        }
+    }
+
+    static void PushInteract(JsonElement data)
+    {
+        // 1.2.0 的映射：1 进场、2 关注、3 分享、4 关注、5 互粉。
+        var (type, action) = data.TryGetProperty("msg_type", out var mt) ? mt.GetInt32() switch
+        {
+            1 => ("enter", "进入直播间"),
+            2 => ("follow", "按下了关注"),
+            3 => ("share", "分享了直播间"),
+            4 => ("follow", "按下了关注"),
+            5 => ("follow", "与主播互粉了"),
+            _ => ("", "")
+        } : ("", "");
+        if (type.Length == 0) return;
+        // 1.2.0：进场/关注/分享也带粉丝牌（fans_medal）。V2 解码里没有这块，留空。
+        var (mName, mLevel, mColor) = MedalFrom(data, "fans_medal");
+        PushLine(new ChatLine { Type = type, Name = GetStr(data, "uname"), Text = action, MedalName = mName, MedalLevel = mLevel, MedalColor = mColor });
+    }
+
+    // 极简 protobuf 解码，只取 INTERACT_WORD_V2 需要的字段。
+    // 字段 1=uid（varint）、2=uname（bytes）、5=msg_type（varint）。
+    static JsonElement DecodeInteract(byte[] buf)
+    {
+        long uid = 0;
+        string uname = "";
+        long msgType = 0;
+        var i = 0;
+        long Varint()
+        {
+            long r = 0;
+            var s = 0;
+            while (i < buf.Length)
+            {
+                var b = buf[i++];
+                r |= (long)(b & 0x7f) << s;
+                s += 7;
+                if ((b & 0x80) == 0) break;
+            }
+            return r;
+        }
+        while (i < buf.Length)
+        {
+            var key = Varint();
+            var no = (int)(key >> 3);
+            var wt = (int)(key & 7);
+            if (wt == 0)
+            {
+                var v = Varint();
+                if (no == 1) uid = v;
+                else if (no == 5) msgType = v;
+            }
+            else if (wt == 2)
+            {
+                var len = (int)Varint();
+                if (i + len > buf.Length) break;
+                var text = Encoding.UTF8.GetString(buf, i, len);
+                i += len;
+                if (no == 2) uname = text;
+            }
+            else if (wt == 1) i += 8;
+            else if (wt == 5) i += 4;
+            else break;
+        }
+        using var doc = JsonDocument.Parse($"{{\"uid\":{uid},\"uname\":{JsonSerializer.Serialize(uname)},\"msg_type\":{msgType}}}");
+        return doc.RootElement.Clone();
     }
 
     static async Task<string> Wbi(Dictionary<string, string> query)

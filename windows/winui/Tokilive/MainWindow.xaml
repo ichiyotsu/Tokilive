@@ -47,6 +47,10 @@
                             </Border>
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="默认" Tag="默认" Click="Preset_Click"/>
+                                <Button Content="紧凑" Tag="紧凑" Click="Preset_Click"/>
+                                <Button Content="极简" Tag="极简" Click="Preset_Click"/>
+                                <Button Content="霓虹" Tag="霓虹" Click="Preset_Click"/>
+                                <Button Content="纯文字" Tag="纯文字" Click="Preset_Click"/>
                                 <Button Content="大字" Tag="大字" Click="Preset_Click"/>
                                 <Button Content="安静" Tag="安静" Click="Preset_Click"/>
                                 <Button Content="导出主题" Click="ExportTheme_Click"/>
@@ -55,39 +59,63 @@
                             <Expander Header="头像与颜色" IsExpanded="True">
                                 <StackPanel Spacing="8">
                                     <ToggleSwitch x:Name="AvatarSwitch" Header="显示头像" OnContent="开" OffContent="关"/>
-                                    <TextBox x:Name="NameColorBox" Header="名字颜色"/>
-                                    <TextBox x:Name="CardColorBox" Header="卡片颜色"/>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBox x:Name="NameColorBox" Grid.Column="0" Header="名字颜色"/>
+                                        <TextBox x:Name="CardColorBox" Grid.Column="1" Header="卡片颜色"/>
+                                        <TextBox x:Name="TextColorBox" Grid.Column="2" Header="文字颜色"/>
+                                    </Grid>
                                 </StackPanel>
                             </Expander>
                             <Expander Header="文字" IsExpanded="True">
                                 <StackPanel Spacing="8">
-                                    <TextBox x:Name="TextColorBox" Header="文字颜色"/>
                                     <TextBox x:Name="CardFontBox" Header="字体"/>
-                                    <Slider x:Name="FontSlider" Header="字号" Minimum="12" Maximum="32"/>
+                                    <ComboBox x:Name="CardFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="CardFontPicker_SelectionChanged"/>
                                     <ToggleSwitch x:Name="AdaptiveSwitch" Header="文字颜色自适应" OnContent="开" OffContent="关"/>
                                     <TextBlock Text="默认关闭。打开后大约每 2 秒把悬浮窗藏起一瞬，采样它挡住的那一块屏幕。不上传。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
                             </Expander>
-                            <Expander Header="圆角与边框" IsExpanded="True">
+                            <Expander Header="字号、圆角与边框" IsExpanded="True">
                                 <StackPanel Spacing="8">
-                                    <Slider x:Name="CornerSlider" Header="圆角" Minimum="0" Maximum="28"/>
-                                    <Slider x:Name="OpacitySlider" Header="卡片不透明度" Minimum="0.2" Maximum="1" StepFrequency="0.05"/>
-                                    <ToggleSwitch x:Name="BorderSwitch" Header="窗口边框（强调色）" OnContent="开" OffContent="关"/>
-                                    <ToggleSwitch x:Name="ClickSwitch" Header="鼠标穿透" OnContent="开" OffContent="关"/>
-                                    <ToggleSwitch x:Name="GameTopSwitch" Header="实验性游戏置顶" OnContent="开" OffContent="关"/>
+                                    <Grid ColumnSpacing="12" RowSpacing="8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                        <Slider x:Name="FontSlider" Grid.Column="0" Header="字号" Minimum="12" Maximum="32"/>
+                                        <Slider x:Name="CornerSlider" Grid.Column="1" Header="圆角" Minimum="0" Maximum="28"/>
+                                        <Slider x:Name="OpacitySlider" Grid.Column="0" Grid.Row="1" Header="卡片不透明度" Minimum="0.2" Maximum="1" StepFrequency="0.05"/>
+                                    </Grid>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="8">
+                                            <ToggleSwitch x:Name="BorderSwitch" Header="窗口边框（强调色）" OnContent="开" OffContent="关"/>
+                                            <ToggleSwitch x:Name="GameTopSwitch" Header="实验性游戏置顶" OnContent="开" OffContent="关"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="8">
+                                            <ToggleSwitch x:Name="ClickSwitch" Header="鼠标穿透" OnContent="开" OffContent="关"/>
+                                        </StackPanel>
+                                    </Grid>
                                     <TextBlock Text="只反复把 tokilive 自己的窗口抬到普通置顶层，设置窗口仍然在悬浮窗上面。不注入游戏，也不保证盖住独占全屏。无边框窗口化更有机会。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
                             </Expander>
                             <Expander Header="显示的消息" IsExpanded="True">
                                 <StackPanel Spacing="8">
-                                    <ToggleSwitch x:Name="MsgDanmaku" Header="弹幕" OnContent="开" OffContent="关"/>
-                                    <ToggleSwitch x:Name="MsgGift" Header="礼物" OnContent="开" OffContent="关"/>
-                                    <ToggleSwitch x:Name="MsgSc" Header="醒目留言" OnContent="开" OffContent="关"/>
-                                    <ToggleSwitch x:Name="MsgGuard" Header="上舰" OnContent="开" OffContent="关"/>
-                                    <ToggleSwitch x:Name="MsgEnter" Header="进场" OnContent="开" OffContent="关"/>
-                                    <ToggleSwitch x:Name="MsgFollow" Header="关注" OnContent="开" OffContent="关"/>
-                                    <ToggleSwitch x:Name="MsgLike" Header="点赞" OnContent="开" OffContent="关"/>
-                                    <ToggleSwitch x:Name="MsgShare" Header="分享" OnContent="开" OffContent="关"/>
+                                    <!-- 1.3.1 是 8 个开关竖着一行一个，占了大半页。
+                                         改成两列，4 行放完，意思和开关状态都不变。 -->
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="8">
+                                            <ToggleSwitch x:Name="MsgDanmaku" Header="弹幕" OnContent="开" OffContent="关"/>
+                                            <ToggleSwitch x:Name="MsgGift" Header="礼物" OnContent="开" OffContent="关"/>
+                                            <ToggleSwitch x:Name="MsgSc" Header="醒目留言" OnContent="开" OffContent="关"/>
+                                            <ToggleSwitch x:Name="MsgGuard" Header="上舰" OnContent="开" OffContent="关"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="8">
+                                            <ToggleSwitch x:Name="MsgEnter" Header="进场" OnContent="开" OffContent="关"/>
+                                            <ToggleSwitch x:Name="MsgFollow" Header="关注" OnContent="开" OffContent="关"/>
+                                            <ToggleSwitch x:Name="MsgLike" Header="点赞" OnContent="开" OffContent="关"/>
+                                            <ToggleSwitch x:Name="MsgShare" Header="分享" OnContent="开" OffContent="关"/>
+                                        </StackPanel>
+                                    </Grid>
                                     <TextBlock Text="进场、关注、点赞和分享进实时窗。弹幕、礼物、醒目留言和上舰进弹幕窗。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
                             </Expander>
@@ -104,16 +132,16 @@
                             </Expander>
                         </StackPanel>
                     </ScrollViewer>
-                    <Border Grid.Row="1" Margin="16" Padding="8" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                    <Border Grid.Row="1" Margin="16" Padding="6" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                         <ScrollViewer x:Name="TestBar" HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled" PointerWheelChanged="TestBar_Wheel">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="测试弹幕" Tag="danmaku" Click="Test_Click"/>
-                                <Button Content="测试礼物" Tag="gift" Click="Test_Click"/>
-                                <Button Content="测试醒目留言" Tag="superchat" Click="Test_Click"/>
-                                <Button Content="测试上舰" Tag="guard" Click="Test_Click"/>
-                                <Button Content="测试进场" Tag="enter" Click="Test_Click"/>
-                                <Button Content="测试关注" Tag="follow" Click="Test_Click"/>
-                                <Button Content="测试点赞" Tag="like" Click="Test_Click"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Content="测试弹幕" Tag="danmaku" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
+                                <Button Content="测试礼物" Tag="gift" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
+                                <Button Content="测试醒目留言" Tag="superchat" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
+                                <Button Content="测试上舰" Tag="guard" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
+                                <Button Content="测试进场" Tag="enter" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
+                                <Button Content="测试关注" Tag="follow" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
+                                <Button Content="测试点赞" Tag="like" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
@@ -141,6 +169,7 @@
                             <ToggleSwitch x:Name="DesktopLyricsSwitch" Header="桌面歌词" OnContent="开" OffContent="关"/>
                             <ToggleSwitch x:Name="LyricDemoSwitch" Header="演示排版" OnContent="开" OffContent="关"/>
                             <TextBox x:Name="LyricFontBox" Header="字体"/>
+                            <ComboBox x:Name="LyricFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="LyricFontPicker_SelectionChanged"/>
                             <Slider x:Name="LyricSizeSlider" Header="字号" Minimum="16" Maximum="64"/>
                             <TextBox x:Name="LyricColorBox" Header="文字颜色"/>
                             <TextBox x:Name="LyricHiBox" Header="当前行颜色"/>

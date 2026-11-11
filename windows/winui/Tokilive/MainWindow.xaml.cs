@@ -21,9 +21,13 @@ public sealed partial class MainWindow : Window
     readonly InputWindow _input;
     bool _loading = true;
     bool _tray;
+    bool _lastObsEnabled;
+    int _lastObsPort = -1;
+    string _lastHotkey = "";
     DispatcherTimer? _z;
     DispatcherTimer? _sample;
     DispatcherTimer? _lyricTimer;
+    DispatcherTimer? _expire;
     bool _updateArmed;
 
     public MainWindow()
@@ -51,6 +55,7 @@ public sealed partial class MainWindow : Window
         Nav.SelectedItem = Nav.MenuItems[0];
         LiveService.Lines.CollectionChanged += (_, _) => App.UI(RefreshCards);
         LiveService.Pills.CollectionChanged += (_, _) => App.UI(RefreshCards);
+        LiveService.StatsChanged += () => App.UI(RefreshCards);
         _ = LiveService.RefreshAccount().ContinueWith(_ => App.UI(() => { if (AccountText != null) AccountText.Text = AppState.Current.Account; }));
         var hwnd = NativeWin.Hwnd(this);
         _tray = NativeWin.TryTray(hwnd, () => { Activate(); AppWindow.Show(); });
@@ -66,6 +71,11 @@ public sealed partial class MainWindow : Window
         _lyricTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _lyricTimer.Tick += async (_, _) => { try { await LyricsService.Refresh(); ShowPlayer(); _lyrics.Render(); } catch { } };
         _lyricTimer.Start();
+        // 弹幕 30 秒、实时窗互动 6 秒后过期，但没有新消息就不会有人触发
+        // 重绘，所以每秒只在确实有东西过期时才重绘一次。
+        _expire = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _expire.Tick += (_, _) => { if (LiveService.HasExpired()) RefreshCards(); };
+        _expire.Start();
         ApplyVisibility();
         RefreshCards();
         ObsServer.Apply();
@@ -101,6 +111,9 @@ public sealed partial class MainWindow : Window
         CardColorBox.Text = s.CardColor;
         TextColorBox.Text = s.TextColor;
         CardFontBox.Text = s.CardFont;
+        foreach (var font in FontHelper.KnownFonts) { CardFontPicker.Items.Add(font); LyricFontPicker.Items.Add(font); }
+        CardFontPicker.SelectedItem = FontHelper.KnownFonts.Contains(s.CardFont) ? s.CardFont : null;
+        LyricFontPicker.SelectedItem = FontHelper.KnownFonts.Contains(s.LyricFont) ? s.LyricFont : null;
         FontSlider.Value = s.FontSize;
         AdaptiveSwitch.IsOn = s.AdaptiveText;
         CornerSlider.Value = s.Corner;
@@ -122,7 +135,9 @@ public sealed partial class MainWindow : Window
         VolumeSlider.Value = s.TtsVolume;
         foreach (var voice in SpeechService.Voices()) VoiceBox.Items.Add(voice);
         if (VoiceBox.Items.Count == 0) VoiceBox.Items.Add("系统默认");
-        VoiceBox.SelectedIndex = 0;
+        // 1.3.1 的 bug：这里永远 SelectedIndex = 0，保存的 TTS 语音重启后丢失。
+        var savedVoice = VoiceBox.Items.IndexOf(s.TtsVoice);
+        VoiceBox.SelectedIndex = savedVoice >= 0 ? savedVoice : 0;
         LiveSwitch.IsOn = s.ShowLive;
         LiveBorderSwitch.IsOn = s.ShowLiveBorder;
         DesktopLyricsSwitch.IsOn = s.ShowDesktopLyrics;
@@ -225,8 +240,11 @@ public sealed partial class MainWindow : Window
         ApplyTheme();
         ApplyVisibility();
         ApplyTaskbar();
-        Hotkey.Bind(NativeWin.Hwnd(this), () => _input.Toggle());
-        ObsServer.Apply();
+        // 1.3.1 的 bug：每敲一个字、每拖一下滑杆，Pull() 都会重启 OBS 服务
+        // （先 Stop 再 Start，浏览器源断连）并重绑全局热键。只在相关值
+        // 真变了的时候才做，字体/颜色这些改动不再惊动它们。
+        if (s.ObsEnabled != _lastObsEnabled || s.ObsPort != _lastObsPort) { ObsServer.Apply(); _lastObsEnabled = s.ObsEnabled; _lastObsPort = s.ObsPort; }
+        if (s.Hotkey != _lastHotkey) { Hotkey.Bind(NativeWin.Hwnd(this), () => _input.Toggle()); _lastHotkey = s.Hotkey; }
         RefreshCards();
         OverlayUrl.Text = ObsServer.OverlayUrl;
         MiniUrl.Text = ObsServer.MiniUrl;
@@ -287,6 +305,9 @@ public sealed partial class MainWindow : Window
     void Sample()
     {
         if (!AppState.Current.AdaptiveText) return;
+        // 1.3.1 的 bug：弹幕窗已经隐藏了，采样函数最后的 SW_SHOWNA 还会
+        // 把它重新显示出来。先判断可见性，不可见直接跳过。
+        if (!_danmaku.AppWindow.IsVisible) return;
         var light = NativeWin.SampleBehindIsLight(NativeWin.Hwnd(_danmaku));
         if (light == null) return;
         OverlayWindow.DarkText = light.Value;
@@ -300,7 +321,7 @@ public sealed partial class MainWindow : Window
         PreviewList.Children.Clear();
         var lines = LiveService.Lines.TakeLast(4).ToList();
         if (lines.Count == 0) PreviewList.Children.Add(OverlayWindow.Card("预览", "头像、文字和圆角都作用在这一块", AppState.Current));
-        foreach (var line in lines) PreviewList.Children.Add(OverlayWindow.Card(line.Name, line.Text, AppState.Current));
+        foreach (var line in lines) PreviewList.Children.Add(OverlayWindow.Card(line, AppState.Current));
         LivePreview.Text = $"点赞 {LiveService.Likes}    弹幕 {LiveService.Danmaku}    在线 {LiveService.Online}\n{LiveService.Watched}";
         StatusText.Text = AppState.Current.Status;
         AccountText.Text = AppState.Current.Account;
@@ -397,22 +418,69 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
     }
 
+    void CardFontPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CardFontPicker.SelectedItem is string font) CardFontBox.Text = font;
+    }
+
+    void LyricFontPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (LyricFontPicker.SelectedItem is string font) LyricFontBox.Text = font;
+    }
+
+    // 1.2.0 settings.html:300-307 的 7 个预设。WinUI 没有 1.2.0 的
+    // design（边距/间距/元素显隐）和 customCss，也没有 blur 这一项，
+    // 所以只按下表里 WinUI 能表达的部分映射，数值有来源的直接用来源值：
+    // 默认：pad/gap/spacing 都是 1；紧凑：pad .72、gap .55、spacing .8（更小）；
+    // 极简：hide medal+badge、无描边；霓虹：名字用主题色 --md-primary 发光描边；
+    // 纯文字：hide medal+badge、背景全无、白字；大字：fontSize 22；
+    // 安静：opacity 0.72、blur 0、hide medal+badge。
+    // “藏粉丝牌/徽章”在 WinUI 里没有对应开关，就用头像开关（关掉头像圆）
+    // 和边框开关来近似；每个预设都把字号、圆角、不透明度、头像、
+    // 自适应、边框和 8 个消息开关一次设全，免得切了预设还留着上一个的状态。
     void Preset_Click(object sender, RoutedEventArgs e)
     {
         var tag = (string)((FrameworkElement)sender).Tag;
         _loading = true;
-        if (tag == "大字") { FontSlider.Value = 28; CornerSlider.Value = 20; OpacitySlider.Value = 0.92; }
-        else if (tag == "安静")
+        void AllMessages(bool danmaku = true, bool gift = true, bool sc = true, bool guard = true,
+            bool enter = false, bool follow = true, bool like = true, bool share = true)
         {
-            FontSlider.Value = 14; OpacitySlider.Value = 0.55;
-            MsgEnter.IsOn = MsgFollow.IsOn = MsgLike.IsOn = MsgShare.IsOn = false;
+            MsgDanmaku.IsOn = danmaku; MsgGift.IsOn = gift; MsgSc.IsOn = sc; MsgGuard.IsOn = guard;
+            MsgEnter.IsOn = enter; MsgFollow.IsOn = follow; MsgLike.IsOn = like; MsgShare.IsOn = share;
         }
-        else
+        switch (tag)
         {
-            FontSlider.Value = 16; CornerSlider.Value = 16; OpacitySlider.Value = 0.86;
-            NameColorBox.Text = "#7C4DFF"; TextColorBox.Text = "#1A1A1A"; CardColorBox.Text = "#F5F5F5"; CardFontBox.Text = "Segoe UI Variable";
-            MsgDanmaku.IsOn = MsgGift.IsOn = MsgSc.IsOn = MsgGuard.IsOn = MsgFollow.IsOn = MsgLike.IsOn = MsgShare.IsOn = true;
-            MsgEnter.IsOn = false;
+            case "紧凑": // pad .72：字和圆角都收小一档，其余跟默认一样
+                FontSlider.Value = 16; CornerSlider.Value = 10; OpacitySlider.Value = 0.86;
+                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
+                AllMessages(); break;
+            case "极简": // hide medal+badge、无描边：关头像和边框，圆角收小
+                FontSlider.Value = 16; CornerSlider.Value = 8; OpacitySlider.Value = 0.86;
+                AvatarSwitch.IsOn = false; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
+                AllMessages(); break;
+            case "霓虹": // 名字用主题色、发光描边：开强调色边框，名字改成种子色
+                FontSlider.Value = 18; CornerSlider.Value = 16; OpacitySlider.Value = 0.92;
+                NameColorBox.Text = "#6750A4";
+                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = true;
+                AllMessages(); break;
+            case "纯文字": // 背景全无、白字：不透明度拉到最低、圆角 0、字改白
+                FontSlider.Value = 18; CornerSlider.Value = 0; OpacitySlider.Value = 0.2;
+                NameColorBox.Text = "#FFFFFF"; TextColorBox.Text = "#FFFFFF"; CardColorBox.Text = "#000000";
+                AvatarSwitch.IsOn = false; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
+                AllMessages(); break;
+            case "大字": // 1.2.0 readable：fontSize 22
+                FontSlider.Value = 22; CornerSlider.Value = 20; OpacitySlider.Value = 0.92;
+                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
+                AllMessages(); break;
+            case "安静": // 1.2.0 quiet：opacity 0.72、hide medal+badge
+                FontSlider.Value = 14; CornerSlider.Value = 12; OpacitySlider.Value = 0.72;
+                AvatarSwitch.IsOn = false; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
+                AllMessages(enter: false, follow: false, like: false, share: false); break;
+            default: // 默认：字号 18（1.2.0 默认）、圆角 16、不透明度 0.86，颜色和开关全重置
+                FontSlider.Value = 18; CornerSlider.Value = 16; OpacitySlider.Value = 0.86;
+                NameColorBox.Text = "#7C4DFF"; TextColorBox.Text = "#1A1A1A"; CardColorBox.Text = "#F5F5F5"; CardFontBox.Text = "Segoe UI Variable";
+                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
+                AllMessages(); break;
         }
         _loading = false;
         Pull();

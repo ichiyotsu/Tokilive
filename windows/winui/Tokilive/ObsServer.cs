@@ -49,17 +49,18 @@ public static class ObsServer
     static string Json() => JsonSerializer.Serialize(new
     {
         lines = LiveService.Lines.TakeLast(30).Select(l => new { l.Type, l.Name, l.Text }),
+        pills = LiveService.Pills.TakeLast(30).Select(l => new { l.Type, l.Name, l.Text }),
         LiveService.Likes, LiveService.Danmaku, LiveService.Online, LiveService.Watched
     });
 
     static string Page(bool mini)
     {
-        var pick = mini ? "s.lines.filter(x=>x.Type!=='danmaku')" : "s.lines";
-        var stats = mini ? "root.insertAdjacentHTML('afterbegin', `<div class=\"card\">点赞 ${s.Likes} · 弹幕 ${s.Danmaku} · 在线 ${s.Online}<br>${s.Watched||''}</div>`);" : "";
+        var pick = mini ? "s.pills" : "s.lines";
+        var stats = mini ? "root.insertAdjacentHTML('afterbegin', `<div class=\"card\">点赞 ${s.Likes} · 弹幕 ${s.Danmaku} · 在线 ${s.Online}<br>${esc(s.Watched||'')}</div>`);" : "";
         return "<!doctype html><meta charset=utf-8><title>tokilive · " + (mini ? "实时窗" : "弹幕") + "</title>"
             + "<style>html,body{margin:0;background:transparent;color:#111;font:16px 'Segoe UI Variable',sans-serif}.card{margin:8px;padding:10px 14px;border-radius:16px;background:rgba(255,255,255,.88)}</style>"
-            + "<div id=root></div><script>async function tick(){const s=await fetch('/api/state').then(r=>r.json());const root=document.querySelector('#root');"
-            + "const rows=" + pick + ".slice(-12).map(x=>'<div class=\"card\"><b>'+x.Name+'</b> '+x.Text+'</div>').join('');"
+            + "<div id=root></div><script>function esc(s){return String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]))}async function tick(){const s=await fetch('/api/state').then(r=>r.json());const root=document.querySelector('#root');"
+            + "const rows=" + pick + ".slice(-12).map(x=>'<div class=\"card\"><b>'+esc(x.Name)+'</b> '+esc(x.Text)+'</div>').join('');"
             + "root.innerHTML=rows||'<div class=\"card\">等待消息</div>';" + stats + "}setInterval(tick,1000);tick();</script>";
     }
 }
