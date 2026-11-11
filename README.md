@@ -1,4 +1,6 @@
-# tokilive
+# Tokilive
+
+Tokilive 是一款哔哩哔哩直播弹幕工具，Windows、Android 和 iOS / iPadOS 各有一份客户端。Windows 上是可以锁定和改大小的弹幕悬浮窗，旁边有实时数据小窗；登录后可以把弹幕发回当前直播间，也可以把本机页面交给 OBS 或直播姬的浏览器源。手机端用来连接直播间，并查看弹幕、点赞和在线人数。三个平台的应用内更新都只对照 GitHub Releases，默认只提示正式版。
 
 B站直播弹幕工具。当前开发版本 **1.2.0**。Windows、Android、iOS / iPadOS 的应用 ID 都是 `com.ichiyotsu.tokilive`。
 
@@ -8,13 +10,23 @@ B站直播弹幕工具。当前开发版本 **1.2.0**。Windows、Android、iOS 
 | Android | `versionName` 1.2.0，`versionCode` 3。 |
 | iOS / iPadOS | `CFBundleShortVersionString` 1.2.0，`CFBundleVersion` 3。 |
 
-已发布的 [v1.0.0](https://github.com/ichiyotsu/tokilive/releases/tag/v1.0.0) 和 [v1.1.0](https://github.com/ichiyotsu/tokilive/releases/tag/v1.1.0) 仍保留。1.2.0 还没有发布。1.0.0，以及 1.1.0 里那套私人仓库授权，都需要手动安装 1.2.0 一次。仓库现在是公开的，1.2.0 的更新检查不再要令牌。
+已发布的 [v1.0.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.0.0) 和 [v1.1.0](https://github.com/ichiyotsu/Tokilive/releases/tag/v1.1.0) 仍保留。1.2.0 还没有发布。1.0.0，以及 1.1.0 里那套私人仓库授权，都需要手动安装 1.2.0 一次。仓库现在是公开的，1.2.0 的更新检查不再要令牌。
 
 签名钥匙不在这个仓库里。Android 正式包要在父机上用原来的钥匙签名。
 
+## 版本规则
+
+`X.Y.Z`（例如 `0.1.0`）是正式版。`X.Y.Z-bN`（例如 `0.1.1-b1`、`0.1.1-b2`）是测试版。tag 用 `v` 前缀，例如 `v0.1.1-b1`。
+
+发布顺序是 `0.1.0` → `0.1.1-b1` → `0.1.1-b2` → … → `0.1.1`。测试版的 `X.Y.Z` 比已经发出的正式版超前几个，属于正常情况，并不表示那个正式版已经发布。同一个 `X.Y.Z` 上，测试版小于正式版：`0.1.1-b1` < `0.1.1`。`b` 后面的序号按数字比较，所以 `b2` < `b10`。
+
+推送 `v*` tag 时，`.github/workflows/release.yml` 看 tag 里有没有 `-b`。带 `-b` 的发成 GitHub prerelease，并且不标成 latest。不带 `-b` 的发成正式 release，并标成 latest。这个工作流只设置发行类型，不在这里重新打包。
+
+应用内更新默认只提供正式版。正在使用正式版的人不会收到 `X.Y.Z-bN`。上面的开发版本仍是 **1.2.0**。Android `versionCode` 按每次发布加 1（1.0.0 是 1，1.1.0 是 2，1.2.0 是 3），测试版也继续加，不跟着 `versionName` 回退。
+
 ## 安装已发布的版本
 
-从 [Releases](https://github.com/ichiyotsu/tokilive/releases) 下载。Windows 安装包可以选择目录，包括 D:。便携版不用安装。
+从 [Releases](https://github.com/ichiyotsu/Tokilive/releases) 下载。Windows 安装包可以选择目录，包括 D:。便携版不用安装。
 
 ## 从源码构建
 

@@ -16,6 +16,23 @@ function parseVersion(input) {
   return { core: m[1].split('.').map(n => Number(n)), pre: m[2] ? m[2].split('.') : [], raw };
 }
 
+function betaNumber(id) {
+  const m = /^b(\d+)$/.exec(id);
+  return m ? Number(m[1]) : null;
+}
+
+function compareIdentifier(x, y) {
+  const bx = betaNumber(x), by = betaNumber(y);
+  if (bx != null && by != null) return bx - by;
+  const na = Number(x), nb = Number(y);
+  const aNum = Number.isInteger(na) && String(na) === x;
+  const bNum = Number.isInteger(nb) && String(nb) === y;
+  if (aNum && bNum) return na - nb;
+  if (aNum !== bNum) return aNum ? -1 : 1;
+  if (x === y) return 0;
+  return x < y ? -1 : 1;
+}
+
 function compareVersions(a, b) {
   const pa = parseVersion(a), pb = parseVersion(b);
   if (!pa || !pb) return String(a).localeCompare(String(b));
@@ -30,10 +47,8 @@ function compareVersions(a, b) {
   for (let i = 0; i < m; i++) {
     if (pa.pre[i] == null) return -1;
     if (pb.pre[i] == null) return 1;
-    const na = Number(pa.pre[i]), nb = Number(pb.pre[i]);
-    if (Number.isInteger(na) && Number.isInteger(nb) && String(na) === pa.pre[i] && String(nb) === pb.pre[i]) {
-      if (na !== nb) return na - nb;
-    } else if (pa.pre[i] !== pb.pre[i]) return pa.pre[i] < pb.pre[i] ? -1 : 1;
+    const d = compareIdentifier(pa.pre[i], pb.pre[i]);
+    if (d) return d;
   }
   return 0;
 }
