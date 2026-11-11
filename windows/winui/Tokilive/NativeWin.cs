@@ -45,9 +45,45 @@ public static class NativeWin
     public static void ApplyMain(Window window)
     {
         var hwnd = Hwnd(window);
-        ForWindow(window).Title = "tokilive · 设置";
+        var app = ForWindow(window);
+        app.Title = "tokilive · 设置";
+        // 顶栏透明：把内容延伸进标题栏，标题栏那条就不再是系统单独画的
+        // 有色条，而是窗口自己的背景（Mica / Acrylic）透出来。
+        // 标题栏按钮的底色也全部改透明，悬停/按下只留一层很淡的灰，
+        // 让按钮在浅色深色下都看得见，又不会再出现一块颜色。
+        try
+        {
+            var bar = app.TitleBar;
+            bar.ExtendsContentIntoTitleBar = true;
+            bar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+            bar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+            bar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(20, 127, 127, 127);
+            bar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(32, 127, 127, 127);
+            // 前景色（按钮图标和文字）不改，留给系统按浅色/深色自己选。
+        }
+        catch { /* 老系统上标题栏 API 不可用就保持默认顶栏 */ }
         RaiseAbove(hwnd, overlays: false);
         InstallSubclass(hwnd);
+    }
+
+    // 拖动区域：标题栏整条（除右边的最小化/最大化/关闭三个按钮）。
+    // SetDragRectangles 要的是物理像素：AppWindow.Size 和 TitleBar.Height
+    // 本来就是物理像素，标题栏按钮宽按 46dip × 缩放换算。
+    // 必须在窗口大小变化时重算（最大化/还原会触发 SizeChanged）。
+    public static void UpdateMainDragRectangles(Window window)
+    {
+        try
+        {
+            var app = ForWindow(window);
+            var scale = window.Content?.XamlRoot?.RasterizationScale ?? 1.0;
+            var height = app.TitleBar.Height;
+            var width = app.Size.Width;
+            var captionWidth = (int)Math.Ceiling(46 * 3 * scale);
+            var dragWidth = Math.Max(0, width - captionWidth);
+            if (height <= 0 || dragWidth <= 0) return;
+            app.TitleBar.SetDragRectangles(new[] { new global::Windows.Graphics.RectInt32(0, 0, dragWidth, height) });
+        }
+        catch { /* 拖动区设不上时，标题栏那行的 PointerPressed 会兜底拖动 */ }
     }
 
     public static void ApplyOverlay(Window window, string title, bool clickThrough, bool resizable, bool noActivate)

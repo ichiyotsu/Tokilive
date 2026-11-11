@@ -29,6 +29,8 @@ public sealed partial class MainWindow : Window
     DispatcherTimer? _lyricTimer;
     DispatcherTimer? _expire;
     bool _updateArmed;
+    // 同步颜色选择器时置位，避免 ColorChanged -> 写文本框 -> Pull -> 再同步的循环。
+    bool _syncingColor;
 
     public MainWindow()
     {
@@ -40,6 +42,13 @@ public sealed partial class MainWindow : Window
         NativeWin.ApplyMain(this);
         TryBackdrop();
         AppWindow.Resize(new global::Windows.Graphics.SizeInt32(1100, 760));
+        NativeWin.UpdateMainDragRectangles(this);
+        // 拖动区要跟着窗口大小走：最大化/还原/改大小都会触发 SizeChanged。
+        SizeChanged += (_, _) => NativeWin.UpdateMainDragRectangles(this);
+        // 构造时窗口还没显示，XamlRoot 可能拿不到，缩放会按 1.0 算；
+        // 激活后 XamlRoot 就有了，再按真实缩放重算一次，避免高 DPI 下
+        // 拖动区盖住右边的最小化/最大化/关闭按钮。
+        Activated += (_, _) => NativeWin.UpdateMainDragRectangles(this);
         Closed += (_, _) =>
         {
             Hotkey.Unbind();
@@ -79,6 +88,15 @@ public sealed partial class MainWindow : Window
         ApplyVisibility();
         RefreshCards();
         ObsServer.Apply();
+    }
+
+    // 顶栏拖动的兜底：拖动区（SetDragRectangles）正常时，点在标题栏上
+    // 的操作会被系统当成标题栏拖动，不会走到这里；只有拖动区设不上
+    // 时，这里才接住按下事件，用 WM_NCLBUTTONDOWN 模拟按住标题栏拖动，
+    // 和悬浮窗的拖动是同一套办法。窗口就不会出现拖不动的情况。
+    void TitleBarRow_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        NativeWin.DragWindow(NativeWin.Hwnd(this));
     }
 
     void TryBackdrop()
@@ -163,7 +181,67 @@ public sealed partial class MainWindow : Window
         AccentBox.Text = s.AccentHex;
         UpdateText.Text = s.UpdateMessage;
         Wire();
+        SyncColorPickers();
         ApplyTheme();
+    }
+
+    // 接受 #RRGGBB，或不带 # 的 6 位 hex，统一成大写的 #RRGGBB。
+    // 打错了（长度不对、不是 hex 字符）返回 false，Pull() 会保留
+    // 原来的 AppState 值，而不是把错文本存进去；以前错文本是直接
+    // 存了，OverlayWindow.Parse 再悄悄回退到 #1A1A1A。
+    static bool TryNormalizeHex(string? text, out string hex)
+    {
+        hex = "";
+        var t = (text ?? "").Trim().TrimStart('#');
+        if (t.Length != 6) return false;
+        if (!int.TryParse(t, System.Globalization.NumberStyles.HexNumber, null, out _)) return false;
+        hex = "#" + t.ToUpperInvariant();
+        return true;
+    }
+
+    void SyncColorPickers()
+    {
+        _syncingColor = true;
+        try
+        {
+            SyncOneColor(NameColorPicker, NameColorBox, NameColorSwatch);
+            SyncOneColor(CardColorPicker, CardColorBox, CardColorSwatch);
+            SyncOneColor(TextColorPicker, TextColorBox, TextColorSwatch);
+            SyncOneColor(LyricColorPicker, LyricColorBox, LyricColorSwatch);
+            SyncOneColor(LyricHiPicker, LyricHiBox, LyricHiSwatch);
+            SyncOneColor(AccentPicker, AccentBox, AccentSwatch);
+        }
+        finally { _syncingColor = false; }
+    }
+
+    static void SyncOneColor(ColorPicker picker, TextBox box, Border swatch)
+    {
+        // 用现成的 OverlayWindow.Parse 把 hex 转成 Color；hex 非法时
+        // Parse 会回退到 #1A1A1A，所以先用 TryNormalizeHex 校验，
+        // 非法就让选择器和色块保持原样，不拿回退色去骗人。
+        if (!TryNormalizeHex(box.Text, out var hex)) return;
+        var color = OverlayWindow.Parse(hex);
+        picker.Color = color;
+        swatch.Background = new SolidColorBrush(color);
+    }
+
+    void ColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        if (_syncingColor) return;
+        if (sender.Tag is not string boxName) return;
+        if (FindName(boxName) is not TextBox box) return;
+        var color = sender.Color;
+        var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+        // 色块名就是文本框名把 Box 换成 Swatch，例如 TextColorBox -> TextColorSwatch。
+        if (FindName(boxName.Replace("Box", "Swatch")) is Border swatch)
+            swatch.Background = new SolidColorBrush(color);
+        // 写回文本框后走现成的 TextChanged -> Pull() 保存并刷新悬浮窗。
+        box.Text = hex;
+    }
+
+    void TextColorChip_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button chip && chip.Tag is string hex) TextColorBox.Text = hex;
     }
 
     void Wire()
@@ -188,9 +266,11 @@ public sealed partial class MainWindow : Window
         var wasTts = s.TtsEnabled;
         s.Room = RoomBox.Text;
         s.ShowAvatar = AvatarSwitch.IsOn;
-        s.NameColor = NameColorBox.Text;
-        s.CardColor = CardColorBox.Text;
-        s.TextColor = TextColorBox.Text;
+        // 颜色只接受合法的 #RRGGBB（或不带 # 的 6 位 hex，自动补 # 并大写）；
+        // 非法文本保留原来的 AppState 值，不存错颜色。
+        if (TryNormalizeHex(NameColorBox.Text, out var nameHex)) { s.NameColor = nameHex; if (NameColorBox.Text != nameHex) NameColorBox.Text = nameHex; }
+        if (TryNormalizeHex(CardColorBox.Text, out var cardHex)) { s.CardColor = cardHex; if (CardColorBox.Text != cardHex) CardColorBox.Text = cardHex; }
+        if (TryNormalizeHex(TextColorBox.Text, out var textHex)) { s.TextColor = textHex; if (TextColorBox.Text != textHex) TextColorBox.Text = textHex; }
         s.CardFont = CardFontBox.Text;
         s.FontSize = FontSlider.Value;
         s.AdaptiveText = AdaptiveSwitch.IsOn;
@@ -218,8 +298,8 @@ public sealed partial class MainWindow : Window
         s.LyricDemo = LyricDemoSwitch.IsOn;
         s.LyricFont = LyricFontBox.Text;
         s.LyricSize = LyricSizeSlider.Value;
-        s.LyricColor = LyricColorBox.Text;
-        s.LyricHighlight = LyricHiBox.Text;
+        if (TryNormalizeHex(LyricColorBox.Text, out var lyricHex)) { s.LyricColor = lyricHex; if (LyricColorBox.Text != lyricHex) LyricColorBox.Text = lyricHex; }
+        if (TryNormalizeHex(LyricHiBox.Text, out var lyricHiHex)) { s.LyricHighlight = lyricHiHex; if (LyricHiBox.Text != lyricHiHex) LyricHiBox.Text = lyricHiHex; }
         s.LyricAlign = (LyricAlignBox.SelectedItem as ComboBoxItem)?.Content as string ?? "center";
         s.LyricShadow = LyricShadowSwitch.IsOn;
         s.LyricOutline = LyricOutlineSwitch.IsOn;
@@ -234,7 +314,7 @@ public sealed partial class MainWindow : Window
         s.ObsPort = (int)PortBox.Value;
         s.ThemeMode = ThemeBox.SelectedIndex < 0 ? 0 : ThemeBox.SelectedIndex;
         s.UseSystemAccent = AccentSwitch.IsOn;
-        s.AccentHex = AccentBox.Text;
+        if (TryNormalizeHex(AccentBox.Text, out var accentHex)) { s.AccentHex = accentHex; if (AccentBox.Text != accentHex) AccentBox.Text = accentHex; }
         if (wasTts && !s.TtsEnabled) SpeechService.Stop();
         s.Save();
         ApplyTheme();
@@ -245,6 +325,9 @@ public sealed partial class MainWindow : Window
         // 真变了的时候才做，字体/颜色这些改动不再惊动它们。
         if (s.ObsEnabled != _lastObsEnabled || s.ObsPort != _lastObsPort) { ObsServer.Apply(); _lastObsEnabled = s.ObsEnabled; _lastObsPort = s.ObsPort; }
         if (s.Hotkey != _lastHotkey) { Hotkey.Bind(NativeWin.Hwnd(this), () => _input.Toggle()); _lastHotkey = s.Hotkey; }
+        // 手打 hex 合法时也把选择器和色块同步过去；非法时 SyncOneColor
+        // 会跳过，选择器保持原样。_syncingColor 保证这里不会循环触发 Pull。
+        SyncColorPickers();
         RefreshCards();
         OverlayUrl.Text = ObsServer.OverlayUrl;
         MiniUrl.Text = ObsServer.MiniUrl;
