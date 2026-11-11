@@ -12,8 +12,16 @@ class UpdateLogicTest {
         assertFalse(UpdateLogic.isNewer("1.0.0", "1.1.0"))
         assertFalse(UpdateLogic.isNewer("v1.1.0", "1.1.0"))
         assertTrue(UpdateLogic.compare("1.2.0", "1.1.10") > 0)
+        assertTrue(UpdateLogic.compare("0.1.1-b1", "0.1.1") < 0)
+        assertTrue(UpdateLogic.compare("0.1.0", "0.1.1-b1") < 0)
+        assertTrue(UpdateLogic.compare("0.1.1-b1", "0.1.1-b2") < 0)
+        assertTrue(UpdateLogic.compare("0.1.1-b2", "0.1.1-b10") < 0)
+        assertTrue(UpdateLogic.isNewer("0.1.1", "0.1.1-b1"))
+        assertFalse(UpdateLogic.isNewer("0.1.1-b1", "0.1.1"))
+        assertEquals(0, UpdateLogic.compare("v0.1.1-b2", "0.1.1-b2"))
         assertTrue(UpdateLogic.isStable("1.1.0"))
         assertFalse(UpdateLogic.isStable("1.1.0-beta"))
+        assertFalse(UpdateLogic.isStable("0.1.1-b1"))
     }
 
     @Test fun privateDownloadDropsAuthAndNeedsAssetId() {

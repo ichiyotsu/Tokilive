@@ -87,7 +87,7 @@ final class LiveModel: ObservableObject {
     func checkUpdate() {
         updateMessage = "正在检查…"
         Task {
-            var req = URLRequest(url: URL(string: "https://api.github.com/repos/ichiyotsu/tokilive/releases?per_page=10")!)
+            var req = URLRequest(url: URL(string: "https://api.github.com/repos/ichiyotsu/tokilive/releases?per_page=20")!)
             req.setValue("tokilive/1.2.0 (https://github.com/ichiyotsu/tokilive)", forHTTPHeaderField: "User-Agent")
             req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             do {
@@ -97,12 +97,12 @@ final class LiveModel: ObservableObject {
                     updateMessage = "检查失败：HTTP \(code)"
                     return
                 }
-                let latest = list.compactMap { $0["tag_name"] as? String }.first { !$0.contains("-") } ?? ""
-                let version = latest.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
-                if Self.isNewer(version, than: "1.2.0") {
+                let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.2.0"
+                let version = Self.latestStable(list)
+                if Self.isNewer(version, than: current) {
                     updateMessage = "发现 \(version)。请到 GitHub Releases 下载后，用 SideStore 重新签名安装。本 App 不会静默安装 IPA。"
                 } else {
-                    updateMessage = "已经是 1.2.0，或没有更新的正式版。"
+                    updateMessage = "已经是 \(current)，或没有更新的正式版。"
                 }
             } catch {
                 updateMessage = "检查失败：\(error.localizedDescription)"
@@ -143,15 +143,102 @@ final class LiveModel: ObservableObject {
         }
     }
 
-    static func isNewer(_ remote: String, than current: String) -> Bool {
-        let a = remote.split(separator: ".").map { Int($0) ?? 0 }
-        let b = current.split(separator: ".").map { Int($0) ?? 0 }
-        for i in 0..<max(a.count, b.count) {
-            let l = i < a.count ? a[i] : 0
-            let r = i < b.count ? b[i] : 0
-            if l != r { return l > r }
+    static func latestStable(_ releases: [[String: Any]]) -> String {
+        var best = ""
+        for item in releases {
+            if jsonBool(item["draft"]) || jsonBool(item["prerelease"]) { continue }
+            guard let tag = item["tag_name"] as? String else { continue }
+            var version = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+            if version.hasPrefix("v") || version.hasPrefix("V") { version.removeFirst() }
+            guard isStable(version) else { continue }
+            if best.isEmpty || compare(version, best) > 0 { best = version }
         }
+        return best
+    }
+
+    private static func jsonBool(_ value: Any?) -> Bool {
+        if let value = value as? Bool { return value }
+        if let value = value as? NSNumber { return value.boolValue }
         return false
+    }
+
+    static func isStable(_ version: String) -> Bool {
+        guard let parsed = parseVersion(version) else { return false }
+        return parsed.pre.isEmpty
+    }
+
+    static func isNewer(_ remote: String, than current: String) -> Bool {
+        compare(remote, current) > 0
+    }
+
+    static func compare(_ left: String, _ right: String) -> Int {
+        guard let a = parseVersion(left), let b = parseVersion(right) else {
+            if left == right { return 0 }
+            return left < right ? -1 : 1
+        }
+        let n = max(a.core.count, b.core.count)
+        for i in 0..<n {
+            let d = (i < a.core.count ? a.core[i] : 0) - (i < b.core.count ? b.core[i] : 0)
+            if d != 0 { return d }
+        }
+        if a.pre.isEmpty && !b.pre.isEmpty { return 1 }
+        if !a.pre.isEmpty && b.pre.isEmpty { return -1 }
+        let m = max(a.pre.count, b.pre.count)
+        for i in 0..<m {
+            if i >= a.pre.count { return -1 }
+            if i >= b.pre.count { return 1 }
+            let d = compareIdentifier(a.pre[i], b.pre[i])
+            if d != 0 { return d }
+        }
+        return 0
+    }
+
+    private static func parseVersion(_ input: String) -> (core: [Int], pre: [String])? {
+        var raw = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.hasPrefix("v") || raw.hasPrefix("V") { raw.removeFirst() }
+        let pattern = #"^(\d+(?:\.\d+)*)(?:-([0-9A-Za-z.-]+))?$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(raw.startIndex..<raw.endIndex, in: raw)
+        guard let match = regex.firstMatch(in: raw, range: range),
+              let coreRange = Range(match.range(at: 1), in: raw) else { return nil }
+        let pieces = raw[coreRange].split(separator: ".")
+        let core = pieces.compactMap { Int($0) }
+        if core.count != pieces.count { return nil }
+        var pre: [String] = []
+        let preNS = match.range(at: 2)
+        if preNS.location != NSNotFound, let preRange = Range(preNS, in: raw) {
+            pre = raw[preRange].split(separator: ".").map(String.init)
+            if pre.isEmpty { return nil }
+        }
+        return (core, pre)
+    }
+
+    private static func betaNumber(_ id: String) -> Int? {
+        guard id.count > 1, id.first == "b" else { return nil }
+        let digits = id.dropFirst()
+        guard digits.allSatisfy({ $0.isNumber }), let n = Int(digits) else { return nil }
+        return n
+    }
+
+    private static func compareIdentifier(_ a: String, _ b: String) -> Int {
+        if let ba = betaNumber(a), let bb = betaNumber(b) {
+            if ba == bb { return 0 }
+            return ba < bb ? -1 : 1
+        }
+        func numeric(_ s: String) -> Int? {
+            guard !s.isEmpty, s.allSatisfy({ $0.isNumber }), let n = Int(s), String(n) == s else { return nil }
+            return n
+        }
+        let na = numeric(a)
+        let nb = numeric(b)
+        if let na, let nb {
+            if na == nb { return 0 }
+            return na < nb ? -1 : 1
+        }
+        if na != nil { return -1 }
+        if nb != nil { return 1 }
+        if a == b { return 0 }
+        return a < b ? -1 : 1
     }
 
     private struct Danmu { let url: URL; let token: String }

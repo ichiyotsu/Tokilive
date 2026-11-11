@@ -189,6 +189,22 @@ test('private update compares versions and will not fetch anonymously', () => {
   assert.equal(isNewer('1.2.0', '1.1.0'), true);
   assert.equal(isNewer('1.1.0', '1.2.0'), false);
   assert.equal(isNewer('1.2.0', '1.2.0'), false);
+  assert.ok(compareVersions('0.1.1-b1', '0.1.1') < 0);
+  assert.ok(compareVersions('0.1.1', '0.1.1-b1') > 0);
+  assert.ok(compareVersions('0.1.0', '0.1.1-b1') < 0);
+  assert.ok(compareVersions('0.1.1-b1', '0.1.1-b2') < 0);
+  assert.ok(compareVersions('0.1.1-b2', '0.1.1-b10') < 0);
+  assert.equal(compareVersions('v0.1.1-b1', '0.1.1-b1'), 0);
+  const channel = [
+    { tag_name: 'v0.1.1-b2', draft: false, prerelease: true, assets: [{ id: 3, name: 'tokilive-0.1.1-b2-setup.exe', digest: 'sha256:' + 'aa'.repeat(32) }] },
+    { tag_name: 'v0.1.1-b1', draft: false, prerelease: false, assets: [{ id: 5, name: 'tokilive-0.1.1-b1-setup.exe', digest: 'sha256:' + 'ee'.repeat(32) }] },
+    { tag_name: 'v0.1.1', draft: false, prerelease: false, assets: [{ id: 4, name: 'tokilive-0.1.1-setup.exe', digest: 'sha256:' + 'bb'.repeat(32) }] },
+    { tag_name: 'v0.1.0', draft: false, prerelease: false, assets: [{ id: 2, name: 'tokilive-0.1.0-setup.exe', digest: 'sha256:' + 'cc'.repeat(32) }] },
+  ];
+  assert.equal(pickUpdate(channel, '0.1.0', 'setup').latest, '0.1.1');
+  assert.equal(pickUpdate(channel, '0.1.1-b2', 'setup').latest, '0.1.1');
+  assert.equal(pickUpdate(channel, '0.1.1', 'setup').state, 'uptodate');
+  assert.equal(pickUpdate([channel[0], channel[1], channel[3]], '0.1.0', 'setup').state, 'uptodate');
   assert.deepEqual(setupArgs(), []);
   const plan = installPlan({ packaged: true, kind: 'setup', verified: true, version: '1.2.0' });
   assert.equal(plan.silent, false);

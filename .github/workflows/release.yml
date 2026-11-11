@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark prerelease or latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          # X.Y.Z-bN (v0.1.1-b1) is a prerelease and must not replace latest.
+          # X.Y.Z (v0.1.1) is the stable release and becomes latest.
+          if [[ "$tag" == *-b* ]]; then
+            prerelease=true
+          else
+            prerelease=false
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            if [ "$prerelease" = true ]; then
+              gh release edit "$tag" --prerelease --latest=false
+            else
+              gh release edit "$tag" --prerelease=false --latest
+            fi
+          else
+            if [ "$prerelease" = true ]; then
+              gh release create "$tag" --verify-tag --title "Tokilive ${version}" --notes "Tokilive ${version}" --prerelease --latest=false
+            else
+              gh release create "$tag" --verify-tag --title "Tokilive ${version}" --notes "Tokilive ${version}" --latest
+            fi
+          fi

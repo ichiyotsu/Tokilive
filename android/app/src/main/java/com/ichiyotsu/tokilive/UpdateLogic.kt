@@ -28,7 +28,28 @@ object UpdateLogic {
         }
         if (pa.second.isEmpty() && pb.second.isNotEmpty()) return 1
         if (pa.second.isNotEmpty() && pb.second.isEmpty()) return -1
+        val m = maxOf(pa.second.size, pb.second.size)
+        for (i in 0 until m) {
+            val left = pa.second.getOrNull(i) ?: return -1
+            val right = pb.second.getOrNull(i) ?: return 1
+            val d = compareId(left, right)
+            if (d != 0) return d
+        }
         return 0
+    }
+
+    private val betaId = Regex("""^b(\d+)$""")
+
+    private fun compareId(a: String, b: String): Int {
+        val ba = betaId.matchEntire(a)
+        val bb = betaId.matchEntire(b)
+        if (ba != null && bb != null) return ba.groupValues[1].toInt() - bb.groupValues[1].toInt()
+        val aNum = a.toIntOrNull()?.takeIf { it.toString() == a }
+        val bNum = b.toIntOrNull()?.takeIf { it.toString() == b }
+        if (aNum != null && bNum != null) return aNum - bNum
+        if (aNum != null) return -1
+        if (bNum != null) return 1
+        return a.compareTo(b)
     }
 
     fun isNewer(remote: String, current: String) = compare(remote, current) > 0
