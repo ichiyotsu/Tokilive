@@ -14,7 +14,15 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - name: Publish unpackaged self-contained app
-        run: dotnet publish windows/winui/Tokilive/Tokilive.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 -o "$env:RUNNER_TEMP\tokilive-publish"
+        id: publish
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          dotnet publish windows/winui/Tokilive/Tokilive.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 -o "$env:RUNNER_TEMP\tokilive-publish"
+          if ($LASTEXITCODE -ne 0) {
+            Get-ChildItem -Recurse -Filter output.json -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "---- $($_.FullName)"; Get-Content $_.FullName -Raw }
+            exit $LASTEXITCODE
+          }
       - name: Portable zip
         shell: pwsh
         run: Compress-Archive -Path "$env:RUNNER_TEMP\tokilive-publish\*" -DestinationPath tokilive-1.3.0-portable.zip

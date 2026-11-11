@@ -37,6 +37,7 @@ public static class SpeechService
             var stream = await _synth.SynthesizeTextToStreamAsync(text);
             if (!force && !AppState.Current.TtsEnabled) { Stop(); return; }
             _player ??= new MediaPlayer();
+            _player.Volume = Math.Clamp(AppState.Current.TtsVolume, 0, 1);
             _player.Source = MediaSource.CreateFromStream(stream, stream.ContentType);
             _player.Play();
         }

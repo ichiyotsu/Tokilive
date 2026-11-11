@@ -45,6 +45,13 @@
                             <Border x:Name="Preview" MinHeight="140" Padding="12" CornerRadius="12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                                 <StackPanel x:Name="PreviewList" Spacing="8"/>
                             </Border>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="默认" Tag="默认" Click="Preset_Click"/>
+                                <Button Content="大字" Tag="大字" Click="Preset_Click"/>
+                                <Button Content="安静" Tag="安静" Click="Preset_Click"/>
+                                <Button Content="导出主题" Click="ExportTheme_Click"/>
+                                <Button Content="导入主题" Click="ImportTheme_Click"/>
+                            </StackPanel>
                             <Expander Header="头像与颜色" IsExpanded="True">
                                 <StackPanel Spacing="8">
                                     <ToggleSwitch x:Name="AvatarSwitch" Header="显示头像" OnContent="开" OffContent="关"/>
@@ -55,6 +62,7 @@
                             <Expander Header="文字" IsExpanded="True">
                                 <StackPanel Spacing="8">
                                     <TextBox x:Name="TextColorBox" Header="文字颜色"/>
+                                    <TextBox x:Name="CardFontBox" Header="字体"/>
                                     <Slider x:Name="FontSlider" Header="字号" Minimum="12" Maximum="32"/>
                                     <ToggleSwitch x:Name="AdaptiveSwitch" Header="文字颜色自适应" OnContent="开" OffContent="关"/>
                                     <TextBlock Text="默认关闭。打开后大约每 2 秒把悬浮窗藏起一瞬，采样它挡住的那一块屏幕。不上传。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -66,6 +74,21 @@
                                     <Slider x:Name="OpacitySlider" Header="卡片不透明度" Minimum="0.2" Maximum="1" StepFrequency="0.05"/>
                                     <ToggleSwitch x:Name="BorderSwitch" Header="窗口边框（强调色）" OnContent="开" OffContent="关"/>
                                     <ToggleSwitch x:Name="ClickSwitch" Header="鼠标穿透" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="GameTopSwitch" Header="实验性游戏置顶" OnContent="开" OffContent="关"/>
+                                    <TextBlock Text="只反复把 tokilive 自己的窗口抬到普通置顶层，设置窗口仍然在悬浮窗上面。不注入游戏，也不保证盖住独占全屏。无边框窗口化更有机会。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Expander>
+                            <Expander Header="显示的消息" IsExpanded="True">
+                                <StackPanel Spacing="8">
+                                    <ToggleSwitch x:Name="MsgDanmaku" Header="弹幕" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgGift" Header="礼物" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgSc" Header="醒目留言" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgGuard" Header="上舰" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgEnter" Header="进场" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgFollow" Header="关注" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgLike" Header="点赞" OnContent="开" OffContent="关"/>
+                                    <ToggleSwitch x:Name="MsgShare" Header="分享" OnContent="开" OffContent="关"/>
+                                    <TextBlock Text="进场、关注、点赞和分享进实时窗。弹幕、礼物、醒目留言和上舰进弹幕窗。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
                             </Expander>
                             <Expander Header="输入与语音" IsExpanded="True">
@@ -75,6 +98,7 @@
                                     <ToggleSwitch x:Name="TtsSwitch" Header="语音播报" OnContent="开" OffContent="关"/>
                                     <ComboBox x:Name="VoiceBox" Header="语音" HorizontalAlignment="Stretch"/>
                                     <Slider x:Name="RateSlider" Header="语速" Minimum="0.5" Maximum="2" StepFrequency="0.1"/>
+                                    <Slider x:Name="VolumeSlider" Header="音量" Minimum="0" Maximum="1" StepFrequency="0.05"/>
                                     <Button Content="试听" Click="PreviewSpeech_Click"/>
                                 </StackPanel>
                             </Expander>
@@ -155,7 +179,9 @@
                 <ScrollViewer x:Name="PageSource" Visibility="Collapsed" Padding="{StaticResource PagePadding}">
                     <StackPanel Spacing="12" MaxWidth="760">
                         <TextBlock Text="窗口源" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <ToggleSwitch x:Name="DanmakuWindowSwitch" Header="显示弹幕窗" OnContent="开" OffContent="关"/>
                         <ToggleSwitch x:Name="TaskbarSwitch" Header="在任务栏隐藏" OnContent="开" OffContent="关"/>
+                        <Button Content="重置窗口位置" Click="ResetBounds_Click"/>
                         <TextBlock Text="窗口仍在托盘里。托盘创建失败时会留下任务栏按钮，避免程序消失。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ToggleSwitch x:Name="ObsSwitch" Header="启用本地浏览器源" OnContent="开" OffContent="关"/>
                         <NumberBox x:Name="PortBox" Header="端口" Minimum="1024" Maximum="65535" SpinButtonPlacementMode="Inline"/>

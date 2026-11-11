@@ -18,6 +18,7 @@ public sealed class ChatLine
 public static class LiveService
 {
     public static ObservableCollection<ChatLine> Lines { get; } = new();
+    public static ObservableCollection<ChatLine> Pills { get; } = new();
     public static event Action<string>? Status;
     public static int Likes, Danmaku, Online;
     public static string Watched = "";
@@ -28,13 +29,34 @@ public static class LiveService
     static DateTime _nextSend = DateTime.MinValue;
     static string? _mix;
 
-    public static void PushLocal(string type, string name, string text)
+    public static void PushLocal(string type, string name, string text, bool force = false)
     {
+        if (!force && !AppState.Current.Allows(type)) return;
+        var pills = type is "enter" or "follow" or "like" or "share";
         App.UI(() =>
         {
-            Lines.Add(new ChatLine { Type = type, Name = name, Text = text });
-            while (Lines.Count > 200) Lines.RemoveAt(0);
+            var list = pills ? Pills : Lines;
+            list.Add(new ChatLine { Type = type, Name = name, Text = text });
+            while (list.Count > 200) list.RemoveAt(0);
         });
+    }
+
+    public static async Task RefreshAccount()
+    {
+        if (!AppState.Current.Cookie.Contains("SESSDATA=", StringComparison.Ordinal))
+        {
+            AppState.Current.Account = "未登录";
+            return;
+        }
+        try
+        {
+            var nav = await GetJson("https://api.bilibili.com/x/web-interface/nav", AppState.Current.Cookie);
+            var data = nav.RootElement.GetProperty("data");
+            if (nav.RootElement.GetProperty("code").GetInt32() == 0 && data.GetProperty("isLogin").GetBoolean())
+                AppState.Current.Account = data.GetProperty("uname").GetString() ?? "已登录";
+            else AppState.Current.Account = "登录已失效";
+        }
+        catch { AppState.Current.Account = "已保存登录，但没有读到昵称"; }
     }
 
     public static void Connect(string room)

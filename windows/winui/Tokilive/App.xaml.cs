@@ -8,7 +8,6 @@ public partial class App : Application
 {
     public static MainWindow? Shell { get; private set; }
     static DispatcherQueue? _queue;
-    static TaskCompletionSource<bool>? _confirm;
 
     public App()
     {

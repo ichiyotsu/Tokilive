@@ -42,6 +42,29 @@ public sealed class AppState : INotifyPropertyChanged
     public bool ObsEnabled { get => obsEnabled; set => Set(ref obsEnabled, value); }
     public int ObsPort { get => obsPort; set => Set(ref obsPort, value); }
     public bool ShowWindowBorder { get => showWindowBorder; set => Set(ref showWindowBorder, value); }
+    public bool ShowDanmakuMsg { get => showDanmakuMsg; set => Set(ref showDanmakuMsg, value); }
+    public bool ShowGift { get => showGift; set => Set(ref showGift, value); }
+    public bool ShowSuperchat { get => showSuperchat; set => Set(ref showSuperchat, value); }
+    public bool ShowGuard { get => showGuard; set => Set(ref showGuard, value); }
+    public bool ShowEnter { get => showEnter; set => Set(ref showEnter, value); }
+    public bool ShowFollow { get => showFollow; set => Set(ref showFollow, value); }
+    public bool ShowLike { get => showLike; set => Set(ref showLike, value); }
+    public bool ShowShare { get => showShare; set => Set(ref showShare, value); }
+    public double TtsVolume { get => ttsVolume; set => Set(ref ttsVolume, value); }
+    public string CardFont { get => cardFont; set => Set(ref cardFont, value); }
+    public bool ExperimentalTopmost { get => experimentalTopmost; set => Set(ref experimentalTopmost, value); }
+    public int DanmakuX { get => danmakuX; set => Set(ref danmakuX, value); }
+    public int DanmakuY { get => danmakuY; set => Set(ref danmakuY, value); }
+    public int DanmakuW { get => danmakuW; set => Set(ref danmakuW, value); }
+    public int DanmakuH { get => danmakuH; set => Set(ref danmakuH, value); }
+    public int LiveX { get => liveX; set => Set(ref liveX, value); }
+    public int LiveY { get => liveY; set => Set(ref liveY, value); }
+    public int LiveW { get => liveW; set => Set(ref liveW, value); }
+    public int LiveH { get => liveH; set => Set(ref liveH, value); }
+    public int LyricX { get => lyricX; set => Set(ref lyricX, value); }
+    public int LyricY { get => lyricY; set => Set(ref lyricY, value); }
+    public int LyricW { get => lyricW; set => Set(ref lyricW, value); }
+    public int LyricH { get => lyricH; set => Set(ref lyricH, value); }
     public bool ShowLiveBorder { get => showLiveBorder; set => Set(ref showLiveBorder, value); }
     public string LyricFont { get => lyricFont; set => Set(ref lyricFont, value); }
     public double LyricSize { get => lyricSize; set => Set(ref lyricSize, value); }
@@ -87,6 +110,20 @@ public sealed class AppState : INotifyPropertyChanged
     bool obsEnabled;
     int obsPort = 9977;
     bool showWindowBorder;
+    bool showDanmakuMsg = true;
+    bool showGift = true;
+    bool showSuperchat = true;
+    bool showGuard = true;
+    bool showEnter;
+    bool showFollow = true;
+    bool showLike = true;
+    bool showShare = true;
+    double ttsVolume = 1;
+    string cardFont = "Segoe UI Variable";
+    bool experimentalTopmost;
+    int danmakuX, danmakuY, danmakuW, danmakuH;
+    int liveX, liveY, liveW, liveH;
+    int lyricX, lyricY, lyricW, lyricH;
     bool showLiveBorder;
     string lyricFont = "Segoe UI Variable";
     double lyricSize = 28;
@@ -105,6 +142,19 @@ public sealed class AppState : INotifyPropertyChanged
     string status = "未连接";
     string account = "未登录";
     string updateMessage = "公开的 GitHub Releases。1.3.0 不需要令牌。";
+
+    public bool Allows(string type) => type switch
+    {
+        "gift" => ShowGift,
+        "superchat" => ShowSuperchat,
+        "guard" => ShowGuard,
+        "enter" => ShowEnter,
+        "follow" => ShowFollow,
+        "like" => ShowLike,
+        "share" => ShowShare,
+        "danmaku" => ShowDanmakuMsg,
+        _ => true
+    };
 
     public void Save()
     {

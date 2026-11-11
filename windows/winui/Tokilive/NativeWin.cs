@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using WinRT.Interop;
@@ -39,12 +40,12 @@ public static class NativeWin
     const int ACCENT_ENABLE_TRANSPARENTGRADIENT = 2;
 
     public static IntPtr Hwnd(Window window) => WindowNative.GetWindowHandle(window);
-    public static AppWindow App(Window window) => AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(Hwnd(window)));
+    public static AppWindow ForWindow(Window window) => AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(Hwnd(window)));
 
     public static void ApplyMain(Window window)
     {
         var hwnd = Hwnd(window);
-        App(window).Title = "tokilive · 设置";
+        ForWindow(window).Title = "tokilive · 设置";
         RaiseAbove(hwnd, overlays: false);
         InstallSubclass(hwnd);
     }
@@ -52,7 +53,7 @@ public static class NativeWin
     public static void ApplyOverlay(Window window, string title, bool clickThrough, bool resizable, bool noActivate)
     {
         var hwnd = Hwnd(window);
-        var app = App(window);
+        var app = ForWindow(window);
         app.Title = title;
         if (app.Presenter is OverlappedPresenter presenter)
         {
@@ -181,7 +182,7 @@ public static class NativeWin
             var code = lParam.ToInt32() & 0xFFFF;
             if (code is WM_LBUTTONUP or WM_LBUTTONDBLCLK) _click?.Invoke();
         }
-        if (msg == 0x0312) App.UI(() => Hotkey.OnPressed?.Invoke());
+        if (msg == 0x0312) global::Tokilive.App.UI(() => Hotkey.OnPressed?.Invoke());
         return DefSubclassProc(hWnd, msg, wParam, lParam);
     }
 

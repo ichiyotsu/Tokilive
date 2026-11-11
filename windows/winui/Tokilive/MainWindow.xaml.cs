@@ -1,5 +1,6 @@
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -9,6 +10,8 @@ using Windows.Storage.Streams;
 using WinRT.Interop;
 
 namespace Tokilive;
+
+public sealed record CardTheme(string NameColor, string TextColor, string CardColor, string CardFont, double FontSize, double Corner, double CardOpacity, bool ShowAvatar);
 
 public sealed partial class MainWindow : Window
 {
@@ -47,6 +50,8 @@ public sealed partial class MainWindow : Window
         _loading = false;
         Nav.SelectedItem = Nav.MenuItems[0];
         LiveService.Lines.CollectionChanged += (_, _) => App.UI(RefreshCards);
+        LiveService.Pills.CollectionChanged += (_, _) => App.UI(RefreshCards);
+        _ = LiveService.RefreshAccount().ContinueWith(_ => App.UI(() => { if (AccountText != null) AccountText.Text = AppState.Current.Account; }));
         var hwnd = NativeWin.Hwnd(this);
         _tray = NativeWin.TryTray(hwnd, () => { Activate(); AppWindow.Show(); });
         if (!_tray) AppState.Current.HideFromTaskbar = false;
@@ -95,15 +100,26 @@ public sealed partial class MainWindow : Window
         NameColorBox.Text = s.NameColor;
         CardColorBox.Text = s.CardColor;
         TextColorBox.Text = s.TextColor;
+        CardFontBox.Text = s.CardFont;
         FontSlider.Value = s.FontSize;
         AdaptiveSwitch.IsOn = s.AdaptiveText;
         CornerSlider.Value = s.Corner;
         OpacitySlider.Value = s.CardOpacity;
         BorderSwitch.IsOn = s.ShowWindowBorder;
         ClickSwitch.IsOn = s.ClickThrough;
+        GameTopSwitch.IsOn = s.ExperimentalTopmost;
+        MsgDanmaku.IsOn = s.ShowDanmakuMsg;
+        MsgGift.IsOn = s.ShowGift;
+        MsgSc.IsOn = s.ShowSuperchat;
+        MsgGuard.IsOn = s.ShowGuard;
+        MsgEnter.IsOn = s.ShowEnter;
+        MsgFollow.IsOn = s.ShowFollow;
+        MsgLike.IsOn = s.ShowLike;
+        MsgShare.IsOn = s.ShowShare;
         HotkeyBox.Text = s.Hotkey;
         TtsSwitch.IsOn = s.TtsEnabled;
         RateSlider.Value = s.TtsRate;
+        VolumeSlider.Value = s.TtsVolume;
         foreach (var voice in SpeechService.Voices()) VoiceBox.Items.Add(voice);
         if (VoiceBox.Items.Count == 0) VoiceBox.Items.Add("系统默认");
         VoiceBox.SelectedIndex = 0;
@@ -123,6 +139,7 @@ public sealed partial class MainWindow : Window
         LyricClickSwitch.IsOn = s.LyricClickThrough;
         LyricLockSwitch.IsOn = s.LyricLocked;
         LyricOffsetSlider.Value = s.LyricOffset;
+        DanmakuWindowSwitch.IsOn = s.ShowDanmaku;
         TaskbarSwitch.IsOn = s.HideFromTaskbar;
         ObsSwitch.IsOn = s.ObsEnabled;
         PortBox.Value = s.ObsPort;
@@ -137,11 +154,11 @@ public sealed partial class MainWindow : Window
     void Wire()
     {
         void Save(object? _, object? __) { if (!_loading) Pull(); }
-        foreach (var box in new TextBox[] { RoomBox, NameColorBox, CardColorBox, TextColorBox, HotkeyBox, LyricFontBox, LyricColorBox, LyricHiBox, AccentBox })
+        foreach (var box in new TextBox[] { RoomBox, NameColorBox, CardColorBox, TextColorBox, CardFontBox, HotkeyBox, LyricFontBox, LyricColorBox, LyricHiBox, AccentBox })
             box.TextChanged += (_, _) => Save(null, null);
-        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, TaskbarSwitch, ObsSwitch, AccentSwitch })
+        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, GameTopSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, AccentSwitch })
             sw.Toggled += (_, _) => Save(null, null);
-        foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, LyricSizeSlider, LyricBgSlider, LyricLinesSlider, LyricOffsetSlider })
+        foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricLinesSlider, LyricOffsetSlider })
             slider.ValueChanged += (_, _) => Save(null, null);
         ThemeBox.SelectionChanged += (_, _) => Save(null, null);
         LyricAlignBox.SelectionChanged += (_, _) => Save(null, null);
@@ -159,15 +176,26 @@ public sealed partial class MainWindow : Window
         s.NameColor = NameColorBox.Text;
         s.CardColor = CardColorBox.Text;
         s.TextColor = TextColorBox.Text;
+        s.CardFont = CardFontBox.Text;
         s.FontSize = FontSlider.Value;
         s.AdaptiveText = AdaptiveSwitch.IsOn;
         s.Corner = CornerSlider.Value;
         s.CardOpacity = OpacitySlider.Value;
         s.ShowWindowBorder = BorderSwitch.IsOn;
         s.ClickThrough = ClickSwitch.IsOn;
+        s.ExperimentalTopmost = GameTopSwitch.IsOn;
+        s.ShowDanmakuMsg = MsgDanmaku.IsOn;
+        s.ShowGift = MsgGift.IsOn;
+        s.ShowSuperchat = MsgSc.IsOn;
+        s.ShowGuard = MsgGuard.IsOn;
+        s.ShowEnter = MsgEnter.IsOn;
+        s.ShowFollow = MsgFollow.IsOn;
+        s.ShowLike = MsgLike.IsOn;
+        s.ShowShare = MsgShare.IsOn;
         s.Hotkey = HotkeyBox.Text;
         s.TtsEnabled = TtsSwitch.IsOn;
         s.TtsRate = RateSlider.Value;
+        s.TtsVolume = VolumeSlider.Value;
         s.TtsVoice = VoiceBox.SelectedItem as string ?? "";
         s.ShowLive = LiveSwitch.IsOn;
         s.ShowLiveBorder = LiveBorderSwitch.IsOn;
@@ -185,6 +213,7 @@ public sealed partial class MainWindow : Window
         s.LyricClickThrough = LyricClickSwitch.IsOn;
         s.LyricLocked = LyricLockSwitch.IsOn;
         s.LyricOffset = LyricOffsetSlider.Value;
+        s.ShowDanmaku = DanmakuWindowSwitch.IsOn;
         s.HideFromTaskbar = TaskbarSwitch.IsOn && _tray;
         s.ObsEnabled = ObsSwitch.IsOn;
         s.ObsPort = (int)PortBox.Value;
@@ -236,13 +265,23 @@ public sealed partial class MainWindow : Window
         SetEx(hwnd, ex);
     }
 
+    int _orderTick;
     void KeepOrder()
     {
         var main = NativeWin.Hwnd(this);
+        if (AppState.Current.ExperimentalTopmost)
+        {
+            NativeWin.RaiseAbove(NativeWin.Hwnd(_danmaku), true);
+            NativeWin.RaiseAbove(NativeWin.Hwnd(_live), true);
+        }
         NativeWin.PlaceBelow(NativeWin.Hwnd(_danmaku), main);
         NativeWin.PlaceBelow(NativeWin.Hwnd(_live), main);
         NativeWin.PlaceBelow(NativeWin.Hwnd(_lyrics), main);
         if (_input.AppWindow.IsVisible) NativeWin.RaiseAbove(_input.Handle, true);
+        _danmaku.Remember();
+        _live.Remember();
+        _lyrics.Remember();
+        if (++_orderTick % 12 == 0) AppState.Current.Save();
     }
 
     void Sample()
@@ -301,7 +340,7 @@ public sealed partial class MainWindow : Window
         var (url, message) = await LiveService.StartQr(cookie => App.UI(() =>
         {
             AppState.Current.Cookie = cookie;
-            AppState.Current.Account = "已登录";
+            _ = LiveService.RefreshAccount().ContinueWith(_ => App.UI(() => AccountText.Text = AppState.Current.Account));
             AppState.Current.Save();
             AccountText.Text = "已登录";
             QrImage.Visibility = Visibility.Collapsed;
@@ -322,7 +361,7 @@ public sealed partial class MainWindow : Window
     void Test_Click(object sender, RoutedEventArgs e)
     {
         var tag = (string)((Button)sender).Tag;
-        LiveService.PushLocal(tag, "预览", tag switch { "gift" => "小礼物 x1", "superchat" => "醒目留言", "guard" => "舰长", "enter" => "进入直播间", "follow" => "关注了", "like" => "点赞了", _ => "这是一条测试弹幕" });
+        LiveService.PushLocal(tag, "预览", tag switch { "gift" => "小礼物 x1", "superchat" => "醒目留言", "guard" => "舰长", "enter" => "进入直播间", "follow" => "关注了", "like" => "点赞了", "share" => "分享了", _ => "这是一条测试弹幕" }, force: true);
     }
     void PreviewSpeech_Click(object sender, RoutedEventArgs e)
     {
@@ -358,9 +397,74 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
     }
 
+    void Preset_Click(object sender, RoutedEventArgs e)
+    {
+        var tag = (string)((FrameworkElement)sender).Tag;
+        _loading = true;
+        if (tag == "大字") { FontSlider.Value = 28; CornerSlider.Value = 20; OpacitySlider.Value = 0.92; }
+        else if (tag == "安静")
+        {
+            FontSlider.Value = 14; OpacitySlider.Value = 0.55;
+            MsgEnter.IsOn = MsgFollow.IsOn = MsgLike.IsOn = MsgShare.IsOn = false;
+        }
+        else
+        {
+            FontSlider.Value = 16; CornerSlider.Value = 16; OpacitySlider.Value = 0.86;
+            NameColorBox.Text = "#7C4DFF"; TextColorBox.Text = "#1A1A1A"; CardColorBox.Text = "#F5F5F5"; CardFontBox.Text = "Segoe UI Variable";
+            MsgDanmaku.IsOn = MsgGift.IsOn = MsgSc.IsOn = MsgGuard.IsOn = MsgFollow.IsOn = MsgLike.IsOn = MsgShare.IsOn = true;
+            MsgEnter.IsOn = false;
+        }
+        _loading = false;
+        Pull();
+    }
+
+    async void ExportTheme_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileSavePicker();
+        InitializeWithWindow.Initialize(picker, NativeWin.Hwnd(this));
+        picker.SuggestedFileName = "tokilive-theme";
+        picker.FileTypeChoices.Add("JSON", new System.Collections.Generic.List<string> { ".json" });
+        var file = await picker.PickSaveFileAsync();
+        if (file == null) return;
+        var s = AppState.Current;
+        var json = System.Text.Json.JsonSerializer.Serialize(new CardTheme(s.NameColor, s.TextColor, s.CardColor, s.CardFont, s.FontSize, s.Corner, s.CardOpacity, s.ShowAvatar));
+        await Windows.Storage.FileIO.WriteTextAsync(file, json);
+        StatusText.Text = "已导出主题";
+    }
+
+    async void ImportTheme_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker();
+        InitializeWithWindow.Initialize(picker, NativeWin.Hwnd(this));
+        picker.FileTypeFilter.Add(".json");
+        var file = await picker.PickSingleFileAsync();
+        if (file == null) return;
+        CardTheme? theme;
+        try { theme = System.Text.Json.JsonSerializer.Deserialize<CardTheme>(await Windows.Storage.FileIO.ReadTextAsync(file)); }
+        catch { StatusText.Text = "主题文件读不出来"; return; }
+        if (theme == null) { StatusText.Text = "主题文件读不出来"; return; }
+        _loading = true;
+        NameColorBox.Text = theme.NameColor; TextColorBox.Text = theme.TextColor; CardColorBox.Text = theme.CardColor;
+        CardFontBox.Text = theme.CardFont; FontSlider.Value = theme.FontSize; CornerSlider.Value = theme.Corner;
+        OpacitySlider.Value = theme.CardOpacity; AvatarSwitch.IsOn = theme.ShowAvatar;
+        _loading = false;
+        Pull();
+        StatusText.Text = "已导入主题";
+    }
+
+    void ResetBounds_Click(object sender, RoutedEventArgs e)
+    {
+        var s = AppState.Current;
+        s.DanmakuW = s.DanmakuH = s.LiveW = s.LiveH = s.LyricW = s.LyricH = 0;
+        _danmaku.RestoreBounds();
+        _live.RestoreBounds();
+        _lyrics.RestoreBounds();
+        s.Save();
+    }
+
     const int GWL_EXSTYLE = -20;
     [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern nint GetWindowLongPtr(nint h, int i);
     [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern nint SetWindowLongPtr(nint h, int i, nint v);
     static long GetEx(nint hwnd) => GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-    static void SetEx(nint hwnd, long value) => SetWindowLongPtr(hwnd, GWL_EXSTYLE, value);
+    static void SetEx(nint hwnd, long value) => SetWindowLongPtr(hwnd, GWL_EXSTYLE, (nint)value);
 }
