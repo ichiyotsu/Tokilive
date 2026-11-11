@@ -96,7 +96,7 @@ public static class LiveService
         var jar = new CookieContainer();
         using var http = new HttpClient(new HttpClientHandler { CookieContainer = jar, UseCookies = true });
         using var req = new HttpRequestMessage(HttpMethod.Get, "https://passport.bilibili.com/x/passport-login/web/qrcode/generate");
-        req.Headers.TryAddWithoutValidation("User-Agent", "tokilive/1.3.0");
+        req.Headers.TryAddWithoutValidation("User-Agent", "tokilive/1.3.1");
         req.Headers.Referrer = new Uri("https://www.bilibili.com/");
         var json = JsonDocument.Parse(await (await http.SendAsync(req)).Content.ReadAsStringAsync());
         if (json.RootElement.GetProperty("code").GetInt32() != 0) return (null, "获取二维码失败");
@@ -173,7 +173,7 @@ public static class LiveService
             var url = $"wss://{host.GetProperty("host").GetString()}:{host.GetProperty("wss_port").GetInt32()}/sub";
             var auth = JsonSerializer.Serialize(new { uid = 0, roomid = roomId, protover = 2, platform = "web", type = 2, key = data.GetProperty("token").GetString() });
             using var ws = new ClientWebSocket();
-            ws.Options.SetRequestHeader("User-Agent", "tokilive/1.3.0");
+            ws.Options.SetRequestHeader("User-Agent", "tokilive/1.3.1");
             ws.Options.SetRequestHeader("Origin", "https://live.bilibili.com");
             await ws.ConnectAsync(new Uri(url), token);
             await ws.SendAsync(Pack(7, auth), WebSocketMessageType.Binary, true, token);
@@ -262,7 +262,7 @@ public static class LiveService
     static async Task<JsonDocument> GetJson(string url, string cookie)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.TryAddWithoutValidation("User-Agent", "tokilive/1.3.0");
+        req.Headers.TryAddWithoutValidation("User-Agent", "tokilive/1.3.1");
         req.Headers.Referrer = new Uri("https://live.bilibili.com/");
         if (cookie.Length > 0) req.Headers.TryAddWithoutValidation("Cookie", cookie);
         return JsonDocument.Parse(await (await Http.SendAsync(req)).Content.ReadAsStringAsync());

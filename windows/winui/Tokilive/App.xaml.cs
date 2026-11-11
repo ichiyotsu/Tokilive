@@ -11,15 +11,44 @@ public partial class App : Application
 
     public App()
     {
+        UnhandledException += OnUnhandled;
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception ex) Report(ex);
+        };
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Report(e.Exception);
+            e.SetObserved();
+        };
         InitializeComponent();
-        UnhandledException += (_, e) => e.Handled = true;
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _queue = DispatcherQueue.GetForCurrentThread();
-        Shell = new MainWindow();
-        Shell.Activate();
+        try
+        {
+            _queue = DispatcherQueue.GetForCurrentThread();
+            Shell = new MainWindow();
+            Shell.Activate();
+        }
+        catch (Exception ex)
+        {
+            Report(ex);
+        }
+    }
+
+    static void OnUnhandled(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        if (e.Exception is Exception ex) Report(ex);
+        e.Handled = true;
+    }
+
+    static void Report(Exception ex)
+    {
+        CrashLog.Write(ex);
+        CrashLog.Show(ex);
+        Environment.Exit(1);
     }
 
     public static void UI(Action action)

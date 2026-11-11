@@ -23,9 +23,55 @@ jobs:
             Get-ChildItem -Recurse -Filter output.json -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "---- $($_.FullName)"; Get-Content $_.FullName -Raw }
             exit $LASTEXITCODE
           }
+      - name: Check packaged XAML resources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $publish = "$env:RUNNER_TEMP\tokilive-publish"
+          $pri = Join-Path $publish 'resources.pri'
+          foreach ($name in @('resources.pri','Microsoft.UI.pri','Microsoft.UI.Xaml.Controls.pri','Tokilive.exe')) {
+            $path = Join-Path $publish $name
+            if (-not (Test-Path $path)) { throw "发布目录缺少 $name" }
+          }
+          $xbf = Get-ChildItem -Path windows\winui -Recurse -Filter *.xbf
+          if (-not $xbf) { throw '没有生成 .xbf，XAML 没有编进程序。' }
+          $priBytes = [IO.File]::ReadAllBytes($pri)
+          $priText = [Text.Encoding]::Unicode.GetString($priBytes) + [Text.Encoding]::UTF8.GetString($priBytes)
+          if ($priText -notmatch 'MainWindow' -or $priText -notmatch 'App') { throw 'resources.pri 里没有 MainWindow 或 App。' }
+          Write-Host "pri bytes=$((Get-Item $pri).Length) xbf=$($xbf.Count)"
+      - name: Launch smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $publish = "$env:RUNNER_TEMP\tokilive-publish"
+          $log = Join-Path $env:LOCALAPPDATA 'Tokilive\logs\crash.log'
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $proc = Start-Process -FilePath (Join-Path $publish 'Tokilive.exe') -WorkingDirectory $publish -PassThru
+          $deadline = (Get-Date).AddSeconds(15)
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 1
+            if ($proc.HasExited) { break }
+          }
+          $proc.Refresh()
+          $alive = -not $proc.HasExited
+          $window = 0
+          if ($alive) { $window = $proc.MainWindowHandle }
+          if ($alive) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          Get-Process Tokilive -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          if (Test-Path $log) { Write-Host '---- crash.log'; Get-Content $log -Raw; Copy-Item $log crash.log -Force; throw '启动写了 crash.log。' }
+          if (-not $alive) { throw "Tokilive.exe 在 15 秒内退出，代码 $($proc.ExitCode)。" }
+          if ($window -eq 0) { throw '进程还在，但没有出现窗口。' }
+          Write-Host "launch ok pid=$($proc.Id) window=$window"
+      - name: Upload crash log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokilive-1.3.1-crash-log
+          path: crash.log
+          if-no-files-found: ignore
       - name: Portable zip
         shell: pwsh
-        run: Compress-Archive -Path "$env:RUNNER_TEMP\tokilive-publish\*" -DestinationPath tokilive-1.3.0-portable.zip
+        run: Compress-Archive -Path "$env:RUNNER_TEMP\tokilive-publish\*" -DestinationPath tokilive-1.3.1-portable.zip
       - name: Installer
         shell: pwsh
         run: |
@@ -33,8 +79,8 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DPublishDir=$env:RUNNER_TEMP\tokilive-publish" /O"$pwd" windows/winui/installer/tokilive.iss
       - uses: actions/upload-artifact@v4
         with:
-          name: tokilive-1.3.0-windows
+          name: tokilive-1.3.1-windows
           path: |
-            tokilive-1.3.0-setup.exe
-            tokilive-1.3.0-portable.zip
+            tokilive-1.3.1-setup.exe
+            tokilive-1.3.1-portable.zip
           if-no-files-found: error
