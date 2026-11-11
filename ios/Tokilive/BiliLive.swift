@@ -28,7 +28,7 @@ final class LiveModel: ObservableObject {
     @Published var qrImage: Image?
     @Published var qrText = ""
     @Published var show: [String: Bool] = ["danmaku": true, "gift": true, "superchat": true, "guard": true, "enter": true, "follow": true, "like": true]
-    @Published var updateMessage = "\(Self.appVersion)。检查的是公开的 GitHub Releases。"
+    @Published var updateMessage = "\(LiveModel.appVersion)。检查的是公开的 GitHub Releases。"
 
     func binding(_ key: String) -> Binding<Bool> {
         Binding(get: { self.show[key] ?? true }, set: { self.show[key] = $0 })
