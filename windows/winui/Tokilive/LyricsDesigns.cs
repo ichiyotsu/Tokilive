@@ -29,7 +29,7 @@ public static class LyricsDesigns
 
     public static LyricDesign ById(string? id) => All.FirstOrDefault(d => d.Id == id) ?? All[0];
 
-    public static FontWeight WeightOf(string weight) => weight switch
+    public static Windows.UI.Text.FontWeight WeightOf(string weight) => weight switch
     {
         "light" => FontWeights.Light,
         "bold" => FontWeights.Bold,

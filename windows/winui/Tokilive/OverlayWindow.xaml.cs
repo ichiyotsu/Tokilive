@@ -506,7 +506,7 @@ public sealed partial class OverlayWindow : Window
 
     // #3 字重：DanmakuFontWeight 是 "400"/"500"/"600"/"700"/"800" 这样的
     // 数字串（也接受 light/normal/bold 这类词）；未知值按默认 700（Bold）处理。
-    static FontWeight WeightOf(string weight) => (weight ?? "").Trim().ToLowerInvariant() switch
+    static Windows.UI.Text.FontWeight WeightOf(string weight) => (weight ?? "").Trim().ToLowerInvariant() switch
     {
         "light" or "300" => FontWeights.Light,
         "400" or "normal" => FontWeights.Normal,
@@ -778,7 +778,7 @@ public sealed partial class OverlayWindow : Window
     // 回去（和 1.2.0 的 onerror 回退一个意思），不留破图。
     // 只有弹幕带表情（LiveService 从 DANMU_MSG 的 i[0][13].url 取），
     // 其他类型不解析表情；一条消息最多一个表情图。
-    static UIElement MessageContent(ChatLine line, AppState state, FontFamily font, Color ink, FontWeight weight)
+    static UIElement MessageContent(ChatLine line, AppState state, FontFamily font, Color ink, Windows.UI.Text.FontWeight weight)
     {
         var text = line.Text ?? "";
         var plain = new TextBlock { Text = text, FontFamily = font, Foreground = new SolidColorBrush(ink), FontSize = state.FontSize, FontWeight = weight, TextWrapping = TextWrapping.Wrap };

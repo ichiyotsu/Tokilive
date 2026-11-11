@@ -35,8 +35,8 @@ public sealed partial class SplashWindow : Window
         Card.Opacity = 0;
         Card.RenderTransform = new ScaleTransform { ScaleX = 0.86, ScaleY = 0.86 };
         Card.RenderTransformOrigin = new Point(0.5, 0.5);
-        Title.Opacity = 0;
-        Title.RenderTransform = new CompositeTransform { TranslateY = 10 };
+        SplashTitle.Opacity = 0;
+        SplashTitle.RenderTransform = new CompositeTransform { TranslateY = 10 };
         var sb = new Storyboard();
         var fade = new DoubleAnimation { From = 0, To = 1, Duration = new Duration(TimeSpan.FromMilliseconds(550)), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(fade, Card);
@@ -50,11 +50,11 @@ public sealed partial class SplashWindow : Window
             sb.Children.Add(a);
         }
         var titleFade = new DoubleAnimation { From = 0, To = 1, Duration = new Duration(TimeSpan.FromMilliseconds(800)), BeginTime = TimeSpan.FromMilliseconds(100), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(titleFade, Title);
+        Storyboard.SetTarget(titleFade, SplashTitle);
         Storyboard.SetTargetProperty(titleFade, "Opacity");
         sb.Children.Add(titleFade);
         var titleRise = new DoubleAnimation { From = 10, To = 0, Duration = new Duration(TimeSpan.FromMilliseconds(800)), BeginTime = TimeSpan.FromMilliseconds(100), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(titleRise, Title);
+        Storyboard.SetTarget(titleRise, SplashTitle);
         Storyboard.SetTargetProperty(titleRise, "(UIElement.RenderTransform).(CompositeTransform.TranslateY)");
         sb.Children.Add(titleRise);
         sb.Begin();

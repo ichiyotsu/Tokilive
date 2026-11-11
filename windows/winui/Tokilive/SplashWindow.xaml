@@ -15,7 +15,7 @@
                     <GradientStop Color="#420937" Offset="1"/>
                 </LinearGradientBrush>
             </Border.Background>
-            <TextBlock x:Name="Title" Text="tokilive" FontSize="56" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock x:Name="SplashTitle" Text="tokilive" FontSize="56" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
     </Grid>
 </Window>
