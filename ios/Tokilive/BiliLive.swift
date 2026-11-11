@@ -43,9 +43,9 @@ final class LiveModel: ObservableObject {
     private var checkingUpdate = false
     private var cookie = ""
 
-    /// 应用版本号，只从 Bundle 取；取不到时才用 1.3.0 兜底。
+    /// 应用版本号，只从 Bundle 取；取不到时才用 1.4.0 兜底。
     static var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.3.0"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.4.0"
     }
 
     func toggle() {

@@ -11,8 +11,8 @@ android {
         applicationId = "com.ichiyotsu.tokilive"
         minSdk = 31
         targetSdk = 37
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 5
+        versionName = "1.4.0"
     }
     signingConfigs {
         val keystore = System.getenv("TOKILIVE_KEYSTORE")
