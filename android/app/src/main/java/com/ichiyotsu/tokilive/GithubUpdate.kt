@@ -14,7 +14,7 @@ data class RemoteRelease(val version: String, val notes: String, val assetId: Lo
 
 class GithubUpdate(private val http: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).callTimeout(60, TimeUnit.SECONDS).build()) {
     fun latest(current: String): RemoteRelease? {
-        val response = get("https://api.github.com/repos/ichiyotsu/tokilive/releases?per_page=20", redirected = false, accept = "application/vnd.github+json")
+        val response = get("https://api.github.com/repos/ichiyotsu/Tokilive/releases?per_page=20", redirected = false, accept = "application/vnd.github+json")
         val body = response.use { if (it.code !in 200..299) error(UpdateLogic.redact("读取发行版失败 HTTP ${it.code}")) else it.body.string() }
         val array = JSONArray(body)
         var best: RemoteRelease? = null
@@ -81,6 +81,6 @@ class GithubUpdate(private val http: OkHttpClient = OkHttpClient.Builder().follo
     }
 
     private fun get(url: String, redirected: Boolean, accept: String) = http.newCall(
-        Request.Builder().url(url).header("User-Agent", "tokilive/1.2.0 (https://github.com/ichiyotsu/tokilive)").header("Accept", accept).build()
+        Request.Builder().url(url).header("User-Agent", "tokilive/1.3.0 (https://github.com/ichiyotsu/Tokilive)").header("Accept", accept).build()
     ).execute()
 }

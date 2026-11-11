@@ -205,9 +205,8 @@ fun SettingsScreen(vm: LiveViewModel) {
             }
         }
         Text("关于", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-        Text("tokilive", fontFamily = GoogleSans, fontWeight = FontWeight.Bold, fontSize = 40.sp, letterSpacing = (-0.4).sp, modifier = Modifier.padding(start = 8.dp))
-        Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
-        Text("字标使用内置 Google Sans Bold，与 Windows 启动窗口一致。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+        Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.displaySmallEmphasized, modifier = Modifier.padding(start = 8.dp))
+        Text("com.ichiyotsu.tokilive", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
         UpdateCard(vm)
     }
     vm.qr?.let { url ->
@@ -224,13 +223,9 @@ private fun UpdateCard(vm: LiveViewModel) {
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(vm.updateMessage, style = MaterialTheme.typography.bodyMedium)
-                Text("公开的 GitHub Releases。下载后核对 SHA-256、包名和签名，再打开系统安装界面。", style = MaterialTheme.typography.bodySmall)
+                Text("公开的 GitHub Releases。核对 SHA-256、包名和签名后，打开系统安装界面。", style = MaterialTheme.typography.bodySmall)
                 if (vm.updateProgress >= 0) LinearProgressIndicator(progress = { vm.updateProgress / 100f }, modifier = Modifier.fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton({ vm.checkUpdate() }, enabled = !vm.updateBusy) { Text("检查") }
-                    TextButton({ vm.downloadUpdate() }, enabled = !vm.updateBusy) { Text("下载") }
-                    TextButton({ vm.installUpdate() }, enabled = !vm.updateBusy) { Text("安装") }
-                }
+                TextButton({ vm.checkUpdate() }, enabled = !vm.updateBusy) { Text("检查更新") }
             }
         }
     }

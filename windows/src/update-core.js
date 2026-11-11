@@ -1,4 +1,4 @@
-const REPO = 'ichiyotsu/tokilive';
+const REPO = 'ichiyotsu/Tokilive';
 const API = 'https://api.github.com';
 
 const FIRST_UPGRADE_NOTE = '仓库已经公开。1.2.0 起检查更新不需要令牌、设备码或 GitHub CLI。正在使用 1.0.0，或 1.1.0 里那套私人仓库授权的人，需要手动安装 1.2.0 一次。之后的正式版按平台选择安装包，并校验 SHA-256。';
@@ -144,7 +144,7 @@ function classifyHttp(status) {
   if (code === 200 || code === 302) return { ok: true, message: '' };
   if (code === 401) return { ok: false, message: '私人仓库拒绝了这个身份（401）。请重新授权。令牌内容不会显示。' };
   if (code === 403) return { ok: false, message: '请求被拒绝（403）。可能是权限不够，或 GitHub 的访问频率到了上限。' };
-  if (code === 404) return { ok: false, message: '找不到发行版（404）。私人仓库在没有权限时也会显示成 404。请确认令牌可以读取 ichiyotsu/tokilive 的内容。' };
+  if (code === 404) return { ok: false, message: '找不到发行版（404）。私人仓库在没有权限时也会显示成 404。请确认仓库是公开的 ichiyotsu/Tokilive。' };
   return { ok: false, message: 'GitHub 返回 HTTP ' + code + '。' };
 }
 

@@ -1,4 +1,4 @@
-const USER_AGENT = 'tokilive/1.2.0 (https://github.com/ichiyotsu/tokilive)';
+const USER_AGENT = 'tokilive/1.3.0 (https://github.com/ichiyotsu/Tokilive)';
 
 function searchUrl(title, artist) {
   const q = new URL('https://lrclib.net/api/search');

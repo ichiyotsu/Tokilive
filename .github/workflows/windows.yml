@@ -1,0 +1,32 @@
+name: Windows WinUI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish unpackaged self-contained app
+        run: dotnet publish windows/winui/Tokilive/Tokilive.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 -o "$env:RUNNER_TEMP\tokilive-publish"
+      - name: Portable zip
+        shell: pwsh
+        run: Compress-Archive -Path "$env:RUNNER_TEMP\tokilive-publish\*" -DestinationPath tokilive-1.3.0-portable.zip
+      - name: Installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DPublishDir=$env:RUNNER_TEMP\tokilive-publish" /O"$pwd" windows/winui/installer/tokilive.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tokilive-1.3.0-windows
+          path: |
+            tokilive-1.3.0-setup.exe
+            tokilive-1.3.0-portable.zip
+          if-no-files-found: error
