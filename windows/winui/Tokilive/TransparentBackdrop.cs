@@ -2,6 +2,7 @@ using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
+using WindowsBrush = Windows.UI.Composition.CompositionColorBrush;
 
 namespace Tokilive;
 
@@ -10,16 +11,18 @@ namespace Tokilive;
 /// 窗口那样真透明（只看见卡片），就把系统底刷成全透明，再配合
 /// DwmExtendFrameIntoClientArea。不要再加 WS_EX_LAYERED：WinUI 的交换链
 /// 不会走 UpdateLayeredWindow，分层窗口会整块涂黑。
+/// ICompositionSupportsSystemBackdrop.SystemBackdrop 要的是
+/// Windows.UI.Composition 的画刷，不是 Microsoft.UI.Composition 那份。
 /// </summary>
 sealed class TransparentBackdrop : SystemBackdrop
 {
-    CompositionColorBrush? _brush;
+    WindowsBrush? _brush;
 
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop connectedTarget, XamlRoot xamlRoot)
     {
         try
         {
-            var compositor = (connectedTarget as Window)?.Compositor ?? CompositionTarget.GetCompositorForCurrentThread();
+            var compositor = new Windows.UI.Composition.Compositor();
             _brush = compositor.CreateColorBrush(Color.FromArgb(0, 0, 0, 0));
             connectedTarget.SystemBackdrop = _brush;
         }
