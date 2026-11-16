@@ -7,7 +7,7 @@ namespace Tokilive;
 
 public sealed class AppState : INotifyPropertyChanged
 {
-    public const string Version = "1.4.0";
+    public const string Version = "0.1.1";
     public static AppState Current { get; } = Load();
 
     static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never };
@@ -134,6 +134,8 @@ public sealed class AppState : INotifyPropertyChanged
     public double LyricOffset { get => lyricOffset; set => Set(ref lyricOffset, value); }
     public string LyricLocal { get => lyricLocal; set => Set(ref lyricLocal, value); }
     public bool LyricDemo { get => lyricDemo; set => Set(ref lyricDemo, value); }
+    // 逐字高亮：只在这一行真有逐字时间戳时才用。没有时间轴不编造。
+    public bool LyricWordByWord { get => lyricWordByWord; set => Set(ref lyricWordByWord, value); }
     public string Status { get => status; set => Set(ref status, value); }
     public string Account { get => account; set => Set(ref account, value); }
     public string UpdateMessage { get => updateMessage; set => Set(ref updateMessage, value); }
@@ -143,7 +145,8 @@ public sealed class AppState : INotifyPropertyChanged
     int themeMode;
     bool useSystemAccent = true;
     string accentHex = "#6750A4";
-    bool clickThrough;
+    // 1.3.0 默认穿透。1.3.1 以后字段改成默认 false，悬浮窗会挡住设置窗口的点击。
+    bool clickThrough = true;
     bool showDanmaku = true;
     bool showLive = true;
     bool showDesktopLyrics;
@@ -234,6 +237,7 @@ public sealed class AppState : INotifyPropertyChanged
     double lyricOffset;
     string lyricLocal = "";
     bool lyricDemo;
+    bool lyricWordByWord = true;
     string status = "未连接";
     string account = "未登录";
     string updateMessage = "公开的 GitHub Releases。不需要令牌。";

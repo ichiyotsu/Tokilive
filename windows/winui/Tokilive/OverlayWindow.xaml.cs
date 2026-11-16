@@ -39,7 +39,7 @@ public sealed partial class OverlayWindow : Window
         _kind = kind;
         InitializeComponent();
         var title = kind switch { Kind.Live => "tokilive · 实时窗", Kind.Lyrics => "tokilive · 歌词", _ => "tokilive · 弹幕" };
-        NativeWin.ApplyOverlay(this, title, ClickThrough, resizable: kind != Kind.Lyrics, noActivate: true);
+        NativeWin.ApplyOverlay(this, title, ClickThrough, resizable: kind != Kind.Lyrics, noActivate: true, perPixelTransparent: true);
         RestoreBounds();
         Closed += (_, _) => { };
         // 1.3.1 的悬浮窗没有标题栏、没有任何拖动处理，穿透一关也挪不动位置。
@@ -104,16 +104,51 @@ public sealed partial class OverlayWindow : Window
     public void ApplyChrome()
     {
         var locked = _kind == Kind.Lyrics && AppState.Current.LyricLocked;
-        NativeWin.ApplyOverlay(this, AppWindow.Title, ClickThrough || locked, resizable: !locked && _kind != Kind.Lyrics, noActivate: true);
+        NativeWin.ApplyOverlay(this, AppWindow.Title, ClickThrough || locked, resizable: !locked && _kind != Kind.Lyrics, noActivate: true, perPixelTransparent: true);
+        Root.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
         var border = _kind == Kind.Live ? AppState.Current.ShowLiveBorder : _kind == Kind.Danmaku && AppState.Current.ShowWindowBorder;
         Root.BorderBrush = border ? new SolidColorBrush(Parse(AppState.Current.UseSystemAccent ? NativeWin.SystemAccent() ?? AppState.Current.AccentHex : AppState.Current.AccentHex)) : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
         Root.BorderThickness = border ? new Thickness(2) : new Thickness(0);
+    }
+
+    void ConfigureHost()
+    {
+        if (_kind == Kind.Live)
+        {
+            // 实时窗本身就是数据条：横条铺满窗口，不要再套一张带假头像的弹幕卡。
+            Host.VerticalAlignment = VerticalAlignment.Stretch;
+            Host.HorizontalAlignment = HorizontalAlignment.Stretch;
+            Host.MaxWidth = 4096;
+            Host.MinWidth = 0;
+            Host.Margin = new Thickness(0);
+            Host.Spacing = 4;
+        }
+        else if (_kind == Kind.Lyrics)
+        {
+            Host.VerticalAlignment = VerticalAlignment.Center;
+            Host.HorizontalAlignment = HorizontalAlignment.Stretch;
+            Host.MaxWidth = 4096;
+            Host.MinWidth = 0;
+            Host.Margin = new Thickness(8, 0, 8, 0);
+            Host.Spacing = 4;
+        }
+        else
+        {
+            // 弹幕贴底、左对齐，窗口其余部分保持透明，不铺黑底。
+            Host.VerticalAlignment = VerticalAlignment.Bottom;
+            Host.HorizontalAlignment = HorizontalAlignment.Left;
+            Host.MaxWidth = 560;
+            Host.MinWidth = 0;
+            Host.Margin = new Thickness(8);
+            Host.Spacing = 8;
+        }
     }
 
     public void Render()
     {
         var state = AppState.Current;
         var now = DateTimeOffset.UtcNow;
+        ConfigureHost();
         if (_kind == Kind.Danmaku)
         {
             // 逐条过期：LiveService.LifetimeOf 用 DurationSeconds（醒目留言按
@@ -127,7 +162,7 @@ public sealed partial class OverlayWindow : Window
             // 留在 Host 原位播完才移除；其余旧卡片清掉重建。
             BeginFadeOutFor(_liveCards.Keys.Where(l => !lines.Contains(l)).ToList());
             SweepNonFading();
-            if (lines.Count == 0 && _fadingCards.Count == 0) Host.Children.Add(Card("等待弹幕", "连接后会显示在这里", state));
+            if (lines.Count == 0 && _fadingCards.Count == 0) Host.Children.Add(EmptyState(state));
             // 已经不在列表里的行（过期、被顶掉）从已播集合里清掉，
             // 免得集合一直长。只给第一次渲染的新行播入场动画。
             _animated.RemoveWhere(l => !lines.Contains(l));
@@ -154,12 +189,9 @@ public sealed partial class OverlayWindow : Window
             if (state.MiniStats)
             {
                 var vertical = state.MiniLayout == "v" || (state.MiniLayout == "auto" && AppWindow.Size.Height > 0 && AppWindow.Size.Width / (double)AppWindow.Size.Height <= 1.8);
-                var statsText = vertical
-                    ? $"点赞 {FormatCount(LiveService.Likes)}\n弹幕 {FormatCount(LiveService.Danmaku)}\n在线 {FormatCount(LiveService.Online)}\n{LiveService.Watched}"
-                    : $"点赞 {FormatCount(LiveService.Likes)}   弹幕 {FormatCount(LiveService.Danmaku)}   在线 {FormatCount(LiveService.Online)}\n{LiveService.Watched}";
-                Host.Children.Insert(0, Card("实时", statsText, state));
+                Host.Children.Insert(0, StatsBar(state, vertical, compact: state.MiniPills));
             }
-            if (state.MiniPills && pills.Count == 0 && _fadingCards.Count == 0) Host.Children.Add(Card("互动", "进场、关注、点赞和分享出现在这里", state));
+            if (state.MiniPills && pills.Count == 0 && _fadingCards.Count == 0) Host.Children.Add(EmptyState(state, "等待互动", "进场、关注、点赞和分享出现在这里"));
             foreach (var line in pills)
             {
                 var card = Card(line, state);
@@ -183,36 +215,36 @@ public sealed partial class OverlayWindow : Window
             // 同一个规则），先在全曲里定下标，再围着它取要显示的行。
             // 以前是 TakeLast(LyricLines) 直接取全曲最后几行：行数 >1 时
             // 显示的是歌的结尾，而不是当前行附近。
-            var currentIndex = -1;
-            for (var i = 0; i < lines.Count; i++)
-                if (lines[i].Time <= playing.Position) currentIndex = i; else break;
+            var currentIndex = LyricsService.LineIndexAt(lines, playing.Position);
             // 还没到第一行：显示第一行，不高亮。
             if (currentIndex < 0) currentIndex = 0;
             var currentLine = lines[currentIndex];
-            var shown = new List<(string Text, bool Current)>
+            var shown = new List<(LyricLine Line, bool Current, bool Words)>
             {
-                (playing.Current.Length > 0 ? playing.Current : currentLine.Text, lines[currentIndex].Time <= playing.Position)
+                (currentLine, lines[currentIndex].Time <= playing.Position, true)
             };
             if (state.LyricMode == "double")
             {
                 // 双行：第二行优先显示当前行的翻译（LRC 里用 | 分隔），
-                // 没有翻译就显示下一行；都没有就只留一行。
-                var second = currentLine.Translation;
-                if (string.IsNullOrWhiteSpace(second) && currentIndex + 1 < lines.Count)
-                    second = lines[currentIndex + 1].Text;
-                if (!string.IsNullOrWhiteSpace(second)) shown.Add((second, false));
+                // 没有翻译就显示下一行；都没有就只留一行。翻译没有逐字时间。
+                if (!string.IsNullOrWhiteSpace(currentLine.Translation))
+                    shown.Add((new LyricLine { Text = currentLine.Translation, Time = currentLine.Time }, false, false));
+                else if (currentIndex + 1 < lines.Count)
+                    shown.Add((lines[currentIndex + 1], false, false));
             }
+            UIElement View((LyricLine Line, bool Current, bool Words) item) =>
+                LyricView(item.Line, item.Current, state, playing.Position, item.Words);
             if (state.LyricDirection == "vertical")
             {
                 // 竖排：每行是一列字，几列横着排在一起放进 Host，
                 // 而不是上下叠两条竖列。当前行在左。
                 var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 24, HorizontalAlignment = HorizontalAlignment.Center };
-                foreach (var (text, current) in shown) row.Children.Add(Lyric(text, current, state));
+                foreach (var item in shown) row.Children.Add(View(item));
                 Host.Children.Add(row);
             }
             else
             {
-                foreach (var (text, current) in shown) Host.Children.Add(Lyric(text, current, state));
+                foreach (var item in shown) Host.Children.Add(View(item));
             }
         }
     }
@@ -832,6 +864,192 @@ public sealed partial class OverlayWindow : Window
         }
         color = default;
         return false;
+    }
+
+    // 1.0.0 overlay.css 的 #stats：横条是胶囊，标签和数字分开，窗口其余部分透明。
+    // 不再用一张带假头像「实」的弹幕卡把整扇窗涂满。
+    Border StatsBar(AppState state, bool vertical, bool compact)
+    {
+        var dark = IsCardDark(state);
+        var bg = dark ? Parse("#2A2A2A") : Parse("#F7F7F7");
+        var num = dark ? Parse("#FFFFFF") : Parse("#111111");
+        var label = dark ? Color.FromArgb(184, 255, 255, 255) : Parse("#FFFFFF");
+        var font = FontHelper.FamilyForCards(state.CardFont, state.CjkFont, state.JpFont);
+        var scale = Root.XamlRoot?.RasterizationScale ?? 1;
+        if (scale <= 0) scale = 1;
+        var winW = Math.Max(80, AppWindow.Size.Width / scale);
+        var winH = Math.Max(36, AppWindow.Size.Height / scale);
+        var barH = compact ? 42 : winH;
+        var fontSize = Math.Max(11, vertical
+            ? Math.Min(barH / 4.2, winW / 6.4)
+            : Math.Min(barH * 0.42, winW / 19.5));
+        var panel = new StackPanel
+        {
+            Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal,
+            Spacing = vertical ? 1 : 12,
+            HorizontalAlignment = vertical ? HorizontalAlignment.Left : HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        void Add(string caption, string value)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+            var captionBlock = new TextBlock
+            {
+                Text = caption,
+                FontFamily = font,
+                FontSize = Math.Max(11, fontSize * 0.92),
+                Foreground = new SolidColorBrush(label),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            row.Children.Add(ShadowText(captionBlock, dark ? 0.35 : 0.7));
+            row.Children.Add(new TextBlock
+            {
+                Text = value,
+                FontFamily = font,
+                FontSize = fontSize,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(num),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            panel.Children.Add(row);
+        }
+        Add(vertical ? "点赞" : "本场点赞", FormatCount(LiveService.Likes));
+        Add("弹幕", FormatCount(LiveService.Danmaku));
+        Add(vertical ? "在线" : "当前在线", FormatCount(LiveService.Online));
+        if (vertical && !string.IsNullOrWhiteSpace(LiveService.Watched)) Add("看过", LiveService.Watched);
+        var radius = !vertical && state.Corner <= 0 ? barH / 2 : state.Corner <= 0 ? Math.Min(28, winW * 0.22) : state.Corner;
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(235, bg.R, bg.G, bg.B)),
+            BorderBrush = new SolidColorBrush(dark ? Color.FromArgb(90, 255, 255, 255) : Color.FromArgb(50, 0, 0, 0)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(radius),
+            Padding = new Thickness(vertical ? 16 : 18, vertical ? 10 : 0, vertical ? 16 : 18, vertical ? 10 : 0),
+            MinHeight = compact || vertical ? 0 : barH,
+            Height = compact ? 42 : vertical ? double.NaN : barH,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = compact ? VerticalAlignment.Top : VerticalAlignment.Stretch,
+            Margin = compact ? new Thickness(6, 6, 6, 0) : new Thickness(0),
+            Child = panel
+        };
+    }
+
+    // 空窗只留一张左下角的提示卡，不假装成一条带「等」头像的弹幕，也不铺黑底。
+    static Border EmptyState(AppState state, string title = "等待弹幕", string subtitle = "连接后会显示在这里")
+    {
+        var dark = IsCardDark(state);
+        var transparent = string.Equals(state.CardThemeMode, "transparent", StringComparison.OrdinalIgnoreCase);
+        var bg = dark ? Parse("#2B2B2B") : Parse(state.CardColor);
+        var ink = !state.AdaptiveText ? Parse(state.TextColor) : dark ? Parse("#FFFFFF") : Parse("#1A1A1A");
+        var font = FontHelper.FamilyForCards(state.CardFont, state.CjkFont, state.JpFont);
+        var weight = WeightOf(state.DanmakuFontWeight);
+        var stack = new StackPanel { Spacing = 2 };
+        stack.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontFamily = font,
+            FontSize = state.FontSize,
+            FontWeight = weight,
+            Foreground = new SolidColorBrush(ink)
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = subtitle,
+            FontFamily = font,
+            FontSize = Math.Max(12, state.FontSize - 3),
+            Foreground = new SolidColorBrush(Color.FromArgb(170, ink.R, ink.G, ink.B)),
+            TextWrapping = TextWrapping.Wrap
+        });
+        return new Border
+        {
+            Background = transparent ? null : new SolidColorBrush(Color.FromArgb((byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255), bg.R, bg.G, bg.B)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(140, ink.R, ink.G, ink.B)),
+            BorderThickness = transparent ? new Thickness(1) : new Thickness(0),
+            CornerRadius = new CornerRadius(state.Corner <= 0 ? 16 : state.Corner),
+            Padding = new Thickness(14, 10, 14, 10),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            MaxWidth = 360,
+            Child = stack
+        };
+    }
+
+    static UIElement LyricView(LyricLine line, bool current, AppState state, double position, bool allowWords)
+    {
+        // 没有逐字时间戳就整行显示。不按字数把一行均匀切开。
+        if (!allowWords || !current || !state.LyricWordByWord || line.Words.Count == 0)
+            return Lyric(line.Text, current, state);
+        return LyricWords(line, state, position);
+    }
+
+    static UIElement LyricWords(LyricLine line, AppState state, double position)
+    {
+        var active = LyricsService.WordIndexAt(line, position);
+        var align = state.LyricAlign == "left" ? TextAlignment.Left : state.LyricAlign == "right" ? TextAlignment.Right : TextAlignment.Center;
+        var hAlign = state.LyricAlign == "left" ? HorizontalAlignment.Left : state.LyricAlign == "right" ? HorizontalAlignment.Right : HorizontalAlignment.Center;
+        var font = FontHelper.FamilyForCards(state.LyricFont, state.CjkFont, state.JpFont);
+        var weight = LyricsDesigns.WeightOf(state.LyricWeight);
+        var size = state.LyricSize;
+        var sung = Parse(state.LyricHighlight);
+        var idle = Parse(state.LyricColor);
+        if (sung.R == idle.R && sung.G == idle.G && sung.B == idle.B)
+            idle = Color.FromArgb(120, idle.R, idle.G, idle.B);
+        FrameworkElement Make(bool shadow)
+        {
+            Color ColorAt(int index)
+            {
+                if (shadow) return Color.FromArgb(180, 0, 0, 0);
+                return index <= active ? sung : idle;
+            }
+            if (state.LyricDirection == "vertical")
+            {
+                var column = new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center };
+                for (var i = 0; i < line.Words.Count; i++)
+                {
+                    var color = ColorAt(i);
+                    foreach (var rune in line.Words[i].Text.EnumerateRunes())
+                        column.Children.Add(new TextBlock
+                        {
+                            Text = rune.ToString(),
+                            FontFamily = font,
+                            FontSize = size,
+                            FontWeight = weight,
+                            Foreground = new SolidColorBrush(color),
+                            HorizontalAlignment = HorizontalAlignment.Center
+                        });
+                }
+                return column;
+            }
+            var rich = new RichTextBlock
+            {
+                FontFamily = font,
+                FontSize = size,
+                FontWeight = weight,
+                TextAlignment = align,
+                TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = hAlign
+            };
+            var para = new Paragraph();
+            for (var i = 0; i < line.Words.Count; i++)
+                para.Inlines.Add(new Run { Text = line.Words[i].Text, Foreground = new SolidColorBrush(ColorAt(i)) });
+            rich.Blocks.Add(para);
+            return rich;
+        }
+        var stack = new Grid();
+        if (state.LyricOutline)
+        {
+            var edge = Make(true);
+            edge.Margin = new Thickness(1, 0, 0, 0);
+            stack.Children.Add(edge);
+        }
+        else if (state.LyricShadow)
+        {
+            var ghost = Make(true);
+            ghost.Margin = new Thickness(2, 2, 0, 0);
+            stack.Children.Add(ghost);
+        }
+        stack.Children.Add(Make(false));
+        var bg = Color.FromArgb((byte)(Math.Clamp(state.LyricBg, 0, 1) * 255), 0, 0, 0);
+        return new Border { Background = new SolidColorBrush(bg), Padding = new Thickness(12, 4, 12, 4), Child = stack, HorizontalAlignment = HorizontalAlignment.Stretch };
     }
 
     static Border Lyric(string text, bool current, AppState state)

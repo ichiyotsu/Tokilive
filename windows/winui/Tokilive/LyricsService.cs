@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Windows.Media.Control;
@@ -9,8 +10,7 @@ public sealed class LyricLine
     public double Time;
     public string Text = "";
     public string Translation = "";
-    // 逐字时间戳（[00:03.00]<00:03.00>不<00:03.40>是）：没有就是空列表。
-    // 只解析和保存，逐字高亮是以后再做的事。
+    // 逐字时间戳（[00:03.00]<00:03.00>不<00:03.40>是）。没有就是空列表，显示时不编造。
     public IReadOnlyList<LyricWord> Words { get; set; } = Array.Empty<LyricWord>();
 }
 
@@ -29,6 +29,8 @@ public sealed class NowPlaying
     public double Position;
     public double Duration; // 秒，0 = 未知（直播、EndTime 为 0）
     public bool Playing;
+    // SMTC 封面。没有缩略图就是 null。不读播放器自己的数据库。
+    public byte[]? Cover;
     public string Current = "";
     public IReadOnlyList<LyricLine> Lines = Array.Empty<LyricLine>();
 }
@@ -82,11 +84,12 @@ public static class LyricsService
             // 歌词查不到/限流时 Label 改成可读的失败原因（设置页和歌词窗
             // 在没有歌词行时显示的就是 Label），而不是悄悄留空行。
             if (lyricError != null) label = lyricError;
+            var cover = await ReadCover(props.Thumbnail);
             Current = new NowPlaying
             {
                 Title = props.Title, Artist = props.Artist, Source = session.SourceAppUserModelId, Label = label,
                 Position = position, Duration = duration, Playing = status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
-                Lines = lines, Current = LineAt(lines, position)
+                Lines = lines, Current = LineAt(lines, position), Cover = cover
             };
         }
         catch (Exception ex)
@@ -145,6 +148,51 @@ public static class LyricsService
         else await session.TryTogglePlayPauseAsync();
     }
 
+    public static async Task Seek(double seconds)
+    {
+        try
+        {
+            if (_manager == null) _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            var session = _manager.GetSessions().OrderBy(Rank).FirstOrDefault();
+            if (session == null) return;
+            var ticks = TimeSpan.FromSeconds(Math.Max(0, seconds)).Ticks;
+            await session.TryChangePlaybackPositionAsync(ticks);
+        }
+        catch { /* 播放器不接受拖动时保持原进度 */ }
+    }
+
+    public static int LineIndexAt(IReadOnlyList<LyricLine> lines, double at)
+    {
+        var index = -1;
+        for (var i = 0; i < lines.Count; i++)
+            if (lines[i].Time <= at) index = i; else break;
+        return index;
+    }
+
+    // 没有 Words 时返回 -1。调用方这时整行显示，不编造每个字的时间。
+    public static int WordIndexAt(LyricLine line, double at)
+    {
+        if (line.Words.Count == 0) return -1;
+        var index = -1;
+        for (var i = 0; i < line.Words.Count; i++)
+            if (line.Words[i].Time <= at) index = i; else break;
+        return index;
+    }
+
+    static async Task<byte[]?> ReadCover(Windows.Storage.Streams.IRandomAccessStreamReference? thumbnail)
+    {
+        if (thumbnail == null) return null;
+        try
+        {
+            using var ras = await thumbnail.OpenReadAsync();
+            using var stream = ras.AsStreamForRead();
+            using var copy = new MemoryStream();
+            await stream.CopyToAsync(copy);
+            return copy.Length == 0 ? null : copy.ToArray();
+        }
+        catch { return null; }
+    }
+
     public static IReadOnlyList<LyricLine> Parse(string text)
     {
         if (text.Contains("<tt", StringComparison.OrdinalIgnoreCase) || text.Contains("<p ", StringComparison.OrdinalIgnoreCase))
@@ -197,9 +245,18 @@ public static class LyricsService
         {
             var begin = Regex.Match(match.Groups[1].Value, @"begin=""([^""]+)""");
             if (!begin.Success) continue;
-            var text = Regex.Replace(match.Groups[2].Value, "<[^>]+>", "").Trim();
+            var inner = match.Groups[2].Value;
+            var words = new List<LyricWord>();
+            foreach (Match span in Regex.Matches(inner, @"<span\b([^>]*)>([^<]*)</span>", RegexOptions.IgnoreCase))
+            {
+                var spanBegin = Regex.Match(span.Groups[1].Value, @"begin=""([^""]+)""");
+                var word = span.Groups[2].Value.Trim();
+                if (!spanBegin.Success || word.Length == 0) continue;
+                words.Add(new LyricWord { Time = Clock(spanBegin.Groups[1].Value), Text = word });
+            }
+            var text = Regex.Replace(inner, "<[^>]+>", "").Trim();
             if (text.Length == 0) continue;
-            lines.Add(new LyricLine { Time = Clock(begin.Groups[1].Value), Text = text });
+            lines.Add(new LyricLine { Time = Clock(begin.Groups[1].Value), Text = text, Words = words });
         }
         return lines.OrderBy(l => l.Time).ToList();
     }

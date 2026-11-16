@@ -6,7 +6,7 @@ B站直播弹幕工具。当前开发版本 **1.4.0**。Windows、Android、iOS 
 
 | 平台 | 版本 |
 | --- | --- |
-| Windows | `windows/winui/Tokilive/Tokilive.csproj` 的 `Version` 1.4.0。安装包名为 `tokilive-1.4.0-setup.exe`，便携包是 `tokilive-1.4.0-portable.zip`。 |
+| Windows | `windows/winui/Tokilive/Tokilive.csproj` 的 `Version` 0.1.1。安装包名为 `tokilive-0.1.1-setup.exe`，便携包是 `tokilive-0.1.1-portable.zip`。 |
 | Android | `versionName` 1.4.0，`versionCode` 5。 |
 | iOS / iPadOS | `CFBundleShortVersionString` 1.4.0，`CFBundleVersion` 5。 |
 

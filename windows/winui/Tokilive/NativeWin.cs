@@ -85,6 +85,11 @@ public static class NativeWin
         }
         catch { /* 老系统上标题栏 API 不可用就保持默认顶栏 */ }
         RaiseAbove(hwnd, overlays: false);
+        // 设置窗口永远不要鼠标穿透。穿透只属于悬浮窗；误加在主窗口上，
+        // 导航和底栏齿轮都会点不着。
+        var ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+        if ((ex & WS_EX_TRANSPARENT) != 0)
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex & ~WS_EX_TRANSPARENT));
         InstallSubclass(hwnd);
     }
 
@@ -98,7 +103,11 @@ public static class NativeWin
         {
             var app = ForWindow(window);
             var scale = window.Content?.XamlRoot?.RasterizationScale ?? 1.0;
-            var height = app.TitleBar.Height;
+            // 自定义顶栏只有 32dip。TitleBar.Height 偶尔会被报成整个客户区，
+            // 拖动区就会盖住设置页，点按钮变成拖窗口。超过顶栏就按 32dip 截断。
+            var row = (int)Math.Ceiling(32 * scale);
+            var reported = app.TitleBar.Height;
+            var height = reported > 0 && reported <= row + 8 ? reported : row;
             var width = app.Size.Width;
             var captionWidth = (int)Math.Ceiling(46 * 3 * scale);
             var dragWidth = Math.Max(0, width - captionWidth);
@@ -108,7 +117,9 @@ public static class NativeWin
         catch { /* 拖动区设不上时，标题栏那行的 PointerPressed 会兜底拖动 */ }
     }
 
-    public static void ApplyOverlay(Window window, string title, bool clickThrough, bool resizable, bool noActivate)
+    public static IntPtr Foreground() => GetForegroundWindow();
+
+    public static void ApplyOverlay(Window window, string title, bool clickThrough, bool resizable, bool noActivate, bool perPixelTransparent = false)
     {
         var hwnd = Hwnd(window);
         var app = ForWindow(window);
@@ -130,13 +141,18 @@ public static class NativeWin
         var ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
         // 1.2.0 capture-win.js / capture-style.js：OBS / 直播姬的窗口枚举会
         // 跳过 WS_EX_TOOLWINDOW，所以去掉它、改加 WS_EX_APPWINDOW，让悬浮窗
-        // 能被窗口捕获枚举到。分层透明（WS_EX_LAYERED）保留，否则不是真透明。
-        // 代价：悬浮窗会出现在任务栏和 Alt-Tab 里，这是 1.2.0 就有的取舍。
+        // 能被窗口捕获枚举到。
         // 默认关掉这个兼容：保留 WS_EX_TOOLWINDOW，悬浮窗不进任务栏和
         // Alt-Tab，程序只留在托盘；只有 ObsCaptureCompat 开了才走 1.2.0
         // 的做法。显示亲和性两种情况都保持 WDA_NONE（它只管采集本身
         // 能不能进行，不管窗口在不在枚举列表里）。
-        ex |= WS_EX_LAYERED;
+        // 真透明不能靠 WS_EX_LAYERED。WinUI 的交换链不会调用
+        // UpdateLayeredWindow，分层窗口会整块涂成不透明的黑。1.0.0 的
+        // Electron 窗口是 backgroundColor '#00000000'。这里改用 DWM 把
+        // 玻璃延进客户区，再把 SystemBackdrop 设成全透明（见
+        // TransparentBackdrop）。输入窗不走这条，它自己有实色底。
+        if (perPixelTransparent) ex &= ~WS_EX_LAYERED;
+        else ex |= WS_EX_LAYERED;
         if (AppState.Current.ObsCaptureCompat)
         {
             ex |= WS_EX_APPWINDOW;
@@ -154,16 +170,25 @@ public static class NativeWin
         SetWindowDisplayAffinity(hwnd, WDA_NONE);
         var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
         DwmExtendFrameIntoClientArea(hwnd, ref margins);
-        var accent = new ACCENT_POLICY { AccentState = ACCENT_ENABLE_TRANSPARENTGRADIENT };
-        var size = Marshal.SizeOf<ACCENT_POLICY>();
-        var ptr = Marshal.AllocHGlobal(size);
-        try
+        if (perPixelTransparent)
         {
-            Marshal.StructureToPtr(accent, ptr, false);
-            var data = new WINDOWCOMPOSITIONATTRIBDATA { Attribute = WCA_ACCENT_POLICY, Data = ptr, SizeOfData = size };
-            SetWindowCompositionAttribute(hwnd, ref data);
+            // 强调色渐变策略会在 WinUI 合成器下面再铺一层，客户区经常是黑的。
+            // 透明悬浮窗只留 DWM 延展 + 透明 SystemBackdrop。
+            try { window.SystemBackdrop ??= new TransparentBackdrop(); } catch { /* 见 TransparentBackdrop */ }
         }
-        finally { Marshal.FreeHGlobal(ptr); }
+        else
+        {
+            var accent = new ACCENT_POLICY { AccentState = ACCENT_ENABLE_TRANSPARENTGRADIENT };
+            var size = Marshal.SizeOf<ACCENT_POLICY>();
+            var ptr = Marshal.AllocHGlobal(size);
+            try
+            {
+                Marshal.StructureToPtr(accent, ptr, false);
+                var data = new WINDOWCOMPOSITIONATTRIBDATA { Attribute = WCA_ACCENT_POLICY, Data = ptr, SizeOfData = size };
+                SetWindowCompositionAttribute(hwnd, ref data);
+            }
+            finally { Marshal.FreeHGlobal(ptr); }
+        }
         // SWP_FRAMECHANGED：扩展样式改了要让系统重算窗口帧，否则
         // WS_EX_TOOLWINDOW 去掉 / WS_EX_APPWINDOW 加上可能不生效。
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
@@ -394,6 +419,7 @@ public static class NativeWin
     [DllImport("user32.dll")] static extern bool DestroyMenu(IntPtr hMenu);
     [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT lpPoint);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
     [DllImport("user32.dll")] static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOWCOMPOSITIONATTRIBDATA data);
