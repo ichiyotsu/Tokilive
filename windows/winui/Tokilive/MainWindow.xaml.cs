@@ -1,5 +1,6 @@
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -39,6 +40,10 @@ public sealed partial class MainWindow : Window
     bool _updateArmed;
     // 同步颜色选择器时置位，避免 ColorChanged -> 写文本框 -> Pull -> 再同步的循环。
     bool _syncingColor;
+    bool _danmakuSplitWide = true;
+    bool _updatingSeek;
+    string _coverKey = "";
+    DispatcherTimer? _seekTimer;
 
     public MainWindow()
     {
@@ -132,6 +137,12 @@ public sealed partial class MainWindow : Window
         _expire = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _expire.Tick += (_, _) => { if (LiveService.HasExpired()) RefreshCards(); };
         _expire.Start();
+        _seekTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
+        _seekTimer.Tick += async (_, _) =>
+        {
+            _seekTimer.Stop();
+            try { await LyricsService.Seek(PlayerSeek.Value); } catch { /* 播放器不接受拖动 */ }
+        };
         ApplyVisibility();
         ApplyPreviewBg();
         RefreshCards();
@@ -316,6 +327,7 @@ public sealed partial class MainWindow : Window
         SelectCombo(LyricModeBox, s.LyricMode);
         SelectCombo(LyricDirectionBox, s.LyricDirection);
         LyricClickSwitch.IsOn = s.LyricClickThrough;
+        LyricWordSwitch.IsOn = s.LyricWordByWord;
         LyricLockSwitch.IsOn = s.LyricLocked;
         LyricOffsetSlider.Value = s.LyricOffset;
         DanmakuWindowSwitch.IsOn = s.ShowDanmaku;
@@ -408,7 +420,7 @@ public sealed partial class MainWindow : Window
         void Save(object? _, object? __) { if (!_loading) Pull(); }
         foreach (var box in new TextBox[] { RoomBox, NameColorBox, CardColorBox, TextColorBox, CardFontBox, HotkeyBox, LyricFontBox, LyricColorBox, LyricHiBox, AccentBox, SeedColorBox, CjkFontBox, JpFontBox, LockHotkeyBox })
             box.TextChanged += (_, _) => Save(null, null);
-        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, GameTopSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
+        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, GameTopSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, LyricWordSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
             sw.Toggled += (_, _) => Save(null, null);
         foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider, AnimSpeedSlider, TextShadowSlider, CardBlurSlider, AppBgOpacitySlider })
             slider.ValueChanged += (_, _) => Save(null, null);
@@ -513,6 +525,7 @@ public sealed partial class MainWindow : Window
         s.LyricDirection = ComboValue(LyricDirectionBox) ?? "horizontal";
         s.LyricDesign = ComboValue(LyricDesignBox) ?? "default";
         s.LyricClickThrough = LyricClickSwitch.IsOn;
+        s.LyricWordByWord = LyricWordSwitch.IsOn;
         s.LyricLocked = LyricLockSwitch.IsOn;
         s.LyricOffset = LyricOffsetSlider.Value;
         s.ShowDanmaku = DanmakuWindowSwitch.IsOn;
@@ -684,8 +697,11 @@ public sealed partial class MainWindow : Window
         var hwnd = NativeWin.Hwnd(this);
         var ex = GetEx(hwnd);
         const long tool = 0x00000080;
+        const long transparent = 0x20;
         if (AppState.Current.HideFromTaskbar && _tray) ex |= tool;
         else ex &= ~tool;
+        // 穿透只属于悬浮窗。任务栏样式重算时也清掉，避免主窗口点不了。
+        ex &= ~transparent;
         SetEx(hwnd, ex);
     }
 
@@ -693,14 +709,28 @@ public sealed partial class MainWindow : Window
     void KeepOrder()
     {
         var main = NativeWin.Hwnd(this);
-        if (AppState.Current.ExperimentalTopmost)
+        var danmaku = NativeWin.Hwnd(_danmaku);
+        var live = NativeWin.Hwnd(_live);
+        var lyrics = NativeWin.Hwnd(_lyrics);
+        var fg = NativeWin.Foreground();
+        // 设置窗口在前台时，先把它放进置顶带，再把悬浮窗插到它下面。
+        // 这样悬浮窗仍盖住别的程序，但不会盖住正在点的设置页。
+        // 切走之后不再把设置窗口留在 TOPMOST，否则 400ms 内又盖回游戏。
+        var settingsFocused = AppWindow.IsVisible && (fg == main || fg == _input.Handle);
+        if (settingsFocused)
         {
-            NativeWin.RaiseAbove(NativeWin.Hwnd(_danmaku), true);
-            NativeWin.RaiseAbove(NativeWin.Hwnd(_live), true);
+            NativeWin.RaiseAbove(main, true);
+            NativeWin.PlaceBelow(danmaku, main);
+            NativeWin.PlaceBelow(live, main);
+            NativeWin.PlaceBelow(lyrics, main);
         }
-        NativeWin.PlaceBelow(NativeWin.Hwnd(_danmaku), main);
-        NativeWin.PlaceBelow(NativeWin.Hwnd(_live), main);
-        NativeWin.PlaceBelow(NativeWin.Hwnd(_lyrics), main);
+        else
+        {
+            NativeWin.RaiseAbove(main, false);
+            NativeWin.RaiseAbove(danmaku, true);
+            NativeWin.RaiseAbove(live, true);
+            NativeWin.RaiseAbove(lyrics, true);
+        }
         if (_input.AppWindow.IsVisible) NativeWin.RaiseAbove(_input.Handle, true);
         _danmaku.Remember();
         _live.Remember();
@@ -812,11 +842,152 @@ public sealed partial class MainWindow : Window
     void ShowPlayer()
     {
         var now = LyricsService.Current;
-        PlayerTitle.Text = now.Title;
-        PlayerArtist.Text = string.Join(" · ", new[] { now.Artist, now.Label, now.Source }.Where(s => !string.IsNullOrWhiteSpace(s)));
-        PlayerLine.Text = string.IsNullOrWhiteSpace(now.Current) ? "没有带时间轴的歌词" : now.Current;
-        // 总时长和当前位置：Duration>0 才显示（直播、EndTime 为 0 时 Duration 是 0）。
-        PlayerTime.Text = now.Duration > 0 ? $"{FmtTime(now.Position)} / {FmtTime(now.Duration)}" : "";
+        PlayerTitle.Text = string.IsNullOrWhiteSpace(now.Title) ? "没有曲目" : now.Title;
+        PlayerArtist.Text = string.Join(" · ", new[] { now.Artist, now.Label }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        PlayPauseIcon.Glyph = now.Playing ? "\uE769" : "\uE768";
+        if (!_updatingSeek && _seekTimer?.IsEnabled != true)
+        {
+            _updatingSeek = true;
+            PlayerSeek.Maximum = now.Duration > 0 ? now.Duration : Math.Max(1, now.Position);
+            PlayerSeek.Value = Math.Clamp(now.Position, PlayerSeek.Minimum, PlayerSeek.Maximum);
+            _updatingSeek = false;
+        }
+        PlayerTime.Text = now.Duration > 0 ? $"{FmtTime(now.Position)} / {FmtTime(now.Duration)}" : FmtTime(now.Position);
+        var coverKey = now.Title + "\n" + now.Artist + "\n" + (now.Cover?.Length ?? 0);
+        if (coverKey != _coverKey)
+        {
+            _coverKey = coverKey;
+            _ = ShowCoverAsync(now.Cover);
+        }
+        RenderPlayerLyrics(now);
+    }
+
+    async Task ShowCoverAsync(byte[]? bytes)
+    {
+        if (bytes == null || bytes.Length == 0)
+        {
+            CoverImage.Source = null;
+            CoverFallback.Visibility = Visibility.Visible;
+            return;
+        }
+        try
+        {
+            var stream = new InMemoryRandomAccessStream();
+            var writer = new DataWriter(stream);
+            writer.WriteBytes(bytes);
+            await writer.StoreAsync();
+            stream.Seek(0);
+            var image = new BitmapImage();
+            await image.SetSourceAsync(stream);
+            CoverImage.Source = image;
+            CoverFallback.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            CoverImage.Source = null;
+            CoverFallback.Visibility = Visibility.Visible;
+        }
+    }
+
+    void RenderPlayerLyrics(NowPlaying now)
+    {
+        PlayerLyrics.Children.Clear();
+        if (now.Lines.Count == 0)
+        {
+            PlayerLyrics.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(now.Current) ? (string.IsNullOrWhiteSpace(now.Label) ? "没有带时间轴的歌词" : now.Label) : now.Current,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+            });
+            return;
+        }
+        var index = LyricsService.LineIndexAt(now.Lines, now.Position);
+        if (index < 0) index = 0;
+        var start = Math.Max(0, index - 1);
+        var end = Math.Min(now.Lines.Count, index + 4);
+        var primary = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+        var tertiary = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
+        var accent = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
+        for (var i = start; i < end; i++)
+        {
+            var line = now.Lines[i];
+            var current = i == index && line.Time <= now.Position;
+            if (current && AppState.Current.LyricWordByWord && line.Words.Count > 0)
+            {
+                var active = LyricsService.WordIndexAt(line, now.Position);
+                var rich = new RichTextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 16 };
+                var para = new Paragraph();
+                for (var w = 0; w < line.Words.Count; w++)
+                    para.Inlines.Add(new Run { Text = line.Words[w].Text, Foreground = w <= active ? accent : tertiary });
+                rich.Blocks.Add(para);
+                PlayerLyrics.Children.Add(rich);
+            }
+            else
+            {
+                PlayerLyrics.Children.Add(new TextBlock
+                {
+                    Text = line.Text,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = current ? 16 : 14,
+                    FontWeight = current ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+                    Foreground = current ? primary : tertiary
+                });
+                if (current && !string.IsNullOrWhiteSpace(line.Translation))
+                    PlayerLyrics.Children.Add(new TextBlock { Text = line.Translation, TextWrapping = TextWrapping.Wrap, FontSize = 13, Foreground = tertiary });
+            }
+        }
+    }
+
+    void PlayerSeek_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_updatingSeek || _seekTimer == null) return;
+        PlayerTime.Text = LyricsService.Current.Duration > 0
+            ? $"{FmtTime(e.NewValue)} / {FmtTime(LyricsService.Current.Duration)}"
+            : FmtTime(e.NewValue);
+        _seekTimer.Stop();
+        _seekTimer.Start();
+    }
+
+    bool _danmakuSplitApplied;
+    void DanmakuBody_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.NewSize.Width < 1) return;
+        var wide = e.NewSize.Width >= 760;
+        if (_danmakuSplitApplied && wide == _danmakuSplitWide) return;
+        _danmakuSplitApplied = true;
+        _danmakuSplitWide = wide;
+        if (wide)
+        {
+            // 预览 1*、设置 2*，预览约占 33%，落在 25%–50%。
+            DanmakuSettingsCol.Width = new GridLength(2, GridUnitType.Star);
+            DanmakuPreviewCol.Width = new GridLength(1, GridUnitType.Star);
+            DanmakuSettingsRow.Height = new GridLength(1, GridUnitType.Star);
+            DanmakuPreviewRow.Height = new GridLength(0);
+            Grid.SetRow(DanmakuSettingsScroll, 0);
+            Grid.SetColumn(DanmakuSettingsScroll, 0);
+            Grid.SetRowSpan(DanmakuSettingsScroll, 2);
+            Grid.SetColumnSpan(DanmakuSettingsScroll, 1);
+            Grid.SetRow(DanmakuPreviewHost, 0);
+            Grid.SetColumn(DanmakuPreviewHost, 1);
+            Grid.SetRowSpan(DanmakuPreviewHost, 2);
+            Grid.SetColumnSpan(DanmakuPreviewHost, 1);
+        }
+        else
+        {
+            DanmakuSettingsCol.Width = new GridLength(1, GridUnitType.Star);
+            DanmakuPreviewCol.Width = new GridLength(1, GridUnitType.Star);
+            DanmakuSettingsRow.Height = new GridLength(1, GridUnitType.Star);
+            DanmakuPreviewRow.Height = new GridLength(240);
+            Grid.SetRow(DanmakuSettingsScroll, 0);
+            Grid.SetColumn(DanmakuSettingsScroll, 0);
+            Grid.SetRowSpan(DanmakuSettingsScroll, 1);
+            Grid.SetColumnSpan(DanmakuSettingsScroll, 2);
+            Grid.SetRow(DanmakuPreviewHost, 1);
+            Grid.SetColumn(DanmakuPreviewHost, 0);
+            Grid.SetRowSpan(DanmakuPreviewHost, 1);
+            Grid.SetColumnSpan(DanmakuPreviewHost, 2);
+        }
     }
 
     static string FmtTime(double seconds)
@@ -828,9 +999,22 @@ public sealed partial class MainWindow : Window
         return h > 0 ? $"{h}:{m:D2}:{s:D2}" : $"{m}:{s:D2}";
     }
 
+    void Nav_ItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
+    {
+        // 底栏「设置」有时不会改变 SelectedItem，SelectionChanged 就不响。
+        // ItemInvoked 只要点到了这项就会来，齿轮和侧栏都走这里。
+        if (args.InvokedItemContainer is NavigationViewItem item && item.Tag is string tag)
+            ShowPage(tag);
+    }
+
     void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string ?? "conn";
+        var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
+        if (!string.IsNullOrEmpty(tag)) ShowPage(tag);
+    }
+
+    void ShowPage(string tag)
+    {
         PageConn.Visibility = tag == "conn" ? Visibility.Visible : Visibility.Collapsed;
         PageDanmaku.Visibility = tag == "danmaku" ? Visibility.Visible : Visibility.Collapsed;
         PageLive.Visibility = tag == "live" ? Visibility.Visible : Visibility.Collapsed;
