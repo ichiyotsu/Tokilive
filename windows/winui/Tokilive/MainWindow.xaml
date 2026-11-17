@@ -428,6 +428,7 @@
                             <ToggleSwitch x:Name="LyricLockSwitch" Header="锁定位置" OnContent="开" OffContent="关"/>
                             <Slider x:Name="LyricOffsetSlider" Header="时间偏移（秒）" Minimum="-10" Maximum="10" StepFrequency="0.1"/>
                             <Button Content="导入 LRC / TTML" Click="ImportLyrics_Click"/>
+                            <Button Content="清除本地歌词" Click="ClearLyrics_Click"/>
                         </StackPanel>
                     </ScrollViewer>
                     <Border Grid.Row="1" Margin="24,0,24,16" Padding="16" CornerRadius="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">

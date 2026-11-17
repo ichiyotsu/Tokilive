@@ -79,7 +79,7 @@ public static class LyricsService
                 position += Math.Max(0, (DateTimeOffset.Now - timeline.LastUpdatedTime).TotalSeconds);
             position += AppState.Current.LyricOffset;
             var duration = Math.Max(0, timeline.EndTime.TotalSeconds);
-            var label = Rank(session) == 0 ? "QQ音乐" : Rank(session) == 1 ? "网易云音乐" : "其他来源";
+            var label = AppRank(session) == 0 ? "QQ音乐" : AppRank(session) == 1 ? "网易云音乐" : "其他来源";
             var (lines, lyricError) = await LyricsFor(props.Title, props.Artist, duration);
             // 歌词查不到/限流时 Label 改成可读的失败原因（设置页和歌词窗
             // 在没有歌词行时显示的就是 Label），而不是悄悄留空行。
@@ -297,7 +297,7 @@ public static class LyricsService
     {
         try
         {
-            using var http = new HttpClient();
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"tokilive/{AppState.Version} (https://github.com/ichiyotsu/Tokilive)");
             var url = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title) + "&artist_name=" + Uri.EscapeDataString(artist);
             using var res = await http.GetAsync(url);
@@ -352,7 +352,19 @@ public static class LyricsService
         return lines;
     }
 
+    // 正在播放的会话优先于已暂停的：否则一个暂停的 QQ 音乐会话会压过
+    // 正在播放的其他播放器，歌词窗就一直显示那首没在放的歌。应用偏好
+    // 只在播放状态相同的时候起作用。
     static int Rank(GlobalSystemMediaTransportControlsSession session)
+        => (IsPlaying(session) ? 0 : 10) + AppRank(session);
+
+    static bool IsPlaying(GlobalSystemMediaTransportControlsSession session)
+    {
+        try { return session.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing; }
+        catch { return false; }
+    }
+
+    static int AppRank(GlobalSystemMediaTransportControlsSession session)
     {
         var id = session.SourceAppUserModelId ?? "";
         if (id.Contains("QQMusic", StringComparison.OrdinalIgnoreCase) || id.Contains("QQ音乐", StringComparison.Ordinal)) return 0;
