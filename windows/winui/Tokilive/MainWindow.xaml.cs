@@ -40,7 +40,6 @@ public sealed partial class MainWindow : Window
     bool _updateArmed;
     // 同步颜色选择器时置位，避免 ColorChanged -> 写文本框 -> Pull -> 再同步的循环。
     bool _syncingColor;
-    bool _danmakuSplitWide = true;
     bool _updatingSeek;
     string _coverKey = "";
     DispatcherTimer? _seekTimer;
@@ -962,47 +961,6 @@ public sealed partial class MainWindow : Window
             : FmtTime(e.NewValue);
         _seekTimer.Stop();
         _seekTimer.Start();
-    }
-
-    bool _danmakuSplitApplied;
-    void DanmakuBody_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        if (e.NewSize.Width < 1) return;
-        var wide = e.NewSize.Width >= 760;
-        if (_danmakuSplitApplied && wide == _danmakuSplitWide) return;
-        _danmakuSplitApplied = true;
-        _danmakuSplitWide = wide;
-        if (wide)
-        {
-            // 预览 1*、设置 2*，预览约占 33%，落在 25%–50%。
-            DanmakuSettingsCol.Width = new GridLength(2, GridUnitType.Star);
-            DanmakuPreviewCol.Width = new GridLength(1, GridUnitType.Star);
-            DanmakuSettingsRow.Height = new GridLength(1, GridUnitType.Star);
-            DanmakuPreviewRow.Height = new GridLength(0);
-            Grid.SetRow(DanmakuSettingsScroll, 0);
-            Grid.SetColumn(DanmakuSettingsScroll, 0);
-            Grid.SetRowSpan(DanmakuSettingsScroll, 2);
-            Grid.SetColumnSpan(DanmakuSettingsScroll, 1);
-            Grid.SetRow(DanmakuPreviewHost, 0);
-            Grid.SetColumn(DanmakuPreviewHost, 1);
-            Grid.SetRowSpan(DanmakuPreviewHost, 2);
-            Grid.SetColumnSpan(DanmakuPreviewHost, 1);
-        }
-        else
-        {
-            DanmakuSettingsCol.Width = new GridLength(1, GridUnitType.Star);
-            DanmakuPreviewCol.Width = new GridLength(1, GridUnitType.Star);
-            DanmakuSettingsRow.Height = new GridLength(1, GridUnitType.Star);
-            DanmakuPreviewRow.Height = new GridLength(240);
-            Grid.SetRow(DanmakuSettingsScroll, 0);
-            Grid.SetColumn(DanmakuSettingsScroll, 0);
-            Grid.SetRowSpan(DanmakuSettingsScroll, 1);
-            Grid.SetColumnSpan(DanmakuSettingsScroll, 2);
-            Grid.SetRow(DanmakuPreviewHost, 1);
-            Grid.SetColumn(DanmakuPreviewHost, 0);
-            Grid.SetRowSpan(DanmakuPreviewHost, 1);
-            Grid.SetColumnSpan(DanmakuPreviewHost, 2);
-        }
     }
 
     static string FmtTime(double seconds)
