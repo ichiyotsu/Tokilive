@@ -74,6 +74,14 @@ public sealed partial class MainWindow : Window
                 AppWindow.Hide();
                 return;
             }
+            // 真退出：先停掉所有定时器，免得窗口拆到一半时 tick 又跑进来
+            // 取已经没了的句柄。
+            _z?.Stop();
+            _sample?.Stop();
+            _lyricTimer?.Stop();
+            _expire?.Stop();
+            _refreshTimer?.Stop();
+            _seekTimer?.Stop();
             Hotkey.Unbind();
             if (_tray) NativeWin.RemoveTray(NativeWin.Hwnd(this));
             _danmaku.Close();
@@ -707,6 +715,14 @@ public sealed partial class MainWindow : Window
 
     int _orderTick;
     void KeepOrder()
+    {
+        // 排序只是每 400ms 的管家活：取句柄失败（窗口还没建好、正在拆）
+        // 时跳过这一次，绝不能因为它崩掉整个程序。0.2.0-b1 启动崩溃
+        // 的教训：定时器里的未处理异常会直接杀掉应用。
+        try { KeepOrderCore(); } catch { /* 跳过这一次，下个 tick 再试 */ }
+    }
+
+    void KeepOrderCore()
     {
         var main = NativeWin.Hwnd(this);
         var danmaku = NativeWin.Hwnd(_danmaku);
