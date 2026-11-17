@@ -5,12 +5,12 @@
 [Setup]
 AppId=com.ichiyotsu.tokilive
 AppName=tokilive
-AppVersion=0.1.1
+AppVersion=0.1.2
 AppPublisher=ichiyotsu
 DefaultDirName={autopf}\tokilive
 DisableDirPage=no
 DisableProgramGroupPage=yes
-OutputBaseFilename=tokilive-0.1.1-setup
+OutputBaseFilename=tokilive-0.1.2-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64
