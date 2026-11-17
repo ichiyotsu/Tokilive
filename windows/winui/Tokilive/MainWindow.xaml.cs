@@ -1159,6 +1159,15 @@ public sealed partial class MainWindow : Window
         await LyricsService.Refresh();
         ShowPlayer();
     }
+    async void ClearLyrics_Click(object sender, RoutedEventArgs e)
+    {
+        // 本地歌词一旦导入就永久优先于在线歌词：没有清除入口的话，
+        // 换歌也一直显示旧的那份。这里清掉，回到在线歌词。
+        AppState.Current.LyricLocal = "";
+        AppState.Current.Save();
+        await LyricsService.Refresh();
+        ShowPlayer();
+    }
     async void Update_Click(object sender, RoutedEventArgs e)
     {
         await UpdateService.Check(_updateArmed);
