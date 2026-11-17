@@ -34,7 +34,7 @@ public partial class App : Application
         SplashWindow? splash = null;
         try
         {
-            // 1.2.0 启动时先出启动画面（384x256，约 2 秒），主窗口建好后
+            // 1.2.0 启动时先出启动画面（585x360，约 2 秒），主窗口建好后
             // 再淡出。启动画面出问题就直接进主窗口，和 1.2.0 在 createSplash
             // 外包 try/catch 的做法一样，不因此崩掉。
             try
