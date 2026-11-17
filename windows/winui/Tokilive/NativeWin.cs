@@ -57,7 +57,6 @@ public static class NativeWin
     const uint TrayMenuLockLive = 1004;
     const uint TrayMenuDanmakuVisible = 1005;
     const uint TrayMenuLiveVisible = 1006;
-    const uint TrayMenuTopmost = 1007;
     const uint TrayMenuReconnect = 1008;
     const uint TrayMenuExit = 1009;
 
@@ -283,7 +282,6 @@ public static class NativeWin
     public static event Action? TrayToggleLiveLock;
     public static event Action? TrayToggleDanmakuVisible;
     public static event Action? TrayToggleLiveVisible;
-    public static event Action? TrayToggleTopmost;
     public static event Action? TrayReconnect;
     public static event Action? TrayExit;
 
@@ -295,7 +293,6 @@ public static class NativeWin
     public static Func<bool>? TrayLiveLocked;
     public static Func<bool>? TrayDanmakuVisible;
     public static Func<bool>? TrayLiveVisible;
-    public static Func<bool>? TrayTopmost;
 
     static void ShowTrayMenu(IntPtr hwnd)
     {
@@ -313,7 +310,6 @@ public static class NativeWin
             AppendMenu(menu, MF_SEPARATOR, 0, null);
             AppendMenu(menu, MF_STRING, TrayMenuDanmakuVisible, (TrayDanmakuVisible?.Invoke() ?? true) ? "隐藏弹幕窗" : "显示弹幕窗");
             AppendMenu(menu, MF_STRING, TrayMenuLiveVisible, (TrayLiveVisible?.Invoke() ?? true) ? "隐藏实时窗" : "显示实时窗");
-            AppendMenu(menu, MF_STRING | ((TrayTopmost?.Invoke() ?? false) ? MF_CHECKED : 0), TrayMenuTopmost, "置顶");
             AppendMenu(menu, MF_SEPARATOR, 0, null);
             AppendMenu(menu, MF_STRING, TrayMenuReconnect, "重新连接");
             AppendMenu(menu, MF_STRING, TrayMenuExit, "退出");
@@ -331,7 +327,6 @@ public static class NativeWin
                 case TrayMenuLockLive: TrayToggleLiveLock?.Invoke(); break;
                 case TrayMenuDanmakuVisible: TrayToggleDanmakuVisible?.Invoke(); break;
                 case TrayMenuLiveVisible: TrayToggleLiveVisible?.Invoke(); break;
-                case TrayMenuTopmost: TrayToggleTopmost?.Invoke(); break;
                 case TrayMenuReconnect: TrayReconnect?.Invoke(); break;
                 case TrayMenuExit: TrayExit?.Invoke(); break;
             }
