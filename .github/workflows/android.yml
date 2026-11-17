@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Also attach the APK to this release tag (e.g. v0.1.0). Leave empty to only save a workflow artifact."
+        description: "Also attach the APK to this release tag (e.g. v0.1.2). Leave empty to only save a workflow artifact."
         required: false
         default: ""
 
