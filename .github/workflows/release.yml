@@ -34,8 +34,8 @@ jobs:
             fi
           else
             if [ "$prerelease" = true ]; then
-              gh release create "$tag" --verify-tag --title "Tokilive ${version}" --notes "Tokilive ${version}" --prerelease --latest=false
+              gh release create "$tag" --verify-tag --title "${version}" --notes "Tokilive ${version}" --prerelease --latest=false
             else
-              gh release create "$tag" --verify-tag --title "Tokilive ${version}" --notes "Tokilive ${version}" --latest
+              gh release create "$tag" --verify-tag --title "${version}" --notes "Tokilive ${version}" --latest
             fi
           fi
