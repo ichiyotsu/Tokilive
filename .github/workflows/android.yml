@@ -59,7 +59,7 @@ jobs:
         run: |
           version=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
           src=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          dest="tokilive-${version}-android.apk"
+          dest="TokiLive-${version}.apk"
           cp "$src" "$RUNNER_TEMP/$dest"
           echo "path=$RUNNER_TEMP/$dest" >> "$GITHUB_OUTPUT"
           echo "name=$dest" >> "$GITHUB_OUTPUT"
