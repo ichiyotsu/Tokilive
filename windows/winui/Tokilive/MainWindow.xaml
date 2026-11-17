@@ -541,6 +541,7 @@
                         </ComboBox>
                         <TextBox x:Name="LockHotkeyBox" Header="锁定窗口快捷键（例如 Control+Shift+L，留空则不注册）"/>
                         <TextBlock x:Name="MaterialText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <ToggleSwitch x:Name="SplashSwitch" Header="启动时显示启动画面" OnContent="开" OffContent="关"/>
                         <TextBlock Text="关于" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <TextBlock x:Name="VersionText" Text="0.2.0-b1" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <TextBlock Text="原生 WinUI 3，未打包，Windows 10 1809 和 Windows 11。应用 ID com.ichiyotsu.tokilive。" TextWrapping="Wrap"/>

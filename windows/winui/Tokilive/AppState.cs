@@ -93,6 +93,7 @@ public sealed class AppState : INotifyPropertyChanged
     public string SidebarMode { get => sidebarMode; set => Set(ref sidebarMode, value); }
     public string MedalStyle { get => medalStyle; set => Set(ref medalStyle, value); }
     public bool ScBiliColor { get => scBiliColor; set => Set(ref scBiliColor, value); }
+    public bool ShowSplash { get => showSplash; set => Set(ref showSplash, value); }
     public int InputX { get => inputX; set => Set(ref inputX, value); }
     public int InputY { get => inputY; set => Set(ref inputY, value); }
     public int InputW { get => inputW; set => Set(ref inputW, value); }
@@ -207,6 +208,7 @@ public sealed class AppState : INotifyPropertyChanged
     string sidebarMode = "auto";
     string medalStyle = "unified";
     bool scBiliColor;
+    bool showSplash = true;
     int inputX, inputY, inputW, inputH;
     string lockHotkey = "Control+Shift+L";
     double ttsVolume = 1;
