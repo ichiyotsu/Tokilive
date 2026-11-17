@@ -36,27 +36,34 @@
                     <StackPanel Spacing="12" HorizontalAlignment="Stretch" MinWidth="{Binding ViewportWidth, ElementName=PageConn}">
                         <TextBlock Text="连接" Style="{ThemeResource TitleTextBlockStyle}"/>
                         <TextBlock x:Name="AccountText" Style="{ThemeResource BodyTextBlockStyle}"/>
-                        <TextBox x:Name="RoomBox" Header="房间号" PlaceholderText="直播间号"/>
-                        <TextBlock Text="改了房间号要点「连接」才会重连。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <!-- 窗口拖窄时这四个按钮横着排不下，包一层横向滚动，别被裁掉。 -->
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="连接" Click="Connect_Click"/>
-                            <Button Content="断开" Click="Disconnect_Click"/>
-                            <Button Content="读取我的直播间" Click="OwnRoom_Click"/>
-                            <Button Content="扫码登录" Click="Qr_Click"/>
-                        </StackPanel>
-                        </ScrollViewer>
-                        <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <Image x:Name="QrImage" Width="200" Height="200" Visibility="Collapsed"/>
-                        <TextBlock Text="扫码只把 Cookie 留在本机配置里，不会写入仓库或日志。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBox x:Name="CookieBox" Header="Cookie（手动粘贴，SESSDATA=… 这样一整串）" PlaceholderText="SESSDATA=…; bili_jct=…; DedeUserID=…"/>
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="保存 Cookie" Click="SaveCookie_Click"/>
-                            <Button Content="退出登录" Click="Logout_Click"/>
-                        </StackPanel>
-                        </ScrollViewer>
+                        <TextBlock Text="房间" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Spacing="12">
+                                <TextBox x:Name="RoomBox" Header="房间号" PlaceholderText="直播间号"/>
+                                <TextBlock Text="改了房间号要点「连接」才会重连。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <Grid ColumnSpacing="8" RowSpacing="8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                    <Button Content="连接" Click="Connect_Click" HorizontalAlignment="Stretch"/>
+                                    <Button Content="断开" Grid.Column="1" Click="Disconnect_Click" HorizontalAlignment="Stretch"/>
+                                    <Button Content="读取我的直播间" Grid.Row="1" Click="OwnRoom_Click" HorizontalAlignment="Stretch"/>
+                                    <Button Content="扫码登录" Grid.Column="1" Grid.Row="1" Click="Qr_Click" HorizontalAlignment="Stretch"/>
+                                </Grid>
+                                <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="登录" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Spacing="12">
+                                <Image x:Name="QrImage" Width="200" Height="200" Visibility="Collapsed"/>
+                                <TextBlock Text="扫码只把 Cookie 留在本机配置里，不会写入仓库或日志。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBox x:Name="CookieBox" Header="Cookie（手动粘贴，SESSDATA=… 这样一整串）" PlaceholderText="SESSDATA=…; bili_jct=…; DedeUserID=…"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="保存 Cookie" Click="SaveCookie_Click"/>
+                                    <Button Content="退出登录" Click="Logout_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
                 <Grid x:Name="PageDanmaku" Visibility="Collapsed">
@@ -64,37 +71,35 @@
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <!-- 宽窗口：左设置 2*、右预览 1*（约 33%，落在 25%–50%）。
-                         窄于 760 时 DanmakuBody_SizeChanged 改成上下排。 -->
-                    <Grid x:Name="DanmakuBody" SizeChanged="DanmakuBody_SizeChanged">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition x:Name="DanmakuSettingsCol" Width="2*"/>
-                            <ColumnDefinition x:Name="DanmakuPreviewCol" Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition x:Name="DanmakuSettingsRow" Height="*"/>
-                            <RowDefinition x:Name="DanmakuPreviewRow" Height="0"/>
-                        </Grid.RowDefinitions>
-                        <ScrollViewer x:Name="DanmakuSettingsScroll" Padding="24,16,12,12" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
-                        <StackPanel Spacing="8" HorizontalAlignment="Stretch" MinWidth="{Binding ViewportWidth, ElementName=DanmakuSettingsScroll}">
+                    <!-- 单栏卡片流：设置和预览上下排在同一个滚动区里，不再
+                         左右分栏，也不再按宽度手写重排。 -->
+                    <ScrollViewer x:Name="DanmakuSettingsScroll" Padding="{StaticResource PagePadding}" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
+                        <StackPanel Spacing="12" HorizontalAlignment="Stretch" MinWidth="{Binding ViewportWidth, ElementName=DanmakuSettingsScroll}">
                             <TextBlock Text="弹幕面板" Style="{ThemeResource TitleTextBlockStyle}"/>
-                            <TextBlock Text="左边改设置，右边一直是同一块预览。窗口很窄时预览才排到设置下面。分组改的是这块预览和真正的悬浮窗。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <!-- 窗口拖窄时 9 个预设按钮横着排不下，包一层横向滚动，别被裁掉。 -->
-                            <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="默认" Tag="默认" Click="Preset_Click"/>
-                                <Button Content="紧凑" Tag="紧凑" Click="Preset_Click"/>
-                                <Button Content="极简" Tag="极简" Click="Preset_Click"/>
-                                <Button Content="霓虹" Tag="霓虹" Click="Preset_Click"/>
-                                <Button Content="纯文字" Tag="纯文字" Click="Preset_Click"/>
-                                <Button Content="大字" Tag="大字" Click="Preset_Click"/>
-                                <Button Content="安静" Tag="安静" Click="Preset_Click"/>
-                                <Button Content="导出主题" Click="ExportTheme_Click"/>
-                                <Button Content="导入主题" Click="ImportTheme_Click"/>
-                            </StackPanel>
-                            </ScrollViewer>
-                            <Expander Header="头像与颜色" IsExpanded="True">
-                                <StackPanel Spacing="8">
+                            <TextBlock Text="分组改的是下面的预览和真正的悬浮窗。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="预设" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
+                                    <Grid ColumnSpacing="8" RowSpacing="8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                        <Button Content="默认" Tag="默认" Click="Preset_Click" HorizontalAlignment="Stretch"/>
+                                        <Button Content="紧凑" Grid.Column="1" Tag="紧凑" Click="Preset_Click" HorizontalAlignment="Stretch"/>
+                                        <Button Content="极简" Grid.Column="2" Tag="极简" Click="Preset_Click" HorizontalAlignment="Stretch"/>
+                                        <Button Content="霓虹" Grid.Row="1" Tag="霓虹" Click="Preset_Click" HorizontalAlignment="Stretch"/>
+                                        <Button Content="纯文字" Grid.Row="1" Grid.Column="1" Tag="纯文字" Click="Preset_Click" HorizontalAlignment="Stretch"/>
+                                        <Button Content="大字" Grid.Row="1" Grid.Column="2" Tag="大字" Click="Preset_Click" HorizontalAlignment="Stretch"/>
+                                        <Button Content="安静" Grid.Row="2" Tag="安静" Click="Preset_Click" HorizontalAlignment="Stretch"/>
+                                    </Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Content="导出主题" Click="ExportTheme_Click"/>
+                                        <Button Content="导入主题" Click="ImportTheme_Click"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="头像与颜色" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
                                     <ToggleSwitch x:Name="AvatarSwitch" Header="显示头像" OnContent="开" OffContent="关"/>
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -141,9 +146,10 @@
                                     </StackPanel>
                                     </ScrollViewer>
                                 </StackPanel>
-                            </Expander>
-                            <Expander Header="停留、数量与主题" IsExpanded="True">
-                                <StackPanel Spacing="8">
+                            </Border>
+                            <TextBlock Text="停留、数量与主题" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <NumberBox x:Name="LifetimeBox" Grid.Column="0" Header="弹幕停留（秒，0=不消失）" Minimum="0" Maximum="3600" SpinButtonPlacementMode="Inline"/>
@@ -194,17 +200,19 @@
                                     <ComboBox x:Name="JpFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="JpFontPicker_SelectionChanged"/>
                                     <NumberBox x:Name="MinGiftPriceBox" Header="最低礼物价（元，0=不过滤）" Minimum="0" Maximum="100000" SpinButtonPlacementMode="Inline"/>
                                 </StackPanel>
-                            </Expander>
-                            <Expander Header="文字" IsExpanded="True">
-                                <StackPanel Spacing="8">
+                            </Border>
+                            <TextBlock Text="文字" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
                                     <TextBox x:Name="CardFontBox" Header="字体"/>
                                     <ComboBox x:Name="CardFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="CardFontPicker_SelectionChanged"/>
                                     <ToggleSwitch x:Name="AdaptiveSwitch" Header="文字颜色自适应" OnContent="开" OffContent="关"/>
                                     <TextBlock Text="默认关闭。打开后大约每 2 秒把悬浮窗藏起一瞬，采样它挡住的那一块屏幕。不上传。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
-                            </Expander>
-                            <Expander Header="字号、圆角与边框" IsExpanded="True">
-                                <StackPanel Spacing="8">
+                            </Border>
+                            <TextBlock Text="字号、圆角与边框" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
                                     <Grid ColumnSpacing="12" RowSpacing="8">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -223,9 +231,10 @@
                                     </Grid>
                                     <TextBlock Text="只反复把 tokilive 自己的窗口抬到普通置顶层，设置窗口仍然在悬浮窗上面。不注入游戏，也不保证盖住独占全屏。无边框窗口化更有机会。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
-                            </Expander>
-                            <Expander Header="弹幕动画" IsExpanded="True">
-                                <StackPanel Spacing="8">
+                            </Border>
+                            <TextBlock Text="弹幕动画" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
                                     <ToggleSwitch x:Name="AnimSwitch" Header="弹幕动画" OnContent="开" OffContent="关"/>
                                     <ComboBox x:Name="AnimBox" Header="动画预设" HorizontalAlignment="Stretch">
                                         <ComboBoxItem Content="默认" Tag="default"/>
@@ -237,9 +246,10 @@
                                     <Slider x:Name="AnimSpeedSlider" Header="动画速度" Minimum="0.5" Maximum="2" StepFrequency="0.1"/>
                                     <TextBlock Text="只给新弹幕播入场动画，旧弹幕不会因为刷新重播。关闭或选默认时，新弹幕直接出现，和现在一样。速度 0.5x 最慢、2x 最快。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
-                            </Expander>
-                            <Expander Header="显示的消息" IsExpanded="True">
-                                <StackPanel Spacing="8">
+                            </Border>
+                            <TextBlock Text="显示的消息" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
                                     <!-- 1.3.1 是 8 个开关竖着一行一个，占了大半页。
                                          改成两列，4 行放完，意思和开关状态都不变。 -->
                                     <Grid ColumnSpacing="12">
@@ -259,9 +269,10 @@
                                     </Grid>
                                     <TextBlock Text="进场、关注、点赞和分享进实时窗。弹幕、礼物、醒目留言和上舰进弹幕窗。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
-                            </Expander>
-                            <Expander Header="输入与语音" IsExpanded="True">
-                                <StackPanel Spacing="8">
+                            </Border>
+                            <TextBlock Text="输入与语音" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
                                     <TextBox x:Name="HotkeyBox" Header="打开输入窗的快捷键"/>
                                     <TextBlock Text="单独的 / 只在没有其他输入光标时才会被拿走，避免在游戏和文本框里永远吞掉斜杠。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                     <ToggleSwitch x:Name="TtsSwitch" Header="语音播报" OnContent="开" OffContent="关"/>
@@ -270,34 +281,24 @@
                                     <Slider x:Name="VolumeSlider" Header="音量" Minimum="0" Maximum="1" StepFrequency="0.05"/>
                                     <Button Content="试听" Click="PreviewSpeech_Click"/>
                                 </StackPanel>
-                            </Expander>
-                        </StackPanel>
-                        </ScrollViewer>
-                        <Grid x:Name="DanmakuPreviewHost" Grid.Column="1" Padding="8,16,16,8">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="实时预览" Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,0,0,8"/>
+                            </Border>
+                            <TextBlock Text="实时预览" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
                             <!-- 预览背景：1.2.0 settings.html 的 BGS 四项（棋盘格/白/深色/渐变），
                                  只改预览这一块的底，不改真正的悬浮窗。默认棋盘格。 -->
-                            <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled" Margin="0,0,0,8">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="预览背景：" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                    <Button Content="棋盘格" Tag="0" Click="PreviewBg_Click"/>
-                                    <Button Content="白色" Tag="1" Click="PreviewBg_Click"/>
-                                    <Button Content="深色" Tag="2" Click="PreviewBg_Click"/>
-                                    <Button Content="渐变" Tag="3" Click="PreviewBg_Click"/>
-                                </StackPanel>
-                            </ScrollViewer>
-                            <Border x:Name="Preview" Grid.Row="2" Padding="12" CornerRadius="12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                                <ScrollViewer HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="预览背景：" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <Button Content="棋盘格" Tag="0" Click="PreviewBg_Click"/>
+                                <Button Content="白色" Tag="1" Click="PreviewBg_Click"/>
+                                <Button Content="深色" Tag="2" Click="PreviewBg_Click"/>
+                                <Button Content="渐变" Tag="3" Click="PreviewBg_Click"/>
+                            </StackPanel>
+                            <Border x:Name="Preview" Padding="12" CornerRadius="12" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                <ScrollViewer MaxHeight="320" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
                                     <StackPanel x:Name="PreviewList" Spacing="8"/>
                                 </ScrollViewer>
                             </Border>
-                        </Grid>
-                    </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
                     <Border Grid.Row="1" Margin="16" Padding="6" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                         <ScrollViewer x:Name="TestBar" HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled" PointerWheelChanged="TestBar_Wheel">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -316,50 +317,78 @@
                 <ScrollViewer x:Name="PageLive" Visibility="Collapsed" Padding="{StaticResource PagePadding}" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
                     <StackPanel Spacing="12" HorizontalAlignment="Stretch" MinWidth="{Binding ViewportWidth, ElementName=PageLive}">
                         <TextBlock Text="实时窗" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <ToggleSwitch x:Name="LiveSwitch" Header="显示实时窗" OnContent="开" OffContent="关"/>
-                        <ToggleSwitch x:Name="LiveBorderSwitch" Header="实时窗边框（强调色）" OnContent="开" OffContent="关"/>
-                        <TextBlock Text="点赞、弹幕数、在线和看过人数。隐藏不断开连接。预览和悬浮窗用同一份数字。" TextWrapping="Wrap"/>
+                        <TextBlock Text="点赞、弹幕数、在线和看过人数。隐藏不断开连接。预览和悬浮窗用同一份数字。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="显示" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="显示实时窗" VerticalAlignment="Center"/>
+                                    <ToggleSwitch x:Name="LiveSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="实时窗边框（强调色）" VerticalAlignment="Center"/>
+                                    <ToggleSwitch x:Name="LiveBorderSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                         <Border Padding="12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                             <TextBlock x:Name="LivePreview" TextWrapping="Wrap"/>
                         </Border>
-                        <ToggleSwitch x:Name="MiniStatsSwitch" Header="显示数据栏" OnContent="开" OffContent="关"/>
-                        <ComboBox x:Name="MiniLayoutBox" Header="数据栏布局" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="横条" Tag="h"/>
-                            <ComboBoxItem Content="竖条" Tag="v"/>
-                            <ComboBoxItem Content="自动" Tag="auto"/>
-                        </ComboBox>
-                        <ToggleSwitch x:Name="MiniPillsSwitch" Header="实时窗里显示互动气泡" OnContent="开" OffContent="关"/>
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <NumberBox x:Name="MiniLifetimeBox" Grid.Column="0" Header="互动停留（秒，0=不消失）" Minimum="0" Maximum="3600" SpinButtonPlacementMode="Inline"/>
-                            <NumberBox x:Name="MiniMaxBox" Grid.Column="1" Header="互动最多条数" Minimum="1" Maximum="20" SpinButtonPlacementMode="Inline"/>
-                        </Grid>
-                        <TextBlock Text="进场、关注、点赞、分享去哪里：" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
-                        <Grid ColumnSpacing="12" RowSpacing="8">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <ComboBox x:Name="RouteEnterBox" Grid.Column="0" Header="进场" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="实时窗" Tag="mini"/>
-                                <ComboBoxItem Content="弹幕窗" Tag="main"/>
-                                <ComboBoxItem Content="关闭" Tag="off"/>
-                            </ComboBox>
-                            <ComboBox x:Name="RouteFollowBox" Grid.Column="1" Header="关注" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="实时窗" Tag="mini"/>
-                                <ComboBoxItem Content="弹幕窗" Tag="main"/>
-                                <ComboBoxItem Content="关闭" Tag="off"/>
-                            </ComboBox>
-                            <ComboBox x:Name="RouteShareBox" Grid.Column="0" Grid.Row="1" Header="分享" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="实时窗" Tag="mini"/>
-                                <ComboBoxItem Content="弹幕窗" Tag="main"/>
-                                <ComboBoxItem Content="关闭" Tag="off"/>
-                            </ComboBox>
-                            <ComboBox x:Name="RouteLikeBox" Grid.Column="1" Grid.Row="1" Header="点赞" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="实时窗" Tag="mini"/>
-                                <ComboBoxItem Content="弹幕窗" Tag="main"/>
-                                <ComboBoxItem Content="关闭" Tag="off"/>
-                            </ComboBox>
-                        </Grid>
-                        <TextBlock Text="实时窗迷你预览（数据栏横条）：" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="数据栏" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="显示数据栏" VerticalAlignment="Center"/>
+                                    <ToggleSwitch x:Name="MiniStatsSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                </Grid>
+                                <ComboBox x:Name="MiniLayoutBox" Header="数据栏布局" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="横条" Tag="h"/>
+                                    <ComboBoxItem Content="竖条" Tag="v"/>
+                                    <ComboBoxItem Content="自动" Tag="auto"/>
+                                </ComboBox>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="实时窗里显示互动气泡" VerticalAlignment="Center"/>
+                                    <ToggleSwitch x:Name="MiniPillsSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <NumberBox x:Name="MiniLifetimeBox" Grid.Column="0" Header="互动停留（秒，0=不消失）" Minimum="0" Maximum="3600" SpinButtonPlacementMode="Inline"/>
+                                    <NumberBox x:Name="MiniMaxBox" Grid.Column="1" Header="互动最多条数" Minimum="1" Maximum="20" SpinButtonPlacementMode="Inline"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="互动去向" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid ColumnSpacing="12" RowSpacing="12">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <ComboBox x:Name="RouteEnterBox" Grid.Column="0" Header="进场" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="实时窗" Tag="mini"/>
+                                    <ComboBoxItem Content="弹幕窗" Tag="main"/>
+                                    <ComboBoxItem Content="关闭" Tag="off"/>
+                                </ComboBox>
+                                <ComboBox x:Name="RouteFollowBox" Grid.Column="1" Header="关注" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="实时窗" Tag="mini"/>
+                                    <ComboBoxItem Content="弹幕窗" Tag="main"/>
+                                    <ComboBoxItem Content="关闭" Tag="off"/>
+                                </ComboBox>
+                                <ComboBox x:Name="RouteShareBox" Grid.Column="0" Grid.Row="1" Header="分享" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="实时窗" Tag="mini"/>
+                                    <ComboBoxItem Content="弹幕窗" Tag="main"/>
+                                    <ComboBoxItem Content="关闭" Tag="off"/>
+                                </ComboBox>
+                                <ComboBox x:Name="RouteLikeBox" Grid.Column="1" Grid.Row="1" Header="点赞" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="实时窗" Tag="mini"/>
+                                    <ComboBoxItem Content="弹幕窗" Tag="main"/>
+                                    <ComboBoxItem Content="关闭" Tag="off"/>
+                                </ComboBox>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="迷你预览" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
                         <Border Padding="12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                             <TextBlock x:Name="MiniPreviewText" TextWrapping="Wrap"/>
                         </Border>
@@ -370,65 +399,118 @@
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <ScrollViewer x:Name="PageLyricsScroll" Padding="24,16,24,12" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
-                        <StackPanel Spacing="8" HorizontalAlignment="Stretch" MinWidth="{Binding ViewportWidth, ElementName=PageLyricsScroll}">
+                    <ScrollViewer x:Name="PageLyricsScroll" Padding="{StaticResource PagePadding}" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
+                        <StackPanel Spacing="12" HorizontalAlignment="Stretch" MinWidth="{Binding ViewportWidth, ElementName=PageLyricsScroll}">
                             <TextBlock Text="歌词" Style="{ThemeResource TitleTextBlockStyle}"/>
                             <TextBlock Text="通过 Windows 系统媒体会话读取正在播放的曲目和时间轴，优先标出 QQ 音乐和网易云。不读播放器数据库，也不注入进程。没有时间轴就不会编造逐字时间。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <!-- 设计是预设不是锁定：选一个设计会把它的字体、颜色、字号、
-                                 粗细、阴影、描边、底色和对齐一次写进下面的控件，之后
-                                 再改单项也不会把设计改回去。 -->
-                            <ComboBox x:Name="LyricDesignBox" Header="歌词设计" HorizontalAlignment="Stretch" SelectionChanged="LyricDesignBox_SelectionChanged"/>
-                            <ToggleSwitch x:Name="DesktopLyricsSwitch" Header="桌面歌词" OnContent="开" OffContent="关"/>
-                            <ToggleSwitch x:Name="LyricDemoSwitch" Header="演示排版" OnContent="开" OffContent="关"/>
-                            <TextBox x:Name="LyricFontBox" Header="字体"/>
-                            <ComboBox x:Name="LyricFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="LyricFontPicker_SelectionChanged"/>
-                            <Slider x:Name="LyricSizeSlider" Header="字号" Minimum="16" Maximum="64"/>
-                            <ComboBox x:Name="LyricWeightBox" Header="粗细" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="细" Tag="light"/>
-                                <ComboBoxItem Content="常规" Tag="normal"/>
-                                <ComboBoxItem Content="粗" Tag="bold"/>
-                                <ComboBoxItem Content="特粗" Tag="black"/>
-                            </ComboBox>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox x:Name="LyricColorBox" Header="文字颜色"/>
-                                <Button Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Bottom" MinWidth="36" MinHeight="32" Padding="4" ToolTipService.ToolTip="选歌词文字颜色">
-                                    <Button.Flyout><Flyout><ColorPicker x:Name="LyricColorPicker" Tag="LyricColorBox" IsAlphaEnabled="False" IsHexInputVisible="True" ColorChanged="ColorPicker_ColorChanged"/></Flyout></Button.Flyout>
-                                    <Border x:Name="LyricColorSwatch" Width="20" Height="20" CornerRadius="4" Background="#FFFFFF"/>
-                                </Button>
-                            </Grid>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox x:Name="LyricHiBox" Header="当前行颜色"/>
-                                <Button Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Bottom" MinWidth="36" MinHeight="32" Padding="4" ToolTipService.ToolTip="选歌词当前行颜色">
-                                    <Button.Flyout><Flyout><ColorPicker x:Name="LyricHiPicker" Tag="LyricHiBox" IsAlphaEnabled="False" IsHexInputVisible="True" ColorChanged="ColorPicker_ColorChanged"/></Flyout></Button.Flyout>
-                                    <Border x:Name="LyricHiSwatch" Width="20" Height="20" CornerRadius="4" Background="#FFFFFF"/>
-                                </Button>
-                            </Grid>
-                            <ComboBox x:Name="LyricAlignBox" Header="对齐" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="left"/><ComboBoxItem Content="center"/><ComboBoxItem Content="right"/>
-                            </ComboBox>
-                            <ToggleSwitch x:Name="LyricShadowSwitch" Header="阴影" OnContent="开" OffContent="关"/>
-                            <ToggleSwitch x:Name="LyricOutlineSwitch" Header="描边" OnContent="开" OffContent="关"/>
-                            <Slider x:Name="LyricBgSlider" Header="底色不透明度" Minimum="0" Maximum="0.8" StepFrequency="0.05"/>
-                            <!-- 旧的行数滑杆（1-5）改成单行/双行：以前 TakeLast 是取全曲
-                                 最后几行，行数一多就显示歌的结尾；现在单行只显示当前行，
-                                 双行是当前行 + 翻译（没有翻译就显示下一行）。 -->
-                            <ComboBox x:Name="LyricModeBox" Header="行数" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="单行" Tag="single"/>
-                                <ComboBoxItem Content="双行" Tag="double"/>
-                            </ComboBox>
-                            <ComboBox x:Name="LyricDirectionBox" Header="排列" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="横排" Tag="horizontal"/>
-                                <ComboBoxItem Content="竖排" Tag="vertical"/>
-                            </ComboBox>
-                            <ToggleSwitch x:Name="LyricWordSwitch" Header="逐字歌词" OnContent="开" OffContent="关"/>
-                            <TextBlock Text="打开后，带逐字时间戳的当前行会按时间高亮。这一行没有逐字时间就整行显示，不会编造。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <ToggleSwitch x:Name="LyricClickSwitch" Header="桌面歌词穿透" OnContent="开" OffContent="关"/>
-                            <ToggleSwitch x:Name="LyricLockSwitch" Header="锁定位置" OnContent="开" OffContent="关"/>
-                            <Slider x:Name="LyricOffsetSlider" Header="时间偏移（秒）" Minimum="-10" Maximum="10" StepFrequency="0.1"/>
-                            <Button Content="导入 LRC / TTML" Click="ImportLyrics_Click"/>
-                            <Button Content="清除本地歌词" Click="ClearLyrics_Click"/>
+                            <TextBlock Text="播放" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
+                                    <!-- 设计是预设不是锁定：选一个设计会把它的字体、颜色、字号、
+                                         粗细、阴影、描边、底色和对齐一次写进下面的控件，之后
+                                         再改单项也不会把设计改回去。 -->
+                                    <ComboBox x:Name="LyricDesignBox" Header="歌词设计" HorizontalAlignment="Stretch" SelectionChanged="LyricDesignBox_SelectionChanged"/>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="桌面歌词" VerticalAlignment="Center"/>
+                                        <ToggleSwitch x:Name="DesktopLyricsSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    </Grid>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="演示排版" VerticalAlignment="Center"/>
+                                        <ToggleSwitch x:Name="LyricDemoSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="文字" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
+                                    <TextBox x:Name="LyricFontBox" Header="字体"/>
+                                    <ComboBox x:Name="LyricFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="LyricFontPicker_SelectionChanged"/>
+                                    <Slider x:Name="LyricSizeSlider" Header="字号" Minimum="16" Maximum="64"/>
+                                    <ComboBox x:Name="LyricWeightBox" Header="粗细" HorizontalAlignment="Stretch">
+                                        <ComboBoxItem Content="细" Tag="light"/>
+                                        <ComboBoxItem Content="常规" Tag="normal"/>
+                                        <ComboBoxItem Content="粗" Tag="bold"/>
+                                        <ComboBoxItem Content="特粗" Tag="black"/>
+                                    </ComboBox>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBox x:Name="LyricColorBox" Header="文字颜色"/>
+                                        <Button Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Bottom" MinWidth="36" MinHeight="32" Padding="4" ToolTipService.ToolTip="选歌词文字颜色">
+                                            <Button.Flyout><Flyout><ColorPicker x:Name="LyricColorPicker" Tag="LyricColorBox" IsAlphaEnabled="False" IsHexInputVisible="True" ColorChanged="ColorPicker_ColorChanged"/></Flyout></Button.Flyout>
+                                            <Border x:Name="LyricColorSwatch" Width="20" Height="20" CornerRadius="4" Background="#FFFFFF"/>
+                                        </Button>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBox x:Name="LyricHiBox" Header="当前行颜色"/>
+                                        <Button Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Bottom" MinWidth="36" MinHeight="32" Padding="4" ToolTipService.ToolTip="选歌词当前行颜色">
+                                            <Button.Flyout><Flyout><ColorPicker x:Name="LyricHiPicker" Tag="LyricHiBox" IsAlphaEnabled="False" IsHexInputVisible="True" ColorChanged="ColorPicker_ColorChanged"/></Flyout></Button.Flyout>
+                                            <Border x:Name="LyricHiSwatch" Width="20" Height="20" CornerRadius="4" Background="#FFFFFF"/>
+                                        </Button>
+                                    </Grid>
+                                    <ComboBox x:Name="LyricAlignBox" Header="对齐" HorizontalAlignment="Stretch">
+                                        <ComboBoxItem Content="left"/><ComboBoxItem Content="center"/><ComboBoxItem Content="right"/>
+                                    </ComboBox>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="阴影" VerticalAlignment="Center"/>
+                                        <ToggleSwitch x:Name="LyricShadowSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    </Grid>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="描边" VerticalAlignment="Center"/>
+                                        <ToggleSwitch x:Name="LyricOutlineSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    </Grid>
+                                    <Slider x:Name="LyricBgSlider" Header="底色不透明度" Minimum="0" Maximum="0.8" StepFrequency="0.05"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="行数与排列" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
+                                    <!-- 旧的行数滑杆（1-5）改成单行/双行：以前 TakeLast 是取全曲
+                                         最后几行，行数一多就显示歌的结尾；现在单行只显示当前行，
+                                         双行是当前行 + 翻译（没有翻译就显示下一行）。 -->
+                                    <ComboBox x:Name="LyricModeBox" Header="行数" HorizontalAlignment="Stretch">
+                                        <ComboBoxItem Content="单行" Tag="single"/>
+                                        <ComboBoxItem Content="双行" Tag="double"/>
+                                    </ComboBox>
+                                    <ComboBox x:Name="LyricDirectionBox" Header="排列" HorizontalAlignment="Stretch">
+                                        <ComboBoxItem Content="横排" Tag="horizontal"/>
+                                        <ComboBoxItem Content="竖排" Tag="vertical"/>
+                                    </ComboBox>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="逐字歌词" VerticalAlignment="Center"/>
+                                        <ToggleSwitch x:Name="LyricWordSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    </Grid>
+                                    <TextBlock Text="打开后，带逐字时间戳的当前行会按时间高亮。这一行没有逐字时间就整行显示，不会编造。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="窗口" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Spacing="12">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="桌面歌词穿透" VerticalAlignment="Center"/>
+                                        <ToggleSwitch x:Name="LyricClickSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    </Grid>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="锁定位置" VerticalAlignment="Center"/>
+                                        <ToggleSwitch x:Name="LyricLockSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    </Grid>
+                                    <Slider x:Name="LyricOffsetSlider" Header="时间偏移（秒）" Minimum="-10" Maximum="10" StepFrequency="0.1"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="本地歌词" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                            <Border Style="{StaticResource SettingsCardStyle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="导入 LRC / TTML" Click="ImportLyrics_Click"/>
+                                    <Button Content="清除本地歌词" Click="ClearLyrics_Click"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                     <Border Grid.Row="1" Margin="24,0,24,16" Padding="16" CornerRadius="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
@@ -487,73 +569,124 @@
                 <ScrollViewer x:Name="PageSource" Visibility="Collapsed" Padding="{StaticResource PagePadding}" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
                     <StackPanel Spacing="12" HorizontalAlignment="Stretch" MinWidth="{Binding ViewportWidth, ElementName=PageSource}">
                         <TextBlock Text="窗口源" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <ToggleSwitch x:Name="DanmakuWindowSwitch" Header="显示弹幕窗" OnContent="开" OffContent="关"/>
-                        <ToggleSwitch x:Name="TaskbarSwitch" Header="在任务栏隐藏" OnContent="开" OffContent="关"/>
-                        <Button Content="重置窗口位置" Click="ResetBounds_Click"/>
-                        <TextBlock Text="窗口仍在托盘里。托盘创建失败时会留下任务栏按钮，避免程序消失。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <ToggleSwitch x:Name="ObsSwitch" Header="启用本地浏览器源" OnContent="开" OffContent="关"/>
-                        <ToggleSwitch x:Name="ObsCaptureSwitch" Header="OBS 窗口捕获兼容" OnContent="开" OffContent="关"/>
-                        <TextBlock Text="开启后悬浮窗会出现在任务栏和 Alt-Tab 里，OBS 窗口捕获才能在列表里看到它；关闭时悬浮窗不出现在任务栏，程序只留在托盘。改完立即生效，不用重启。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <NumberBox x:Name="PortBox" Header="端口" Minimum="1024" Maximum="65535" SpinButtonPlacementMode="Inline"/>
-                        <TextBox x:Name="OverlayUrl" Header="弹幕地址" IsReadOnly="True"/>
-                        <TextBox x:Name="MiniUrl" Header="实时窗地址" IsReadOnly="True"/>
-                        <TextBlock Text="标题分别是「tokilive · 弹幕」和「tokilive · 实时窗」。透明窗口在传统窗口捕获里常常是捕不到的。浏览器源是保持透明的办法。这里没有用真实的 OBS 核对过画面。" TextWrapping="Wrap"/>
+                        <TextBlock Text="窗口" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="显示弹幕窗" VerticalAlignment="Center"/>
+                                    <ToggleSwitch x:Name="DanmakuWindowSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="在任务栏隐藏" VerticalAlignment="Center"/>
+                                    <ToggleSwitch x:Name="TaskbarSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                </Grid>
+                                <Button Content="重置窗口位置" Click="ResetBounds_Click"/>
+                                <TextBlock Text="窗口仍在托盘里。托盘创建失败时会留下任务栏按钮，避免程序消失。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="OBS 浏览器源" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="启用本地浏览器源" VerticalAlignment="Center"/>
+                                    <ToggleSwitch x:Name="ObsSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="OBS 窗口捕获兼容" VerticalAlignment="Center"/>
+                                    <ToggleSwitch x:Name="ObsCaptureSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                </Grid>
+                                <TextBlock Text="开启后悬浮窗会出现在任务栏和 Alt-Tab 里，OBS 窗口捕获才能在列表里看到它；关闭时悬浮窗不出现在任务栏，程序只留在托盘。改完立即生效，不用重启。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <NumberBox x:Name="PortBox" Header="端口" Minimum="1024" Maximum="65535" SpinButtonPlacementMode="Inline"/>
+                                <TextBox x:Name="OverlayUrl" Header="弹幕地址" IsReadOnly="True"/>
+                                <TextBox x:Name="MiniUrl" Header="实时窗地址" IsReadOnly="True"/>
+                                <TextBlock Text="标题分别是「tokilive · 弹幕」和「tokilive · 实时窗」。透明窗口在传统窗口捕获里常常是捕不到的。浏览器源是保持透明的办法。这里没有用真实的 OBS 核对过画面。" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
                 <ScrollViewer x:Name="PageSettings" Visibility="Collapsed" Padding="{StaticResource PagePadding}" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
                     <StackPanel Spacing="12" HorizontalAlignment="Stretch" MinWidth="{Binding ViewportWidth, ElementName=PageSettings}">
-                        <TextBlock Text="外观" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock Text="设置" Style="{ThemeResource TitleTextBlockStyle}"/>
+                        <TextBlock Text="外观" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
                         <TextBlock Text="只改变这个设置窗口。弹幕卡片颜色不跟着变。浅色和深色都使用系统画笔，避免浅色模式下字和底色糊在一起。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <ComboBox x:Name="ThemeBox" Header="主题" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="跟随系统"/><ComboBoxItem Content="浅色"/><ComboBoxItem Content="深色"/>
-                        </ComboBox>
-                        <ToggleSwitch x:Name="AccentSwitch" Header="使用 Windows 强调色" OnContent="开" OffContent="关"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBox x:Name="AccentBox" Header="自定义强调色（读不到系统色时使用）"/>
-                            <Button Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Bottom" MinWidth="36" MinHeight="32" Padding="4" ToolTipService.ToolTip="选自定义强调色">
-                                <Button.Flyout><Flyout><ColorPicker x:Name="AccentPicker" Tag="AccentBox" IsAlphaEnabled="False" IsHexInputVisible="True" ColorChanged="ColorPicker_ColorChanged"/></Flyout></Button.Flyout>
-                                <Border x:Name="AccentSwatch" Width="20" Height="20" CornerRadius="4" Background="#6750A4"/>
-                            </Button>
-                        </Grid>
-                        <ComboBox x:Name="AdaptiveManualBox" Header="自适应采样失败时的文字颜色" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="浅色" Tag="light"/>
-                            <ComboBoxItem Content="深色" Tag="dark"/>
-                        </ComboBox>
-                        <ComboBox x:Name="AppMaterialBox" Header="设置窗口材质" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="Mica" Tag="mica"/>
-                            <ComboBoxItem Content="Acrylic" Tag="acrylic"/>
-                            <ComboBoxItem Content="Mica Alt（标签页风格）" Tag="tabbed"/>
-                            <ComboBoxItem Content="无（纯色）" Tag="none"/>
-                        </ComboBox>
-                        <TextBlock x:Name="AppBackgroundText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="选择背景图片" Click="PickBackground_Click"/>
-                            <Button Content="清除背景" Click="ClearBackground_Click"/>
-                        </StackPanel>
-                        </ScrollViewer>
-                        <Slider x:Name="AppBgOpacitySlider" Header="背景图不透明度" Minimum="0" Maximum="1" StepFrequency="0.05"/>
-                        <ComboBox x:Name="SidebarModeBox" Header="左侧导航栏" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="自动" Tag="auto"/>
-                            <ComboBoxItem Content="展开" Tag="left"/>
-                            <ComboBoxItem Content="收起" Tag="leftcompact"/>
-                        </ComboBox>
-                        <TextBox x:Name="LockHotkeyBox" Header="锁定窗口快捷键（例如 Control+Shift+L，留空则不注册）"/>
-                        <TextBlock x:Name="MaterialText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <ToggleSwitch x:Name="SplashSwitch" Header="启动时显示启动画面" OnContent="开" OffContent="关"/>
-                        <TextBlock Text="关于" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <TextBlock x:Name="VersionText" Text="0.2.0-b1" Style="{ThemeResource TitleTextBlockStyle}"/>
-                        <TextBlock Text="原生 WinUI 3，未打包，Windows 10 1809 和 Windows 11。应用 ID com.ichiyotsu.tokilive。" TextWrapping="Wrap"/>
-                        <TextBlock x:Name="UpdateText" TextWrapping="Wrap"/>
-                        <Button Content="检查更新" Click="Update_Click"/>
-                        <ProgressBar x:Name="UpdateProgress" Visibility="Collapsed" Minimum="0" Maximum="100"/>
-                        <TextBlock x:Name="UpdateProgressText" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <Expander x:Name="UpdateNotesExpander" Header="新版说明" Visibility="Collapsed" HorizontalAlignment="Stretch">
-                            <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
-                                <TextBlock x:Name="UpdateNotesText" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
-                            </ScrollViewer>
-                        </Expander>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Spacing="12">
+                                <ComboBox x:Name="ThemeBox" Header="主题" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="跟随系统"/><ComboBoxItem Content="浅色"/><ComboBoxItem Content="深色"/>
+                                </ComboBox>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="使用 Windows 强调色" VerticalAlignment="Center"/>
+                                    <ToggleSwitch x:Name="AccentSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBox x:Name="AccentBox" Header="自定义强调色（读不到系统色时使用）"/>
+                                    <Button Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Bottom" MinWidth="36" MinHeight="32" Padding="4" ToolTipService.ToolTip="选自定义强调色">
+                                        <Button.Flyout><Flyout><ColorPicker x:Name="AccentPicker" Tag="AccentBox" IsAlphaEnabled="False" IsHexInputVisible="True" ColorChanged="ColorPicker_ColorChanged"/></Flyout></Button.Flyout>
+                                        <Border x:Name="AccentSwatch" Width="20" Height="20" CornerRadius="4" Background="#6750A4"/>
+                                    </Button>
+                                </Grid>
+                                <ComboBox x:Name="AdaptiveManualBox" Header="自适应采样失败时的文字颜色" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="浅色" Tag="light"/>
+                                    <ComboBoxItem Content="深色" Tag="dark"/>
+                                </ComboBox>
+                                <ComboBox x:Name="AppMaterialBox" Header="设置窗口材质" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="Mica" Tag="mica"/>
+                                    <ComboBoxItem Content="Acrylic" Tag="acrylic"/>
+                                    <ComboBoxItem Content="Mica Alt（标签页风格）" Tag="tabbed"/>
+                                    <ComboBoxItem Content="无（纯色）" Tag="none"/>
+                                </ComboBox>
+                                <TextBlock x:Name="MaterialText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock x:Name="AppBackgroundText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="选择背景图片" Click="PickBackground_Click"/>
+                                    <Button Content="清除背景" Click="ClearBackground_Click"/>
+                                </StackPanel>
+                                <Slider x:Name="AppBgOpacitySlider" Header="背景图不透明度" Minimum="0" Maximum="1" StepFrequency="0.05"/>
+                                <ComboBox x:Name="SidebarModeBox" Header="左侧导航栏" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="自动" Tag="auto"/>
+                                    <ComboBoxItem Content="展开" Tag="left"/>
+                                    <ComboBoxItem Content="收起" Tag="leftcompact"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="启动" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="启动时显示启动画面" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="SplashSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="快捷键" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <TextBox x:Name="LockHotkeyBox" Header="锁定窗口快捷键（例如 Control+Shift+L，留空则不注册）"/>
+                        </Border>
+                        <TextBlock Text="关于" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                        <Border Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="tokilive" Style="{ThemeResource BodyStrongTextBlockStyle}" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="VersionText" Text="0.2.0-b1" Grid.Column="1" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </Grid>
+                                <TextBlock Text="原生 WinUI 3，未打包，Windows 10 1809 和 Windows 11。应用 ID com.ichiyotsu.tokilive。" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="UpdateText" TextWrapping="Wrap"/>
+                                <Button Content="检查更新" Click="Update_Click"/>
+                                <ProgressBar x:Name="UpdateProgress" Visibility="Collapsed" Minimum="0" Maximum="100"/>
+                                <TextBlock x:Name="UpdateProgressText" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <Expander x:Name="UpdateNotesExpander" Header="新版说明" Visibility="Collapsed" HorizontalAlignment="Stretch">
+                                    <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                        <TextBlock x:Name="UpdateNotesText" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
+                                    </ScrollViewer>
+                                </Expander>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </local:FillSlot>
