@@ -178,7 +178,6 @@ public sealed partial class MainWindow : Window
         NativeWin.TrayToggleLiveLock += () => App.UI(() => ClickSwitch.IsOn = !ClickSwitch.IsOn);
         NativeWin.TrayToggleDanmakuVisible += () => App.UI(() => DanmakuWindowSwitch.IsOn = !DanmakuWindowSwitch.IsOn);
         NativeWin.TrayToggleLiveVisible += () => App.UI(() => LiveSwitch.IsOn = !LiveSwitch.IsOn);
-        NativeWin.TrayToggleTopmost += () => App.UI(() => GameTopSwitch.IsOn = !GameTopSwitch.IsOn);
         NativeWin.TrayReconnect += () => App.UI(() => { AppState.Current.Room = RoomBox.Text; LiveService.Connect(RoomBox.Text); });
         NativeWin.TrayExit += () => App.UI(() => { _exiting = true; Close(); });
         NativeWin.TrayStatusText = () => AppState.Current.Status;
@@ -187,7 +186,6 @@ public sealed partial class MainWindow : Window
         NativeWin.TrayLiveLocked = () => AppState.Current.ClickThrough;
         NativeWin.TrayDanmakuVisible = () => AppState.Current.ShowDanmaku;
         NativeWin.TrayLiveVisible = () => AppState.Current.ShowLive;
-        NativeWin.TrayTopmost = () => AppState.Current.ExperimentalTopmost;
         Hotkey.LockHotkeyPressed += () => App.UI(ToggleLockAll);
     }
 
@@ -271,7 +269,6 @@ public sealed partial class MainWindow : Window
         OpacitySlider.Value = s.CardOpacity;
         BorderSwitch.IsOn = s.ShowWindowBorder;
         ClickSwitch.IsOn = s.ClickThrough;
-        GameTopSwitch.IsOn = s.ExperimentalTopmost;
         MsgDanmaku.IsOn = s.ShowDanmakuMsg;
         MsgGift.IsOn = s.ShowGift;
         MsgSc.IsOn = s.ShowSuperchat;
@@ -287,7 +284,7 @@ public sealed partial class MainWindow : Window
         MaxMessagesBox.Value = s.MaxMessages;
         SelectCombo(FontWeightBox, s.DanmakuFontWeight);
         TextShadowSlider.Value = s.TextShadow;
-        CardBlurSlider.Value = s.CardBlur;
+        CardBlurSwitch.IsOn = s.CardBlur > 0;
         SelectCombo(CardThemeBox, s.CardThemeMode);
         SeedColorBox.Text = s.SeedColor;
         ShowMedalSwitch.IsOn = s.ShowMedal;
@@ -428,9 +425,9 @@ public sealed partial class MainWindow : Window
         void Save(object? _, object? __) { if (!_loading) Pull(); }
         foreach (var box in new TextBox[] { RoomBox, NameColorBox, CardColorBox, TextColorBox, CardFontBox, HotkeyBox, LyricFontBox, LyricColorBox, LyricHiBox, AccentBox, SeedColorBox, CjkFontBox, JpFontBox, LockHotkeyBox })
             box.TextChanged += (_, _) => Save(null, null);
-        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, GameTopSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, LyricWordSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
+        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, CardBlurSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, LyricWordSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
             sw.Toggled += (_, _) => Save(null, null);
-        foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider, AnimSpeedSlider, TextShadowSlider, CardBlurSlider, AppBgOpacitySlider })
+        foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider, AnimSpeedSlider, TextShadowSlider, AppBgOpacitySlider })
             slider.ValueChanged += (_, _) => Save(null, null);
         ThemeBox.SelectionChanged += (_, _) => Save(null, null);
         AnimBox.SelectionChanged += (_, _) => Save(null, null);
@@ -477,7 +474,6 @@ public sealed partial class MainWindow : Window
         s.CardOpacity = OpacitySlider.Value;
         s.ShowWindowBorder = BorderSwitch.IsOn;
         s.ClickThrough = ClickSwitch.IsOn;
-        s.ExperimentalTopmost = GameTopSwitch.IsOn;
         s.ShowDanmakuMsg = MsgDanmaku.IsOn;
         s.ShowGift = MsgGift.IsOn;
         s.ShowSuperchat = MsgSc.IsOn;
@@ -487,19 +483,19 @@ public sealed partial class MainWindow : Window
         s.ShowLike = MsgLike.IsOn;
         s.ShowShare = MsgShare.IsOn;
         s.DanmakuAnimEnabled = AnimSwitch.IsOn;
-        s.DanmakuAnim = ComboValue(AnimBox) ?? "default";
+        s.DanmakuAnim = ComboValue(AnimBox) ?? s.DanmakuAnim;
         s.DanmakuAnimSpeed = AnimSpeedSlider.Value;
         s.DanmakuLifetime = LifetimeBox.Value;
         s.MaxMessages = (int)MaxMessagesBox.Value;
-        s.DanmakuFontWeight = ComboValue(FontWeightBox) ?? "700";
+        s.DanmakuFontWeight = ComboValue(FontWeightBox) ?? s.DanmakuFontWeight;
         s.TextShadow = TextShadowSlider.Value;
-        s.CardBlur = CardBlurSlider.Value;
-        s.CardThemeMode = ComboValue(CardThemeBox) ?? "system";
+        s.CardBlur = CardBlurSwitch.IsOn ? 16 : 0;
+        s.CardThemeMode = ComboValue(CardThemeBox) ?? s.CardThemeMode;
         if (TryNormalizeHex(SeedColorBox.Text, out var seedHex)) { s.SeedColor = seedHex; if (SeedColorBox.Text != seedHex) SeedColorBox.Text = seedHex; }
         s.ShowMedal = ShowMedalSwitch.IsOn;
         s.CjkFont = CjkFontBox.Text;
         s.JpFont = JpFontBox.Text;
-        s.MedalStyle = ComboValue(MedalStyleBox) ?? "unified";
+        s.MedalStyle = ComboValue(MedalStyleBox) ?? s.MedalStyle;
         s.ScBiliColor = ScBiliColorSwitch.IsOn;
         s.MinGiftPrice = MinGiftPriceBox.Value;
         s.Hotkey = HotkeyBox.Text;
@@ -510,28 +506,28 @@ public sealed partial class MainWindow : Window
         s.ShowLive = LiveSwitch.IsOn;
         s.ShowLiveBorder = LiveBorderSwitch.IsOn;
         s.MiniStats = MiniStatsSwitch.IsOn;
-        s.MiniLayout = ComboValue(MiniLayoutBox) ?? "h";
+        s.MiniLayout = ComboValue(MiniLayoutBox) ?? s.MiniLayout;
         s.MiniPills = MiniPillsSwitch.IsOn;
         s.MiniLifetime = MiniLifetimeBox.Value;
         s.MiniMax = (int)MiniMaxBox.Value;
-        s.RouteEnter = ComboValue(RouteEnterBox) ?? "mini";
-        s.RouteFollow = ComboValue(RouteFollowBox) ?? "mini";
-        s.RouteShare = ComboValue(RouteShareBox) ?? "mini";
-        s.RouteLike = ComboValue(RouteLikeBox) ?? "mini";
+        s.RouteEnter = ComboValue(RouteEnterBox) ?? s.RouteEnter;
+        s.RouteFollow = ComboValue(RouteFollowBox) ?? s.RouteFollow;
+        s.RouteShare = ComboValue(RouteShareBox) ?? s.RouteShare;
+        s.RouteLike = ComboValue(RouteLikeBox) ?? s.RouteLike;
         s.ShowDesktopLyrics = DesktopLyricsSwitch.IsOn;
         s.LyricDemo = LyricDemoSwitch.IsOn;
         s.LyricFont = LyricFontBox.Text;
         s.LyricSize = LyricSizeSlider.Value;
-        s.LyricWeight = ComboValue(LyricWeightBox) ?? "normal";
+        s.LyricWeight = ComboValue(LyricWeightBox) ?? s.LyricWeight;
         if (TryNormalizeHex(LyricColorBox.Text, out var lyricHex)) { s.LyricColor = lyricHex; if (LyricColorBox.Text != lyricHex) LyricColorBox.Text = lyricHex; }
         if (TryNormalizeHex(LyricHiBox.Text, out var lyricHiHex)) { s.LyricHighlight = lyricHiHex; if (LyricHiBox.Text != lyricHiHex) LyricHiBox.Text = lyricHiHex; }
         s.LyricAlign = (LyricAlignBox.SelectedItem as ComboBoxItem)?.Content as string ?? "center";
         s.LyricShadow = LyricShadowSwitch.IsOn;
         s.LyricOutline = LyricOutlineSwitch.IsOn;
         s.LyricBg = LyricBgSlider.Value;
-        s.LyricMode = ComboValue(LyricModeBox) ?? "single";
-        s.LyricDirection = ComboValue(LyricDirectionBox) ?? "horizontal";
-        s.LyricDesign = ComboValue(LyricDesignBox) ?? "default";
+        s.LyricMode = ComboValue(LyricModeBox) ?? s.LyricMode;
+        s.LyricDirection = ComboValue(LyricDirectionBox) ?? s.LyricDirection;
+        s.LyricDesign = ComboValue(LyricDesignBox) ?? s.LyricDesign;
         s.LyricClickThrough = LyricClickSwitch.IsOn;
         s.LyricWordByWord = LyricWordSwitch.IsOn;
         s.LyricLocked = LyricLockSwitch.IsOn;
@@ -544,10 +540,10 @@ public sealed partial class MainWindow : Window
         s.ThemeMode = ThemeBox.SelectedIndex < 0 ? 0 : ThemeBox.SelectedIndex;
         s.UseSystemAccent = AccentSwitch.IsOn;
         if (TryNormalizeHex(AccentBox.Text, out var accentHex)) { s.AccentHex = accentHex; if (AccentBox.Text != accentHex) AccentBox.Text = accentHex; }
-        s.AdaptiveManual = ComboValue(AdaptiveManualBox) ?? "light";
-        s.AppMaterial = ComboValue(AppMaterialBox) ?? "mica";
+        s.AdaptiveManual = ComboValue(AdaptiveManualBox) ?? s.AdaptiveManual;
+        s.AppMaterial = ComboValue(AppMaterialBox) ?? s.AppMaterial;
         s.AppBgOpacity = AppBgOpacitySlider.Value;
-        s.SidebarMode = ComboValue(SidebarModeBox) ?? "auto";
+        s.SidebarMode = ComboValue(SidebarModeBox) ?? s.SidebarMode;
         if (wasTts && !s.TtsEnabled) SpeechService.Stop();
         s.Save();
         ApplyTheme();

@@ -100,7 +100,6 @@ public sealed class AppState : INotifyPropertyChanged
     public string LockHotkey { get => lockHotkey; set => Set(ref lockHotkey, value); }
     public double TtsVolume { get => ttsVolume; set => Set(ref ttsVolume, value); }
     public string CardFont { get => cardFont; set => Set(ref cardFont, value); }
-    public bool ExperimentalTopmost { get => experimentalTopmost; set => Set(ref experimentalTopmost, value); }
     public int DanmakuX { get => danmakuX; set => Set(ref danmakuX, value); }
     public int DanmakuY { get => danmakuY; set => Set(ref danmakuY, value); }
     public int DanmakuW { get => danmakuW; set => Set(ref danmakuW, value); }
@@ -212,7 +211,6 @@ public sealed class AppState : INotifyPropertyChanged
     string lockHotkey = "Control+Shift+L";
     double ttsVolume = 1;
     string cardFont = "Segoe UI Variable";
-    bool experimentalTopmost;
     int danmakuX, danmakuY, danmakuW, danmakuH;
     int liveX, liveY, liveW, liveH;
     int lyricX, lyricY, lyricW, lyricH;
@@ -354,7 +352,6 @@ public sealed class AppState : INotifyPropertyChanged
             s.ShowWindowBorder = Bool("showWindowBorder", s.ShowWindowBorder);
             s.ShowLiveBorder = Bool("showLiveBorder", s.ShowLiveBorder);
             s.AdaptiveText = Bool("adaptiveText", s.AdaptiveText);
-            s.ExperimentalTopmost = Bool("experimentalGameTopmost", s.ExperimentalTopmost);
             s.HideFromTaskbar = Bool("hideFromTaskbar", s.HideFromTaskbar);
             // 1.2.0 没有这个设置，行为无条件是开；现在默认关，用户要
             // OBS 窗口捕获兼容再自己开。
