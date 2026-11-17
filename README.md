@@ -2,13 +2,13 @@
 
 Tokilive 是一款哔哩哔哩直播弹幕工具，Windows、Android 和 iOS / iPadOS 各有一份客户端。Windows 上是可以锁定和改大小的弹幕悬浮窗，旁边有实时数据小窗；登录后可以把弹幕发回当前直播间，也可以把本机页面交给 OBS 或直播姬的浏览器源。手机端用来连接直播间，并查看弹幕、点赞和在线人数。三个平台的应用内更新都只对照 GitHub Releases，默认只提示正式版。
 
-B站直播弹幕工具。当前版本：Windows **0.1.2**，Android / iOS **0.1.1**。Windows、Android、iOS / iPadOS 的应用 ID 都是 `com.ichiyotsu.tokilive`。
+B站直播弹幕工具。当前版本：Windows **0.1.2**，Android / iOS **0.1.2**。Windows、Android、iOS / iPadOS 的应用 ID 都是 `com.ichiyotsu.tokilive`。
 
 | 平台 | 版本 |
 | --- | --- |
 | Windows | `windows/winui/Tokilive/Tokilive.csproj` 的 `Version` 0.1.2。安装包名为 `tokilive-0.1.2-setup.exe`，便携包是 `tokilive-0.1.2-portable.zip`。 |
-| Android | `versionName` 0.1.1，`versionCode` 2。 |
-| iOS / iPadOS | `CFBundleShortVersionString` 0.1.1，`CFBundleVersion` 2。 |
+| Android | `versionName` 0.1.2，`versionCode` 2。 |
+| iOS / iPadOS | `CFBundleShortVersionString` 0.1.2，`CFBundleVersion` 2。 |
 
 已发布的版本见 [Releases](https://github.com/ichiyotsu/Tokilive/releases)：v0.1.0（Android / iOS 0.1.0、Windows 0.1.0）和 v0.1.1（Windows 0.1.1）。旧的 v1.x Release 已删除。仓库现在是公开的，更新检查不再要令牌。
 
@@ -22,7 +22,7 @@ B站直播弹幕工具。当前版本：Windows **0.1.2**，Android / iOS **0.1.
 
 推送 `v*` tag 时，`.github/workflows/release.yml` 看 tag 里有没有 `-b`。带 `-b` 的发成 GitHub prerelease，并且不标成 latest。不带 `-b` 的发成正式 release，并标成 latest。这个工作流只设置发行类型，不在这里重新打包。
 
-应用内更新默认只提供正式版。正在使用正式版的人不会收到 `X.Y.Z-bN`。上面的开发版本是 Windows 0.1.2、Android / iOS 0.1.1。Android `versionCode` 从 0.1.0 的 1 开始，按每次发布加 1。
+应用内更新默认只提供正式版。正在使用正式版的人不会收到 `X.Y.Z-bN`。上面的开发版本是 Windows 0.1.2、Android / iOS 0.1.2。Android `versionCode` 从 0.1.0 的 1 开始，按每次发布加 1。
 
 ## 安装已发布的版本
 
