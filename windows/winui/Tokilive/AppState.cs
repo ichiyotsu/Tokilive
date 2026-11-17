@@ -145,7 +145,7 @@ public sealed class AppState : INotifyPropertyChanged
     int themeMode;
     bool useSystemAccent = true;
     string accentHex = "#6750A4";
-    // 1.3.0 默认穿透。1.3.1 以后字段改成默认 false，悬浮窗会挡住设置窗口的点击。
+    // 默认穿透：悬浮窗不挡点击；关掉后才能点选、拖动悬浮窗。
     bool clickThrough = true;
     bool showDanmaku = true;
     bool showLive = true;
@@ -224,7 +224,7 @@ public sealed class AppState : INotifyPropertyChanged
     string lyricAlign = "center";
     bool lyricShadow = true;
     bool lyricOutline;
-    double lyricBg = 0.35;
+    double lyricBg = 0;
     // 旧的行数滑杆（1-5）已被单行/双行取代：字段留着做迁移兼容，
     // 渲染不再读它。
     int lyricLines = 1;

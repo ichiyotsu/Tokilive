@@ -21,6 +21,8 @@ public sealed partial class OverlayWindow : Window
 {
     public enum Kind { Danmaku, Live, Lyrics }
     readonly Kind _kind;
+    Windows.Graphics.PointInt32? _drag;
+    Windows.Foundation.Point _start;
     public static bool DarkText = true;
     // 已经播过入场动画的弹幕行。ChatLine 没有重写 Equals/GetHashCode，
     // HashSet 默认就是引用相等，正好按“同一条消息对象”去重。
@@ -44,10 +46,23 @@ public sealed partial class OverlayWindow : Window
         Closed += (_, _) => { };
         // 1.3.1 的悬浮窗没有标题栏、没有任何拖动处理，穿透一关也挪不动位置。
         // 1.2.0 解锁时整个窗口都是拖拽区。这里在不穿透时点住窗口就拖动。
-        Root.PointerPressed += (_, _) =>
+        // 不用 WM_NCLBUTTONDOWN 的模态移动循环：它会被 KeepOrder 的
+        // SetWindowPos 和消息重绘打断，长按拖不动。改用和输入窗一样的手
+        // 动拖动：按下记偏移，移动调 AppWindow.Move，松开结束。
+        Root.PointerPressed += (_, e) =>
         {
-            if (!ClickThrough) NativeWin.DragWindow(NativeWin.Hwnd(this));
+            if (ClickThrough) return;
+            _drag = AppWindow.Position;
+            _start = e.GetCurrentPoint(Root).Position;
+            Root.CapturePointer(e.Pointer);
         };
+        Root.PointerMoved += (_, e) =>
+        {
+            if (_drag == null || ClickThrough) return;
+            var p = e.GetCurrentPoint(Root).Position;
+            AppWindow.Move(new Windows.Graphics.PointInt32(_drag.Value.X + (int)(p.X - _start.X), _drag.Value.Y + (int)(p.Y - _start.Y)));
+        };
+        Root.PointerReleased += (_, _) => _drag = null;
         Render();
     }
 
@@ -771,7 +786,7 @@ public sealed partial class OverlayWindow : Window
             // 注：BackgroundSource 是 UWP 版 AcrylicBrush 才有的属性，
             // WinUI 3 版没有，这里用它默认的采样来源。
             // 透明悬浮窗上 Acrylic 到底出不出来，必须在 Windows 上验证。
-            background = new AcrylicBrush { TintColor = baseColor, TintOpacity = Math.Clamp(state.CardOpacity, 0, 1), FallbackColor = baseColor };
+            background = new AcrylicBrush { TintColor = baseColor, TintOpacity = Math.Clamp(state.CardOpacity, 0, 1), FallbackColor = Color.FromArgb((byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255), baseColor.R, baseColor.G, baseColor.B) };
         else
             background = new SolidColorBrush(Color.FromArgb((byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255), baseColor.R, baseColor.G, baseColor.B));
         var card = new Border
@@ -918,11 +933,12 @@ public sealed partial class OverlayWindow : Window
         Add(vertical ? "在线" : "当前在线", FormatCount(LiveService.Online));
         if (vertical && !string.IsNullOrWhiteSpace(LiveService.Watched)) Add("看过", LiveService.Watched);
         var radius = !vertical && state.Corner <= 0 ? barH / 2 : state.Corner <= 0 ? Math.Min(28, winW * 0.22) : state.Corner;
+        var transparent = string.Equals(state.CardThemeMode, "transparent", StringComparison.OrdinalIgnoreCase);
         return new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(235, bg.R, bg.G, bg.B)),
+            Background = transparent ? null : new SolidColorBrush(Color.FromArgb((byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255), bg.R, bg.G, bg.B)),
             BorderBrush = new SolidColorBrush(dark ? Color.FromArgb(90, 255, 255, 255) : Color.FromArgb(50, 0, 0, 0)),
-            BorderThickness = new Thickness(1),
+            BorderThickness = transparent ? new Thickness(0) : new Thickness(1),
             CornerRadius = new CornerRadius(radius),
             Padding = new Thickness(vertical ? 16 : 18, vertical ? 10 : 0, vertical ? 16 : 18, vertical ? 10 : 0),
             MinHeight = compact || vertical ? 0 : barH,
@@ -938,8 +954,6 @@ public sealed partial class OverlayWindow : Window
     static Border EmptyState(AppState state, string title = "等待弹幕", string subtitle = "连接后会显示在这里")
     {
         var dark = IsCardDark(state);
-        var transparent = string.Equals(state.CardThemeMode, "transparent", StringComparison.OrdinalIgnoreCase);
-        var bg = dark ? Parse("#2B2B2B") : Parse(state.CardColor);
         var ink = !state.AdaptiveText ? Parse(state.TextColor) : dark ? Parse("#FFFFFF") : Parse("#1A1A1A");
         var font = FontHelper.FamilyForCards(state.CardFont, state.CjkFont, state.JpFont);
         var weight = WeightOf(state.DanmakuFontWeight);
@@ -962,9 +976,9 @@ public sealed partial class OverlayWindow : Window
         });
         return new Border
         {
-            Background = transparent ? null : new SolidColorBrush(Color.FromArgb((byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255), bg.R, bg.G, bg.B)),
+            Background = null,
             BorderBrush = new SolidColorBrush(Color.FromArgb(140, ink.R, ink.G, ink.B)),
-            BorderThickness = transparent ? new Thickness(1) : new Thickness(0),
+            BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(state.Corner <= 0 ? 16 : state.Corner),
             Padding = new Thickness(14, 10, 14, 10),
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -1049,7 +1063,7 @@ public sealed partial class OverlayWindow : Window
         }
         stack.Children.Add(Make(false));
         var bg = Color.FromArgb((byte)(Math.Clamp(state.LyricBg, 0, 1) * 255), 0, 0, 0);
-        return new Border { Background = new SolidColorBrush(bg), Padding = new Thickness(12, 4, 12, 4), Child = stack, HorizontalAlignment = HorizontalAlignment.Stretch };
+        return new Border { Background = new SolidColorBrush(bg), CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 4, 12, 4), Child = stack, HorizontalAlignment = HorizontalAlignment.Center };
     }
 
     static Border Lyric(string text, bool current, AppState state)
@@ -1096,7 +1110,7 @@ public sealed partial class OverlayWindow : Window
             stack.Children.Add(Make(Color.FromArgb(180, 0, 0, 0), new Thickness(2, 2, 0, 0)));
         stack.Children.Add(Make(fill.Color, new Thickness(0)));
         var bg = Color.FromArgb((byte)(Math.Clamp(state.LyricBg, 0, 1) * 255), 0, 0, 0);
-        return new Border { Background = new SolidColorBrush(bg), Padding = new Thickness(12, 4, 12, 4), Child = stack, HorizontalAlignment = HorizontalAlignment.Stretch };
+        return new Border { Background = new SolidColorBrush(bg), CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 4, 12, 4), Child = stack, HorizontalAlignment = HorizontalAlignment.Center };
     }
 
     public static Color Parse(string hex)

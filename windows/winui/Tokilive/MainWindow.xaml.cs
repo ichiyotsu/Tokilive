@@ -687,17 +687,17 @@ public sealed partial class MainWindow : Window
     void ApplyVisibility()
     {
         var s = AppState.Current;
-        if (s.ShowDanmaku) _danmaku.AppWindow.Show(); else _danmaku.AppWindow.Hide();
-        if (s.ShowLive) _live.AppWindow.Show(); else _live.AppWindow.Hide();
-        if (s.ShowDesktopLyrics) _lyrics.AppWindow.Show(); else _lyrics.AppWindow.Hide();
-        // 输入窗平时是藏起来的，先重算它的扩展样式再藏：ApplyOverlay
-        // 末尾的 SWP_SHOWWINDOW 不能在 Hide 之后跑，否则可能把它重新
-        // 弹出来。弹幕/实时/歌词窗沿用已有的 Hide 后 ApplyChrome 顺序。
-        _input.ApplyChrome();
-        _input.AppWindow.Hide();
+        // 先重算全部窗口的扩展样式再决定显隐：ApplyOverlay 末尾的
+        // SWP_SHOWWINDOW 会把刚藏起来的窗口重新弹出来，所以 Show/Hide
+        // 必须在 ApplyChrome 之后跑，否则悬浮窗永远藏不住。
         _danmaku.ApplyChrome();
         _live.ApplyChrome();
         _lyrics.ApplyChrome();
+        _input.ApplyChrome();
+        if (s.ShowDanmaku) _danmaku.AppWindow.Show(); else _danmaku.AppWindow.Hide();
+        if (s.ShowLive) _live.AppWindow.Show(); else _live.AppWindow.Hide();
+        if (s.ShowDesktopLyrics) _lyrics.AppWindow.Show(); else _lyrics.AppWindow.Hide();
+        _input.AppWindow.Hide();
     }
 
     void ApplyTaskbar()
