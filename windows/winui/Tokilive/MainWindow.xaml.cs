@@ -351,6 +351,7 @@ public sealed partial class MainWindow : Window
         _lastMaterial = s.AppMaterial;
         AppBgOpacitySlider.Value = s.AppBgOpacity;
         SelectCombo(SidebarModeBox, s.SidebarMode);
+        SplashSwitch.IsOn = s.ShowSplash;
         UpdateText.Text = s.UpdateMessage;
         VersionText.Text = AppState.Version;
         UpdateProgress.Visibility = Visibility.Collapsed;
@@ -457,6 +458,7 @@ public sealed partial class MainWindow : Window
         MiniLifetimeBox.ValueChanged += (_, _) => Save(null, null);
         MiniMaxBox.ValueChanged += (_, _) => Save(null, null);
         TtsSwitch.Toggled += (_, _) => { if (!TtsSwitch.IsOn) SpeechService.Stop(); };
+        SplashSwitch.Toggled += (_, _) => Save(null, null);
     }
 
     void Pull()
@@ -465,6 +467,7 @@ public sealed partial class MainWindow : Window
         var wasTts = s.TtsEnabled;
         s.Room = RoomBox.Text;
         s.ShowAvatar = AvatarSwitch.IsOn;
+        s.ShowSplash = SplashSwitch.IsOn;
         // 颜色只接受合法的 #RRGGBB（或不带 # 的 6 位 hex，自动补 # 并大写）；
         // 非法文本保留原来的 AppState 值，不存错颜色。
         if (TryNormalizeHex(NameColorBox.Text, out var nameHex)) { s.NameColor = nameHex; if (NameColorBox.Text != nameHex) NameColorBox.Text = nameHex; }

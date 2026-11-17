@@ -34,20 +34,23 @@ public partial class App : Application
         SplashWindow? splash = null;
         try
         {
-            // 1.2.0 启动时先出启动画面（585x360，约 2 秒），主窗口建好后
-            // 再淡出。启动画面出问题就直接进主窗口，和 1.2.0 在 createSplash
-            // 外包 try/catch 的做法一样，不因此崩掉。
+            // 启动时先出启动画面（585x360，约 3 秒），主窗口建好后
+            // 再淡出。启动画面出问题就直接进主窗口，不因此崩掉。
+            // 设置里可以关掉启动画面。
             try
             {
-                splash = new SplashWindow();
-                splash.Activate();
+                if (AppState.Current.ShowSplash)
+                {
+                    splash = new SplashWindow();
+                    splash.Activate();
+                }
             }
             catch { splash = null; }
             var shownAt = DateTimeOffset.Now;
             Shell = new MainWindow();
             if (splash != null)
             {
-                var wait = TimeSpan.FromSeconds(2) - (DateTimeOffset.Now - shownAt);
+                var wait = TimeSpan.FromSeconds(3) - (DateTimeOffset.Now - shownAt);
                 if (wait > TimeSpan.Zero) await Task.Delay(wait);
                 try { await splash.PlayExitAsync(); } catch { }
                 try { splash.Close(); } catch { }
