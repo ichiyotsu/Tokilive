@@ -10,7 +10,7 @@ B站直播弹幕工具。当前版本：Windows **0.1.2**，Android / iOS **0.1.
 | Android | `versionName` 0.1.2，`versionCode` 2。 |
 | iOS / iPadOS | `CFBundleShortVersionString` 0.1.2，`CFBundleVersion` 2。 |
 
-已发布的版本见 [Releases](https://github.com/ichiyotsu/Tokilive/releases)：v0.1.0（Android / iOS 0.1.0、Windows 0.1.0）和 v0.1.1（Windows 0.1.1）。旧的 v1.x Release 已删除。仓库现在是公开的，更新检查不再要令牌。
+已发布的版本见 [Releases](https://github.com/ichiyotsu/Tokilive/releases)：v0.1.0（Android / iOS 0.1.0、Windows 0.1.0）、v0.1.1（Windows 0.1.1）和 v0.1.2（三端 0.1.2，新图标）。旧的 v1.x Release 已删除。仓库现在是公开的，更新检查不再要令牌。
 
 签名钥匙不在这个仓库里。Android 正式包要在父机上用原来的钥匙签名。
 
