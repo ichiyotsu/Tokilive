@@ -1,177 +1,205 @@
 package com.ichiyotsu.tokilive
 
-import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 
 /**
- * 底部导航按 Material 3 Expressive 的选中展开来做：未选中只有图标，选中项用弹簧展开出文字，
- * 操作按钮脱离胶囊，圆角 18dp。手势条和导航条谁更高就避让谁。
- * 视觉关系参考用户自己的 TokiNote 浮动底栏。TokiNote 源码是 GPL-3.0，这里是重新写的，没有复制它的源码。
+ * 悬浮导航栏：与 TokiStudio 0.1.10 同一套（单层毛玻璃胶囊 + 条目 56dp +
+ * 选中实色 pill 标签弹簧展开）：
+ *
+ * - 颜色：全部取当前 MD3E ColorScheme 的 roles —— 选中 pill = primary /
+ *   onPrimary，未选中图标 = onSurfaceVariant，涟漪 = primary 28%；
+ * - 弹簧：不写死数值，全部映射到 MaterialTheme.motionScheme 的槽位；
+ * - 形状：胶囊 = MD3E 的 full 角（50% 圆角）；条目 pill = CircleShape；
+ * - 玻璃：只挂一层调用方给的 [glass]（内容源采样的 chrome —— 胶囊宽度
+ *   随标签动，平台窗口背景采样在尺寸动画里边缘会发黑）。磨砂打开时
+ *   胶囊不加粗描边；[solidStroke] 为真（玻璃关闭或采样不可用）时，外沿
+ *   加一道与滚动标题色块同粗的强调色描边（莫奈悬浮底栏）；
+ * - 高度：条目 56dp + 胶囊内边距。磨砂时上下各 8dp，总高 72dp。
  */
+internal val BottomBarCapsuleHeight = 72.dp
 
-/** 底栏胶囊本身的高度；LiveScreen 的底部留白按它 + 系统手势/导航条高度来算。 */
-internal val BottomBarCapsuleHeight = 64.dp
-
-/**
- * 底栏玻璃配方，按 TokiNote 浮动底栏的参数重新实现：
- * 30dp 大模糊半径、两层很淡的 tint（黑 3%/16% + 白 10%/8%）、0.02 噪点；
- * 不支持模糊的设备用黑色 30%/55% 兜底。
- * 关键是不设 backgroundColor、不再叠实色背景：以前 HazeMaterials.thin() 自带
- * 半透明底色，外面又盖了一层 0.72 alpha 的 surface，叠加后约 86% 不透明，
- * 模糊被埋在下面看不见。
- * 深浅按当前 surface 的亮度判断，不直接读系统深色模式——设置里可以强制浅色/深色。
- */
-@Composable
-private fun bottomBarGlass(): HazeStyle {
-    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val smoke = if (dark) Color.Black.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.03f)
-    val frost = Color.White.copy(alpha = if (dark) 0.08f else 0.10f)
-    val fallback = Color.Black.copy(alpha = if (dark) 0.55f else 0.30f)
-    return HazeStyle(
-        backgroundColor = Color.Unspecified,
-        tints = listOf(HazeTint(smoke), HazeTint(frost)),
-        blurRadius = 30.dp,
-        noiseFactor = 0.02f,
-        fallbackTint = HazeTint(fallback),
-    )
-}
-@OptIn(ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ExpressiveBottomBar(
     selected: Int,
     onSelect: (Int) -> Unit,
-    actionDescription: String,
-    onAction: () -> Unit,
-    actionIcon: String,
-    haze: HazeState,
+    glass: Modifier,
     modifier: Modifier = Modifier,
+    solidStroke: Boolean = false,
 ) {
     val entries = listOf("forum" to "弹幕", "monitoring" to "数据", "settings" to "设置")
-    val density = LocalDensity.current
-    val insetPx = maxOf(WindowInsets.navigationBars.getBottom(density), WindowInsets.systemGestures.getBottom(density))
-    val inset = with(density) { insetPx.toDp() } + 12.dp
-    val reduce = rememberAnimatorScale() == 0f
-    Row(
-        modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = inset).semantics { contentDescription = "主导航" },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+    val shape = RoundedCornerShape(percent = 50)
+    val inset = if (solidStroke) TokiChromeStroke.width + TokiChromeStroke.barGap else 8.dp
+    // 尺寸动画与裁剪分离：胶囊的玻璃跟动画尺寸走（裁成胶囊形），
+    // 条目行是撑起胶囊的唯一普通子项——matchParentSize 的子项不参与
+    // Box 尺寸测量，两个子项都挂它会把胶囊压成 0（TokiStudio 0.1.7
+    // 底栏消失的原因）。标签展开用快弹簧，收起用默认弹簧，切换时新旧
+    // 两个标签同时在场，内容瞬时宽度会超过胶囊的动画宽度。裁剪护栏挂
+    // 在条目行上：以行宽为界，超调只允许伸进与侧钮之间的 8dp 缝隙，
+    // 再往外切掉——否则内容滑到侧钮的玻璃底下，右边看起来缺一块。
+    // 护栏不挂在外层 Box 上：玻璃盒子不能被动画中的裁剪矩形切到，
+    // 否则胶囊边缘在动画里会发黑。
+    Box(
+        modifier = modifier
+            .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+            .semantics { contentDescription = "主导航" },
+        contentAlignment = Alignment.Center,
     ) {
-        Row(
+        Box(
             Modifier
-                .animateContentSize(if (reduce) snap() else spring(dampingRatio = 0.72f, stiffness = 380f))
-                .height(BottomBarCapsuleHeight)
-                .clip(RoundedCornerShape(28.dp))
-                .hazeEffect(haze, bottomBarGlass())
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .matchParentSize()
+                .clip(shape)
+                .then(glass)
+                .then(
+                    if (solidStroke) {
+                        Modifier.border(TokiChromeStroke.width, MaterialTheme.colorScheme.primary, shape)
+                    } else {
+                        Modifier
+                    },
+                ),
+        )
+        Row(
+            modifier = Modifier
+                .padding(horizontal = inset, vertical = inset)
+                .drawWithContent {
+                    val slack = 8.dp.toPx()
+                    clipRect(left = -slack, top = 0f, right = size.width + slack, bottom = size.height) {
+                        this@drawWithContent.drawContent()
+                    }
+                },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             entries.forEachIndexed { index, (icon, label) ->
-                ExpressiveNavItem(icon, label, index == selected, reduce) { onSelect(index) }
+                ExpressiveNavItem(icon, label, index == selected) { onSelect(index) }
             }
         }
-        ExpressiveAction(actionIcon, actionDescription, onAction)
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun rememberAnimatorScale(): Float {
-    val view = LocalView.current
-    return remember(view) {
-        runCatching {
-            Settings.Global.getFloat(view.context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
-        }.getOrDefault(1f)
-    }
-}
-
-@Composable
-private fun Modifier.pressScale(interaction: MutableInteractionSource, reduce: Boolean): Modifier {
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (!reduce && pressed) 0.92f else 1f, spring(dampingRatio = 0.82f, stiffness = 380f), label = "press")
-    return graphicsLayer { scaleX = scale; scaleY = scale }
-}
-
-@Composable
-private fun ExpressiveNavItem(icon: String, label: String, selected: Boolean, reduce: Boolean, onClick: () -> Unit) {
+private fun ExpressiveNavItem(icon: String, label: String, selected: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val haptic = LocalHapticFeedback.current
-    val fade = if (reduce) snap<Float>() else spring<Float>(dampingRatio = 0.6f, stiffness = 440f)
-    val grow = if (reduce) snap<IntSize>() else spring(dampingRatio = 0.6f, stiffness = 440f)
+    val scheme = MaterialTheme.colorScheme
     Row(
-        Modifier
-            .height(52.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0f))
-            .clickable(interaction, ripple(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))) {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
-            }
-            .pressScale(interaction, reduce)
-            .padding(horizontal = 14.dp)
+        modifier = Modifier
+            .height(56.dp)
+            .clip(CircleShape)
+            .background(if (selected) scheme.primary else Color.Transparent)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(color = scheme.primary.copy(alpha = 0.28f)),
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onClick()
+                },
+            )
+            .pressScale(interaction)
+            .padding(horizontal = 16.dp)
             .semantics { role = Role.Tab; this.selected = selected; contentDescription = label },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Symbol(icon, filled = selected, size = 22.dp, tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
-        AnimatedVisibility(visible = selected, enter = expandHorizontally(grow) + fadeIn(fade), exit = shrinkHorizontally(grow) + fadeOut(fade)) {
+        Symbol(icon, filled = selected, size = 22.dp, tint = if (selected) scheme.onPrimary else scheme.onSurfaceVariant)
+        AnimatedVisibility(
+            visible = selected,
+            enter = expandHorizontally(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec()) +
+                fadeIn(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+            exit = shrinkHorizontally(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()) +
+                fadeOut(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.width(8.dp))
-                Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1)
+                Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = scheme.onPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+        }
+    }
+}
+
+/**
+ * 底栏旁的独立圆形玻璃按钮：胶囊外右侧、与胶囊间隔 8dp 的一颗独立
+ * 按钮（56dp 圆形玻璃：与胶囊条目同高，玻璃与胶囊同一层）。
+ * 玻璃关闭时（莫奈悬浮底栏）：不画玻璃也不描边，整个圆填当前底栏
+ * 边框色（primary），图标改 onPrimary。
+ */
+@Composable
+fun ExpressiveAction(
+    icon: String,
+    description: String,
+    onClick: () -> Unit,
+    glass: Modifier,
+    modifier: Modifier = Modifier,
+    solidFill: Boolean = false,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val haptic = LocalHapticFeedback.current
+    // 布局和命中都锁在 56dp 圆里。模糊和按压缩放不能画出这个圆，
+    // 否则动画过程中会盖住旁边的胶囊。可见间距仍由外层 8dp 决定。
+    Box(modifier.requiredSize(56.dp).clipToBounds()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .then(if (solidFill) Modifier.background(MaterialTheme.colorScheme.primary) else glass)
+                .clickable(
+                    interactionSource = interaction,
+                    indication = ripple(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onClick()
+                    },
+                )
+                .pressScale(interaction)
+                .semantics { contentDescription = description },
+            contentAlignment = Alignment.Center,
+        ) {
+            Symbol(icon, filled = true, size = 24.dp, tint = if (solidFill) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
         }
     }
 }
@@ -179,7 +207,7 @@ private fun ExpressiveNavItem(icon: String, label: String, selected: Boolean, re
 /**
  * 宽屏（≥840dp，M3 expanded）用侧栏，而不是把手机底栏拉宽。
  * 选中项用 16dp 圆角的主色块，和未选中的图标形成形状对比，对应 MD3 Expressive 的形状策略。
- * 窄屏仍用 [ExpressiveBottomBar]。来源：m3.material.io navigation rail / navigation bar，以及 Apache-2.0 的 md3e-skill 设计策略说明，没有复制其模板代码。
+ * 窄屏仍用 [ExpressiveBottomBar]。
  */
 @Composable
 fun ExpressiveNavRail(
@@ -188,7 +216,9 @@ fun ExpressiveNavRail(
     actionDescription: String,
     onAction: () -> Unit,
     actionIcon: String,
+    glass: Modifier,
     modifier: Modifier = Modifier,
+    solidFill: Boolean = false,
 ) {
     val entries = listOf("forum" to "弹幕", "monitoring" to "数据", "settings" to "设置")
     Column(
@@ -206,7 +236,7 @@ fun ExpressiveNavRail(
                     .clip(RoundedCornerShape(if (on) 16.dp else 8.dp))
                     .background(if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
                     .clickable { onSelect(index) }
-                    .semantics { role = androidx.compose.ui.semantics.Role.Tab; this.selected = on; contentDescription = label },
+                    .semantics { role = Role.Tab; this.selected = on; contentDescription = label },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
@@ -215,21 +245,6 @@ fun ExpressiveNavRail(
             }
         }
         Spacer(Modifier.weight(1f))
-        ExpressiveAction(actionIcon, actionDescription, onAction)
-    }
-}
-
-@Composable
-private fun ExpressiveAction(icon: String, description: String, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        modifier = Modifier.size(64.dp).semantics { contentDescription = description },
-    ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Symbol(icon, filled = true, size = 28.dp, tint = MaterialTheme.colorScheme.onPrimary)
-        }
+        ExpressiveAction(actionIcon, actionDescription, onAction, glass, solidFill = solidFill)
     }
 }
