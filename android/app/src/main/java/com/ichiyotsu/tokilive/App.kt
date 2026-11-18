@@ -19,56 +19,92 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
-import dev.chrisbanes.haze.*
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalHazeMaterialsApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TokiApp(vm: LiveViewModel, initialTab: Int = 0) {
     var tab by rememberSaveable { mutableIntStateOf(initialTab) }
-    val haze = rememberHazeState()
-    BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-        val expanded = maxWidth >= 840.dp
-        // 底栏占的高度：系统手势/导航条 + 12dp 间隙 + 64dp 胶囊，再留 12dp 余量，
-        // 让最后一条消息完整露在底栏上方。手势导航约 104dp，三键导航约 136dp，
-        // 比原来写死的 140dp 更贴底栏，内容一滚就经过底栏、模糊看得见。
-        val density = LocalDensity.current
-        val bottomInset = with(density) {
-            maxOf(WindowInsets.navigationBars.getBottom(this), WindowInsets.systemGestures.getBottom(this)).toDp()
-        }
-        val liveBottomPad = bottomInset + BottomBarCapsuleHeight + 24.dp
-        val pages = @Composable {
-            Box(Modifier.fillMaxSize().hazeSource(haze)) {
-                val ms = MaterialTheme.motionScheme
-                val eIn = ms.defaultEffectsSpec<Float>(); val sIn = ms.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>(); val eOut = ms.fastEffectsSpec<Float>()
-                AnimatedContent(tab, transitionSpec = {
-                    (fadeIn(eIn) + slideInVertically(sIn) { it / 12 }) togetherWith fadeOut(eOut)
-                }, label = "tab") { t: Int ->
-                    when (t) { 0 -> LiveScreen(vm, if (expanded) 24.dp else liveBottomPad); 1 -> StatsScreen(vm); else -> SettingsScreen(vm) }
+    val backdropBlur = true
+    val frostedChrome = backdropBlur && TokiBlurCapability.canSampleInWindow
+    val hazeState = rememberHazeState()
+    val glass = tokiChrome(hazeState, backdropBlur)
+    // 底栏胶囊的玻璃单独走内容源采样：胶囊宽度随标签展开/收起连续
+    // 变化，平台窗口背景采样在尺寸动画里边缘会发黑（见 Glass.kt）。
+    val barGlass = tokiContentChrome(hazeState, backdropBlur)
+    val density = LocalDensity.current
+    val navBarInset = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
+    var measuredBarTotal by remember { mutableStateOf<Dp?>(null) }
+    var topBarHeight by remember { mutableStateOf(0.dp) }
+    val barTotal = measuredBarTotal ?: (BottomBarCapsuleHeight + 8.dp + navBarInset)
+    val bottomContentPadding: Dp = barTotal + TokiSpacing.contentGap
+    val titles = listOf("tokilive", "直播间数据", "设置")
+    val actionDescription = if (vm.connected) "断开直播" else "连接或预览"
+    val onAction = { if (vm.room.isBlank()) vm.demo() else vm.toggle() }
+    val actionIcon = if (vm.connected) "stop" else "play_arrow"
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val expanded = maxWidth >= TokiSpacing.expandedWindow
+        val contentBottom = if (expanded) navBarInset + TokiSpacing.contentGap else bottomContentPadding
+        Row(Modifier.fillMaxSize()) {
+            if (expanded) {
+                ExpressiveNavRail(tab, { tab = it }, actionDescription, onAction, actionIcon, glass, solidFill = !frostedChrome)
+            }
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                CompositionLocalProvider(LocalHazeState provides hazeState, LocalBackdropBlur provides backdropBlur) {
+                    Scaffold(
+                        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                        topBar = {
+                            OverlayTitleHeader(
+                                title = titles[tab],
+                                onBack = null,
+                                onHeightMeasured = { topBarHeight = it },
+                                backdropBlur = backdropBlur,
+                                hazeState = hazeState,
+                            )
+                        },
+                    ) { _ ->
+                        Box(Modifier.fillMaxSize()) {
+                            val ms = MaterialTheme.motionScheme
+                            val eIn = ms.defaultEffectsSpec<Float>(); val sIn = ms.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>(); val eOut = ms.fastEffectsSpec<Float>()
+                            AnimatedContent(tab, transitionSpec = {
+                                (fadeIn(eIn) + slideInVertically(sIn) { it / 12 }) togetherWith fadeOut(eOut)
+                            }, modifier = Modifier.fillMaxSize().hazeSource(hazeState).background(tokiPageBackground()), label = "tab") { t: Int ->
+                                when (t) {
+                                    0 -> LiveScreen(vm, topBarHeight, contentBottom)
+                                    1 -> StatsScreen(vm, topBarHeight, contentBottom)
+                                    else -> SettingsScreen(vm, topBarHeight, contentBottom)
+                                }
+                            }
+                            if (!expanded) {
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .onSizeChanged { size -> measuredBarTotal = with(density) { size.height.toDp() } }
+                                        .navigationBarsPadding()
+                                        .padding(bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    ExpressiveBottomBar(tab, { tab = it }, barGlass, solidStroke = !frostedChrome)
+                                    ExpressiveAction(actionIcon, actionDescription, onAction, glass, solidFill = !frostedChrome)
+                                }
+                            }
+                        }
+                    }
                 }
-            }
-        }
-        if (expanded) {
-            Row(Modifier.fillMaxSize()) {
-                ExpressiveNavRail(tab, { tab = it }, if (vm.connected) "断开直播" else "连接或预览", { if (vm.room.isBlank()) vm.demo() else vm.toggle() }, if (vm.connected) "stop" else "play_arrow")
-                Box(Modifier.weight(1f)) { pages() }
-            }
-        } else {
-            Box(Modifier.fillMaxSize()) {
-                pages()
-                ExpressiveBottomBar(tab, { tab = it }, if (vm.connected) "断开直播" else "连接或预览", { if (vm.room.isBlank()) vm.demo() else vm.toggle() }, if (vm.connected) "stop" else "play_arrow", haze, Modifier.align(Alignment.BottomCenter))
             }
         }
     }
@@ -76,31 +112,28 @@ fun TokiApp(vm: LiveViewModel, initialTab: Int = 0) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun LiveScreen(vm: LiveViewModel, bottomPad: androidx.compose.ui.unit.Dp = 140.dp) {
+fun LiveScreen(vm: LiveViewModel, topPadding: Dp, bottomPadding: Dp) {
     val status by vm.client.status.collectAsState()
-    val sb = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val list = rememberLazyListState()
     LaunchedEffect(vm.messages.size) { if (vm.messages.isNotEmpty()) list.animateScrollToItem(vm.messages.size - 1) }
-    Scaffold(Modifier.nestedScroll(sb.nestedScrollConnection), containerColor = Color.Transparent, topBar = {
-        LargeFlexibleTopAppBar(title = { Text("tokilive", fontWeight = FontWeight.Bold) }, subtitle = { Text(if (vm.connected) "房间 ${vm.room} · $status" else "弹幕预览") },
-            scrollBehavior = sb, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer))
-    }) { pad ->
-        LazyColumn(state = list, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = pad.calculateTopPadding() + 4.dp, bottom = bottomPad), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
-            item(key = "room") { RoomCard(vm, status) }
-            items(vm.messages, key = { it.id }) { m -> Box(Modifier.animateItem()) { MsgCard(m) } }
-        }
+    LazyColumn(state = list, contentPadding = PaddingValues(start = TokiSpacing.pageMargin, end = TokiSpacing.pageMargin, top = topPadding + TokiSpacing.sm, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+        item(key = "room") { RoomCard(vm, status) }
+        items(vm.messages, key = { it.id }) { m -> Box(Modifier.animateItem()) { MsgCard(m) } }
     }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RoomCard(vm: LiveViewModel, status: String) {
-    Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(vm.room, { vm.room = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("房间号") }, singleLine = true, shape = RoundedCornerShape(16.dp),
-                leadingIcon = { Symbol("live_tv") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), enabled = !vm.connected)
-            if (vm.connected && status.startsWith("正在")) LoadingIndicator(Modifier.size(48.dp))
-            else Button(onClick = { vm.toggle() }, shapes = ButtonDefaults.shapes(), modifier = Modifier.height(56.dp)) { Text(if (vm.connected) "断开" else "连接") }
+    Surface(shape = TokiCardShape, color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(TokiSpacing.xl), verticalArrangement = Arrangement.spacedBy(TokiSpacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(vm.room, { vm.room = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("房间号") }, singleLine = true, shape = RoundedCornerShape(16.dp),
+                    leadingIcon = { Symbol("live_tv") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), enabled = !vm.connected)
+                if (vm.connected && status.startsWith("正在")) LoadingIndicator(Modifier.size(48.dp))
+                else Button(onClick = { vm.toggle() }, shapes = ButtonDefaults.shapes(), modifier = Modifier.height(56.dp)) { Text(if (vm.connected) "断开" else "连接", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+            }
+            Text(if (vm.connected) "房间 ${vm.room} · $status" else "弹幕预览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -129,7 +162,7 @@ fun MsgCard(m: LiveMsg) {
     }
     val shape = if (m.type == "superchat" || m.emote != null || m.text.length > 18) RoundedCornerShape(24.dp) else CircleShape
     Surface(shape = shape, color = bg, contentColor = fg, border = BorderStroke(if (m.type == "danmaku") 1.dp else 2.dp, line)) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.padding(horizontal = TokiSpacing.xl, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                 if (m.type == "like") Symbol("thumb_up", filled = true, size = 18.dp)
                 if (m.type == "share") Symbol("share", filled = true, size = 18.dp)
@@ -154,67 +187,85 @@ fun MsgCard(m: LiveMsg) {
 // ---------- 数据 ----------
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun StatsScreen(vm: LiveViewModel) {
+fun StatsScreen(vm: LiveViewModel, topPadding: Dp, bottomPadding: Dp) {
     val st by vm.client.stats.collectAsState()
     val inf = rememberInfiniteTransition(label = "m")
     val p by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "p")
     val rot by inf.animateFloat(0f, 360f, infiniteRepeatable(tween(12000, easing = LinearEasing)), label = "r")
     val shapes = remember { listOf(morphOf(MaterialShapes.Cookie9Sided, MaterialShapes.Clover4Leaf), morphOf(MaterialShapes.Sunny, MaterialShapes.SoftBurst), morphOf(MaterialShapes.Pill, MaterialShapes.Cookie6Sided)) }
-    Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 24.dp, bottom = 140.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("直播间数据", style = MaterialTheme.typography.displaySmallEmphasized, modifier = Modifier.padding(start = 8.dp, bottom = 12.dp))
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TokiSpacing.pageMargin).padding(top = topPadding + TokiSpacing.sm, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(TokiSpacing.lg)) {
         val cs = MaterialTheme.colorScheme
         listOf(Triple("本场点赞", st.likes, "favorite"), Triple("弹幕", st.danmaku, "chat_bubble"), Triple("当前在线", st.online, "group")).forEachIndexed { i, (label, v, ic) ->
             val (c, on) = listOf(cs.primaryContainer to cs.onPrimaryContainer, cs.secondaryContainer to cs.onSecondaryContainer, cs.tertiaryContainer to cs.onTertiaryContainer)[i]
-            Surface(shape = RoundedCornerShape(if (i == 0) 32.dp else 12.dp, if (i == 0) 32.dp else 12.dp, if (i == 2) 32.dp else 12.dp, if (i == 2) 32.dp else 12.dp), color = c, contentColor = on, modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Surface(shape = TokiCardShape, color = c, contentColor = on, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(TokiSpacing.xl), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     Box(Modifier.size(64.dp).clip(MorphShape(shapes[i], p, rot)).background(on), contentAlignment = Alignment.Center) { Symbol(ic, filled = true, tint = c, size = 28.dp) }
                     Column { Text(label, style = MaterialTheme.typography.titleMedium)
                         AnimatedContent(v, transitionSpec = { (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut()) }, label = "n") { Text("%,d".format(it), style = MaterialTheme.typography.displayMediumEmphasized) } }
                 }
             }
         }
-        if (st.watched.isNotEmpty()) Text(st.watched, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+        if (st.watched.isNotEmpty()) Text(st.watched, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 // ---------- 设置 ----------
+/** 设置分组：surface 阶梯上的实色容器。 */
 @Composable
-private fun Group(content: @Composable ColumnScope.() -> Unit) = Column(Modifier.clip(RoundedCornerShape(24.dp)), verticalArrangement = Arrangement.spacedBy(2.dp), content = content)
+private fun SettingsGroup(content: @Composable () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = TokiSpacing.sm),
+        shape = TokiCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) { content() }
+}
+
+/** 设置行：64dp 高，20dp 主色图标，标题 titleMedium 粗体 + 可选的 bodyMedium 说明。 */
 @Composable
-private fun Item(title: String, sub: String? = null, icon: String, trailing: @Composable () -> Unit = {}, onClick: (() -> Unit)? = null) {
-    ListItem(headlineContent = { Text(title) }, supportingContent = sub?.let { { Text(it) } }, leadingContent = { Symbol(icon) }, trailingContent = trailing,
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.clip(RoundedCornerShape(4.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier))
+private fun SettingRow(icon: String, title: String, note: String? = null, trailing: @Composable () -> Unit = {}, onClick: (() -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth().height(64.dp).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = TokiSpacing.xl),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Symbol(icon, size = 20.dp, tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.size(TokiSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (note != null) Text(note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        trailing()
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SettingsScreen(vm: LiveViewModel) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 24.dp, bottom = 140.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("设置", style = MaterialTheme.typography.displaySmallEmphasized, modifier = Modifier.padding(start = 8.dp, bottom = 12.dp))
-        Text("账号", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-        Group {
-            Item(if (vm.loggedIn) "已登录" else "扫码登录", "登录后可显示完整用户名", "qr_code_scanner", trailing = { if (vm.loggedIn) TextButton({ vm.logout() }) { Text("退出") } }, onClick = { if (!vm.loggedIn) vm.startQr() })
+fun SettingsScreen(vm: LiveViewModel, topPadding: Dp, bottomPadding: Dp) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = TokiSpacing.pageMargin).padding(top = topPadding + TokiSpacing.sm, bottom = bottomPadding)) {
+        SectionTitle("账号")
+        SettingsGroup {
+            SettingRow("qr_code_scanner", if (vm.loggedIn) "已登录" else "扫码登录", "登录后可显示完整用户名", trailing = { if (vm.loggedIn) TextButton({ vm.logout() }) { Text("退出") } }, onClick = { if (!vm.loggedIn) vm.startQr() })
         }
-        Text("外观", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-        Group {
-            Item("主题", null, "dark_mode", trailing = {
+        SectionTitle("外观")
+        SettingsGroup {
+            SettingRow("dark_mode", "主题", trailing = {
                 Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
                     listOf("系统", "浅色", "深色").forEachIndexed { i, l -> ToggleButton(checked = vm.themeMode == i, onCheckedChange = { vm.themeMode = i; vm.save() },
                         shapes = when (i) { 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes(); 2 -> ButtonGroupDefaults.connectedTrailingButtonShapes(); else -> ButtonGroupDefaults.connectedMiddleButtonShapes() },
                         contentPadding = PaddingValues(horizontal = 12.dp)) { Text(l) } }
                 } })
-            Item("动态取色", "跟随系统壁纸颜色（Material You）", "palette", trailing = { Switch(vm.dynamicColor, { vm.dynamicColor = it; vm.save() }, thumbContent = { if (vm.dynamicColor) Symbol("check", size = 16.dp) }) })
+            SettingRow("palette", "动态取色", "跟随系统壁纸颜色（Material You）", trailing = { Switch(vm.dynamicColor, { vm.dynamicColor = it; vm.save() }, thumbContent = { if (vm.dynamicColor) Symbol("check", size = 16.dp) }) })
         }
-        Text("显示的消息", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-        Group {
+        SectionTitle("显示的消息")
+        SettingsGroup {
             listOf("danmaku" to ("弹幕" to "chat"), "gift" to ("礼物" to "redeem"), "superchat" to ("醒目留言" to "paid"), "guard" to ("上舰" to "military_tech"),
                 "enter" to ("进场" to "login"), "follow" to ("关注" to "person_add"), "like" to ("点赞" to "thumb_up")).forEach { (k, v) ->
-                Item(v.first, null, v.second, trailing = { Switch(vm.show[k] != false, { vm.show[k] = it; vm.save() }) })
+                SettingRow(v.second, v.first, trailing = { Switch(vm.show[k] != false, { vm.show[k] = it; vm.save() }) })
             }
         }
-        Text("关于", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-        Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.displaySmallEmphasized, modifier = Modifier.padding(start = 8.dp))
-        Text("com.ichiyotsu.tokilive", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+        SectionTitle("关于")
+        Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = TokiSpacing.xl))
+        Text("com.ichiyotsu.tokilive", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = TokiSpacing.xl))
+        SectionTitle("更新")
         UpdateCard(vm)
     }
     vm.qr?.let { url ->
@@ -226,17 +277,14 @@ fun SettingsScreen(vm: LiveViewModel) {
 
 @Composable
 private fun UpdateCard(vm: LiveViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("更新", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(vm.updateMessage, style = MaterialTheme.typography.bodyMedium)
-                Text("公开的 GitHub Releases。核对 SHA-256、包名和签名后，打开系统安装界面。", style = MaterialTheme.typography.bodySmall)
-                if (vm.updateProgress >= 0) LinearProgressIndicator(progress = { vm.updateProgress / 100f }, modifier = Modifier.fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton({ vm.checkUpdate() }, enabled = !vm.updateBusy) { Text("检查更新") }
-                    if (vm.updateReady) TextButton({ vm.installUpdate() }, enabled = !vm.updateBusy) { Text("安装") }
-                }
+    Card(shape = TokiCardShape, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(TokiSpacing.xl), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(vm.updateMessage, style = MaterialTheme.typography.bodyMedium)
+            Text("公开的 GitHub Releases。核对 SHA-256、包名和签名后，打开系统安装界面。", style = MaterialTheme.typography.bodySmall)
+            if (vm.updateProgress >= 0) LinearProgressIndicator(progress = { vm.updateProgress / 100f }, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton({ vm.checkUpdate() }, enabled = !vm.updateBusy) { Text("检查更新") }
+                if (vm.updateReady) TextButton({ vm.installUpdate() }, enabled = !vm.updateBusy) { Text("安装") }
             }
         }
     }
