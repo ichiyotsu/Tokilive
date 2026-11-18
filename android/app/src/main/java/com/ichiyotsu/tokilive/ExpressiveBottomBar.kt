@@ -12,11 +12,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -26,6 +25,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -128,6 +129,7 @@ private fun ExpressiveNavItem(icon: String, label: String, selected: Boolean, on
     val interaction = remember { MutableInteractionSource() }
     val haptic = LocalHapticFeedback.current
     val scheme = MaterialTheme.colorScheme
+    TokiLongPressLabel(label) {
     Row(
         modifier = Modifier
             .height(56.dp)
@@ -160,6 +162,7 @@ private fun ExpressiveNavItem(icon: String, label: String, selected: Boolean, on
             }
         }
     }
+    }
 }
 
 /**
@@ -181,6 +184,7 @@ fun ExpressiveAction(
     val haptic = LocalHapticFeedback.current
     // 布局和命中都锁在 56dp 圆里。模糊和按压缩放不能画出这个圆，
     // 否则动画过程中会盖住旁边的胶囊。可见间距仍由外层 8dp 决定。
+    TokiLongPressLabel(description) {
     Box(modifier.requiredSize(56.dp).clipToBounds()) {
         Box(
             Modifier
@@ -202,11 +206,13 @@ fun ExpressiveAction(
             Symbol(icon, filled = true, size = 24.dp, tint = if (solidFill) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
         }
     }
+    }
 }
 
 /**
- * 宽屏（≥840dp，M3 expanded）用侧栏，而不是把手机底栏拉宽。
- * 选中项用 16dp 圆角的主色块，和未选中的图标形成形状对比，对应 MD3 Expressive 的形状策略。
+ * 宽屏（≥840dp，M3 expanded）用标准 M3 NavigationRail + NavigationRailItem，
+ * 与 TokiStudio 0.1.10 同一套：栏宽 80dp、容器 surfaceContainer、选中指示为
+ * 56×32dp secondaryContainer pill、图标 24dp、独立按钮放在 rail header（顶部）。
  * 窄屏仍用 [ExpressiveBottomBar]。
  */
 @Composable
@@ -221,30 +227,20 @@ fun ExpressiveNavRail(
     solidFill: Boolean = false,
 ) {
     val entries = listOf("forum" to "弹幕", "monitoring" to "数据", "settings" to "设置")
-    Column(
-        modifier.width(96.dp).fillMaxSize().padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    NavigationRail(
+        modifier = modifier.fillMaxHeight(),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        header = {
+            ExpressiveAction(actionIcon, actionDescription, onAction, glass, solidFill = solidFill)
+        },
     ) {
         entries.forEachIndexed { index, (icon, label) ->
-            val on = index == selected
-            Column(
-                Modifier
-                    .height(64.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-                    .clip(RoundedCornerShape(if (on) 16.dp else 8.dp))
-                    .background(if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
-                    .clickable { onSelect(index) }
-                    .semantics { role = Role.Tab; this.selected = on; contentDescription = label },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Symbol(icon, filled = on, size = 22.dp)
-                Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-            }
+            NavigationRailItem(
+                selected = index == selected,
+                onClick = { onSelect(index) },
+                icon = { Symbol(icon, filled = index == selected, size = 24.dp) },
+                label = { Text(label) },
+            )
         }
-        Spacer(Modifier.weight(1f))
-        ExpressiveAction(actionIcon, actionDescription, onAction, glass, solidFill = solidFill)
     }
 }

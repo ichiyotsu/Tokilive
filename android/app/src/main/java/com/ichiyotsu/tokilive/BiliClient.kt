@@ -53,7 +53,8 @@ class BiliClient(private val http: OkHttpClient = OkHttpClient.Builder().pingInt
     }
 
     fun start(scope: CoroutineScope, room: String) {
-        stop(); job = scope.launch(Dispatchers.IO) {
+        stop(); stats.value = LiveStats()
+        job = scope.launch(Dispatchers.IO) {
             var retry = 0
             while (isActive) {
                 try {
@@ -61,6 +62,8 @@ class BiliClient(private val http: OkHttpClient = OkHttpClient.Builder().pingInt
                     val init = get("https://api.live.bilibili.com/room/v1/Room/room_init?id=$room")
                     if (init.optInt("code") != 0) { status.value = "直播间不存在"; return@launch }
                     val rid = init.getJSONObject("data").getLong("room_id")
+                    // 种子：连接时先取一次房间信息，在线数不从 0 起步。
+                    syncRoomInfo(rid)
                     var buvid = Regex("buvid3=([^;]+)").find(cookie)?.groupValues?.get(1)
                     if (buvid == null) { buvid = get("https://api.bilibili.com/x/frontend/finger/spi").getJSONObject("data").getString("b_3"); cookie = (if (cookie.isBlank()) "" else "$cookie; ") + "buvid3=$buvid" }
                     val info = get("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo?" + wbi(mapOf("id" to rid, "type" to 0, "web_location" to "444.8"))).getJSONObject("data")
@@ -76,13 +79,22 @@ class BiliClient(private val http: OkHttpClient = OkHttpClient.Builder().pingInt
                         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { closed.complete(Unit) }
                     })
                     val hb = launch { while (isActive) { delay(30_000); ws?.send(pack(2, "[object Object]")) } }
-                    closed.await(); hb.cancel()
+                    // 兜底轮询：每 30 秒用房间信息接口同步一次在线数。只靠 WS 推送时，
+                    // 点赞/看过/在线都可能长时间收不到对应消息；HTTP 是不依赖推送的第二来源。
+                    val poll = launch { while (isActive) { delay(30_000); syncRoomInfo(rid) } }
+                    closed.await(); hb.cancel(); poll.cancel()
                 } catch (e: CancellationException) { throw e } catch (e: Exception) { status.value = "连接失败：${e.message}" }
                 val s = minOf(60L, 1L shl minOf(retry++, 6)); status.value = "连接断开，$s 秒后重连…"; delay(s * 1000)
             }
         }
     }
     fun stop() { job?.cancel(); job = null; ws?.cancel(); ws = null; status.value = "未连接" }
+
+    /** 用房间信息接口同步在线数（get_info 不用登录，online 即人气）。失败就跳过等下一轮；0 表示未开播或取不到，不覆盖已有值。 */
+    private fun syncRoomInfo(rid: Long) = runCatching {
+        val on = get("https://api.live.bilibili.com/room/v1/Room/get_info?room_id=$rid").getJSONObject("data").optLong("online")
+        if (on > 0) stats.update { it.copy(online = on) }
+    }
 
     private fun pack(op: Int, body: String): ByteString {
         val b = body.toByteArray(); val buf = ByteBuffer.allocate(16 + b.size)
@@ -98,7 +110,10 @@ class BiliClient(private val http: OkHttpClient = OkHttpClient.Builder().pingInt
             val body = buf.copyOfRange(off + hl, off + len); off += len
             when (op) {
                 8 -> status.value = "已连接"
-                3 -> {}
+                // 心跳回应：包体是 4 字节大端整数 = 当前人气。服务器每 30 秒回一次，
+                // 是直播时最可靠的在线数来源；之前这里直接丢弃，导致“当前在线”
+                // 只能等极少推送的 ONLINE_RANK_COUNT，直播时一直不同步。
+                3 -> if (body.size >= 4) { val v = ByteBuffer.wrap(body).int.toLong() and 0xFFFFFFFFL; if (v > 0) stats.update { it.copy(online = v) } }
                 5 -> if (ver == 2) runCatching { onData(inflate(body)) } else runCatching { handle(JSONObject(String(body))) }
             }
         }

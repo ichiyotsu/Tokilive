@@ -16,9 +16,15 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -132,6 +138,24 @@ fun OverlayTitleHeader(
     }
 }
 
+/** 图标按钮长按提示：长按弹出名称（PlainTooltip + 无障碍朗读）。与 TokiStudio 0.1.10 同一套。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TokiLongPressLabel(
+    label: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = rememberTooltipState(),
+        modifier = modifier,
+    ) {
+        content()
+    }
+}
+
 /** 返回键自己的大圆角色块，高度和标题胶囊对齐。默认就带磨砂（与标题同一套），不随滚动变化。 */
 @Composable
 fun TokiScrollBackChip(
@@ -142,6 +166,7 @@ fun TokiScrollBackChip(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val content = MaterialTheme.colorScheme.onSurface
+    TokiLongPressLabel("返回") {
     Box(
         modifier
             .size(56.dp)
@@ -157,5 +182,6 @@ fun TokiScrollBackChip(
             modifier = Modifier.matchParentSize(),
         )
         Symbol("arrow_back", size = 24.dp, tint = content)
+    }
     }
 }

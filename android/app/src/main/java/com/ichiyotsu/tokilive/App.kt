@@ -26,7 +26,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
@@ -80,7 +79,7 @@ fun TokiApp(vm: LiveViewModel, initialTab: Int = 0) {
                             val ms = MaterialTheme.motionScheme
                             val eIn = ms.defaultEffectsSpec<Float>(); val sIn = ms.defaultSpatialSpec<androidx.compose.ui.unit.IntOffset>(); val eOut = ms.fastEffectsSpec<Float>()
                             AnimatedContent(tab, transitionSpec = {
-                                (fadeIn(eIn) + slideInVertically(sIn) { it / 12 }) togetherWith fadeOut(eOut)
+                                (fadeIn(eIn) + slideInHorizontally(sIn) { it / 14 }) togetherWith fadeOut(eOut)
                             }, modifier = Modifier.fillMaxSize().hazeSource(hazeState).background(tokiPageBackground()), label = "tab") { t: Int ->
                                 when (t) {
                                     0 -> LiveScreen(vm, topBarHeight, contentBottom)
@@ -118,6 +117,9 @@ fun LiveScreen(vm: LiveViewModel, topPadding: Dp, bottomPadding: Dp) {
     LaunchedEffect(vm.messages.size) { if (vm.messages.isNotEmpty()) list.animateScrollToItem(vm.messages.size - 1) }
     LazyColumn(state = list, contentPadding = PaddingValues(start = TokiSpacing.pageMargin, end = TokiSpacing.pageMargin, top = topPadding + TokiSpacing.sm, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
         item(key = "room") { RoomCard(vm, status) }
+        // 房间卡与首条消息之间 16dp（卡片间距）；消息与消息之间 8dp 保留，
+        // 直播流密度是有意的选择。
+        item(key = "gap") { Spacer(Modifier.height(TokiSpacing.sm)) }
         items(vm.messages, key = { it.id }) { m -> Box(Modifier.animateItem()) { MsgCard(m) } }
     }
 }
@@ -125,7 +127,7 @@ fun LiveScreen(vm: LiveViewModel, topPadding: Dp, bottomPadding: Dp) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RoomCard(vm: LiveViewModel, status: String) {
-    Surface(shape = TokiCardShape, color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = TokiCardShape, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(TokiSpacing.xl), verticalArrangement = Arrangement.spacedBy(TokiSpacing.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(vm.room, { vm.room = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("房间号") }, singleLine = true, shape = RoundedCornerShape(16.dp),
@@ -141,10 +143,11 @@ fun RoomCard(vm: LiveViewModel, status: String) {
 // ---------- 卡片：灵动岛式分组，间距统一 ----------
 @Composable
 private fun MedalChip(name: String, level: Int, dim: Boolean = false) {
-    val bg = if (dim) Color(0xFF5C4A16) else Color(0xFFFF5FC8); val lv = if (dim) Color(0xFF3A2E0A) else Color(0xFF4A0A30); val fg = if (dim) Color(0xFFF3E4B0) else Color(0xFF2A0A1E)
-    Row(Modifier.clip(CircleShape).background(bg).border(1.5.dp, lv, CircleShape).padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(name, color = fg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text("lv.$level", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(CircleShape).background(lv).padding(horizontal = 7.dp, vertical = 1.dp))
+    val c = TokiLiveChatColors
+    val bg = if (dim) c.medalBgDim else c.medalBg; val lv = if (dim) c.medalLevelBgDim else c.medalLevelBg; val fg = if (dim) c.medalFgDim else c.medalFg
+    Row(Modifier.clip(CircleShape).background(bg).border(2.dp, lv, CircleShape).padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TokiSpacing.sm)) {
+        Text(name, color = fg, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        Text("lv.$level", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.clip(CircleShape).background(lv).padding(horizontal = TokiSpacing.sm, vertical = 2.dp))
     }
 }
 
@@ -155,25 +158,27 @@ fun MsgCard(m: LiveMsg) {
     val (bg, line, fg) = when (m.type) {
         "superchat" -> Triple(cs.primary, cs.primary, cs.onPrimary)
         "guard" -> Triple(cs.primaryContainer, cs.primary, cs.onPrimaryContainer)
-        "gift" -> Triple(Color(0xFFFFE3A6), Color(0xFF4A3A00), Color(0xFF2A2000))
+        "gift" -> Triple(TokiLiveChatColors.giftBg, TokiLiveChatColors.giftLine, TokiLiveChatColors.giftFg)
         "enter" -> Triple(cs.surface, cs.onSurface, cs.onSurface)
         "follow", "like", "share" -> Triple(cs.tertiaryContainer, cs.tertiaryContainer, cs.onTertiaryContainer)
         else -> Triple(cs.surfaceContainerHighest, cs.outlineVariant, cs.onSurface)
     }
-    val shape = if (m.type == "superchat" || m.emote != null || m.text.length > 18) RoundedCornerShape(24.dp) else CircleShape
+    // 长消息用全 App 定死的卡片形状 28dp；短消息的圆形是聊天气泡例外，
+    // 纵向内边距 12dp 也是气泡密度例外（卡片标准是 24dp），不是漏改。
+    val shape = if (m.type == "superchat" || m.emote != null || m.text.length > 18) TokiCardShape else CircleShape
     Surface(shape = shape, color = bg, contentColor = fg, border = BorderStroke(if (m.type == "danmaku") 1.dp else 2.dp, line)) {
         Column(Modifier.padding(horizontal = TokiSpacing.xl, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                if (m.type == "like") Symbol("thumb_up", filled = true, size = 18.dp)
-                if (m.type == "share") Symbol("share", filled = true, size = 18.dp)
+                if (m.type == "like") Symbol("thumb_up", filled = true, size = 20.dp)
+                if (m.type == "share") Symbol("share", filled = true, size = 20.dp)
                 Text(m.uname, style = MaterialTheme.typography.labelLargeEmphasized, color = fg.copy(alpha = if (m.type == "danmaku") .62f else 1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 m.medalName?.let { MedalChip(it, m.medalLevel, dim = m.type == "gift" || m.type == "guard") }
-                if (m.guard > 0 && m.type == "danmaku") Box(Modifier.size(18.dp).clip(CircleShape).background(Color(0xFFE5484D)), contentAlignment = Alignment.Center) { Text("舰", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                if (m.guard > 0 && m.type == "danmaku") Box(Modifier.size(20.dp).clip(CircleShape).background(TokiLiveChatColors.guardRed), contentAlignment = Alignment.Center) { Text("舰", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) }
                 when (m.type) {
                     "superchat" -> { Spacer(Modifier.weight(1f)); Text("+${m.price}", style = MaterialTheme.typography.titleMediumEmphasized) }
                     "danmaku" -> if (m.emote == null && m.text.length <= 18) Text(m.text, style = MaterialTheme.typography.bodyLargeEmphasized)
                     "gift" -> { Text("${m.action}了", color = fg.copy(.7f), style = MaterialTheme.typography.bodyLarge); Text("${m.gift} ×${m.num}", style = MaterialTheme.typography.bodyLargeEmphasized)
-                        m.icon?.takeIf { it.isNotEmpty() }?.let { AsyncImage(it, null, Modifier.size(22.dp)) } }
+                        m.icon?.takeIf { it.isNotEmpty() }?.let { AsyncImage(it, null, Modifier.size(20.dp)) } }
                     "guard" -> { Text("开通了", color = cs.primary, style = MaterialTheme.typography.bodyLarge); Text("${m.gift} ${m.num} 个月", style = MaterialTheme.typography.bodyLargeEmphasized) }
                     else -> Text(m.action, style = MaterialTheme.typography.bodyLargeEmphasized)
                 }
@@ -198,8 +203,8 @@ fun StatsScreen(vm: LiveViewModel, topPadding: Dp, bottomPadding: Dp) {
         listOf(Triple("本场点赞", st.likes, "favorite"), Triple("弹幕", st.danmaku, "chat_bubble"), Triple("当前在线", st.online, "group")).forEachIndexed { i, (label, v, ic) ->
             val (c, on) = listOf(cs.primaryContainer to cs.onPrimaryContainer, cs.secondaryContainer to cs.onSecondaryContainer, cs.tertiaryContainer to cs.onTertiaryContainer)[i]
             Surface(shape = TokiCardShape, color = c, contentColor = on, modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(TokiSpacing.xl), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Box(Modifier.size(64.dp).clip(MorphShape(shapes[i], p, rot)).background(on), contentAlignment = Alignment.Center) { Symbol(ic, filled = true, tint = c, size = 28.dp) }
+                Row(Modifier.padding(TokiSpacing.xl), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TokiSpacing.lg)) {
+                    Box(Modifier.size(64.dp).clip(MorphShape(shapes[i], p, rot)).background(on), contentAlignment = Alignment.Center) { Symbol(ic, filled = true, tint = c, size = 24.dp) }
                     Column { Text(label, style = MaterialTheme.typography.titleMedium)
                         AnimatedContent(v, transitionSpec = { (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut()) }, label = "n") { Text("%,d".format(it), style = MaterialTheme.typography.displayMediumEmphasized) } }
                 }
@@ -263,8 +268,12 @@ fun SettingsScreen(vm: LiveViewModel, topPadding: Dp, bottomPadding: Dp) {
             }
         }
         SectionTitle("关于")
-        Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = TokiSpacing.xl))
-        Text("com.ichiyotsu.tokilive", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = TokiSpacing.xl))
+        SettingsGroup {
+            Column(Modifier.padding(TokiSpacing.xl), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("com.ichiyotsu.tokilive", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         SectionTitle("更新")
         UpdateCard(vm)
     }
@@ -283,8 +292,8 @@ private fun UpdateCard(vm: LiveViewModel) {
             Text("公开的 GitHub Releases。核对 SHA-256、包名和签名后，打开系统安装界面。", style = MaterialTheme.typography.bodySmall)
             if (vm.updateProgress >= 0) LinearProgressIndicator(progress = { vm.updateProgress / 100f }, modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton({ vm.checkUpdate() }, enabled = !vm.updateBusy) { Text("检查更新") }
-                if (vm.updateReady) TextButton({ vm.installUpdate() }, enabled = !vm.updateBusy) { Text("安装") }
+                Button({ vm.checkUpdate() }, enabled = !vm.updateBusy, shapes = ButtonDefaults.shapes(), modifier = Modifier.height(56.dp)) { Text("检查更新", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                if (vm.updateReady) Button({ vm.installUpdate() }, enabled = !vm.updateBusy, shapes = ButtonDefaults.shapes(), modifier = Modifier.height(56.dp)) { Text("安装", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
             }
         }
     }

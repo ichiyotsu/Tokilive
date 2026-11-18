@@ -21,4 +21,13 @@ class StatsParseTest {
         assertEquals(7L, client.stats.value.online)
         assertEquals("11人看过", client.stats.value.watched)
     }
+
+    /** 心跳回应（op 3）包体是 4 字节人气值：直播时每 30 秒回一次，在线数靠它同步。 */
+    @Test fun heartbeatResponseUpdatesOnline() {
+        val client = BiliClient()
+        val packet = java.nio.ByteBuffer.allocate(20)
+            .putInt(20).putShort(16).putShort(1).putInt(3).putInt(1).putInt(123456)
+        client.onData(packet.array())
+        assertEquals(123456L, client.stats.value.online)
+    }
 }
