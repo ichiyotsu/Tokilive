@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
@@ -108,6 +109,11 @@ fun tokiPageBackground(): Brush {
 @Composable
 fun TokiTheme(dark: Boolean = isSystemInDarkTheme(), dynamic: Boolean = true, content: @Composable () -> Unit) {
     val ctx = LocalContext.current
+    // 系统“移除动画”打开时（过渡动画缩放为 0），动效方案从 expressive 切到
+    // standard（TokiUI token motion/reduced 的要求）；默认走 expressive。
+    val reduceMotion = remember(ctx) {
+        android.provider.Settings.Global.getFloat(ctx.contentResolver, android.provider.Settings.Global.TRANSITION_ANIMATION_SCALE, 1f) == 0f
+    }
     val base = when {
         dynamic -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
         dark -> darkColorScheme(primary = Color(0xFFD0BCFF), onPrimary = Color(0xFF381E72), primaryContainer = Color(0xFF4F378B), onPrimaryContainer = Color(0xFFEADDFF),
@@ -121,8 +127,24 @@ fun TokiTheme(dark: Boolean = isSystemInDarkTheme(), dynamic: Boolean = true, co
     // MaterialExpressiveTheme 不提供 LocalContentColor：不补这一层，
     // 无显式颜色的 Text 会默认黑色，深色下看不见。
     CompositionLocalProvider(LocalDarkTheme provides dark, LocalContentColor provides scheme.onBackground) {
-        MaterialExpressiveTheme(colorScheme = scheme, motionScheme = MotionScheme.expressive(), shapes = TokiDesignShapes, typography = Typography().withFont(GoogleSans), content = content)
+        MaterialExpressiveTheme(colorScheme = scheme, motionScheme = if (reduceMotion) MotionScheme.standard() else MotionScheme.expressive(), shapes = TokiDesignShapes, typography = Typography().withFont(GoogleSans), content = content)
     }
+}
+
+/**
+ * 聊天语义色（Tokilive 私有）：TokiUI 没有勋章 / 礼物 / 守卫这些聊天角色，
+ * 所以不进 token，集中收在这里，不散写在调用点。每组都是不透明的
+ * 背景 + 相配的文字色，自成一对，深浅主题下都可读。
+ */
+object TokiLiveChatColors {
+    // 粉丝勋章（亮粉底 + 深字；dim 档用于礼物/上舰行的弱化勋章）
+    val medalBg = Color(0xFFFF5FC8); val medalBgDim = Color(0xFF5C4A16)
+    val medalLevelBg = Color(0xFF4A0A30); val medalLevelBgDim = Color(0xFF3A2E0A)
+    val medalFg = Color(0xFF2A0A1E); val medalFgDim = Color(0xFFF3E4B0)
+    // 礼物金（浅金底 + 深字）
+    val giftBg = Color(0xFFFFE3A6); val giftLine = Color(0xFF4A3A00); val giftFg = Color(0xFF2A2000)
+    // 守卫红（“舰”徽章）
+    val guardRed = Color(0xFFE5484D)
 }
 
 /** Material Symbols Rounded（可变字体，FILL 轴随选中状态动画） */
