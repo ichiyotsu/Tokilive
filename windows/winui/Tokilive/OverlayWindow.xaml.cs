@@ -617,12 +617,14 @@ public sealed partial class OverlayWindow : Window
     // head 里的元素：头像、名字、粉丝牌、舰长/房管徽章。
     // 两行卡片（head 行）和单行 pill 共用一份，避免两处各写一套。
     // Avatar 为 null 表示不显示头像；Badges 可能为空。
-    static (UIElement? Avatar, UIElement Name, UIElement? Medal, List<UIElement> Badges) HeadParts(
+    // 用 FrameworkElement（不是 UIElement）：WinUI 3 的 Grid.SetColumn
+    // 只要 FrameworkElement，UIElement 传进去会报 CS1503。
+    static (FrameworkElement? Avatar, FrameworkElement Name, FrameworkElement? Medal, List<FrameworkElement> Badges) HeadParts(
         ChatLine line, AppState state, FontFamily font, string nameColorHex,
         Windows.UI.Text.FontWeight weight, double nameSize, double smallSize,
         CornerRadius chipRadius, double shadow)
     {
-        UIElement? avatar = null;
+        FrameworkElement? avatar = null;
         if (state.ShowAvatar)
         {
             // 头像圆：字号 1.6 倍的圆，里面先放名字首字，Face 图盖在上面，
@@ -655,8 +657,8 @@ public sealed partial class OverlayWindow : Window
         // 1.3.1 把名字也绑在 ShowAvatar 上，关头像就连名字都没了，这里改回。
         // #4：名字也带文字阴影（TextShadow>0 时包一层 Grid，不影响 head 布局）。
         var nameTb = new TextBlock { Text = line.Name, FontFamily = font, Foreground = new SolidColorBrush(Parse(nameColorHex)), FontSize = nameSize, FontWeight = weight, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-        UIElement name = ShadowText(nameTb, shadow);
-        UIElement? medal = null;
+        FrameworkElement name = ShadowText(nameTb, shadow);
+        FrameworkElement? medal = null;
         if (state.ShowMedal && line.MedalLevel > 0 && line.MedalName.Length > 0)
         {
             // #28 粉丝牌：默认 unified 用 1.2.0 的固定配色（bg #FF5FC8、字 #2A0A1E、
@@ -698,7 +700,7 @@ public sealed partial class OverlayWindow : Window
                 Child = medalInner
             };
         }
-        var badges = new List<UIElement>();
+        var badges = new List<FrameworkElement>();
         if (line.GuardLevel is >= 1 and <= 3)
         {
             // 1.2.0 overlay.js 的 GUARD = ['', '总督', '提督', '舰长']。
@@ -729,7 +731,7 @@ public sealed partial class OverlayWindow : Window
     // Auto，动作文字占 * 列。窄窗下不许竖排碎字（参考图右下角的竖卡就是这个问题）：
     // 全部 NoWrap，动作文字超出用省略号，固定部分超出时由卡片边缘横向裁掉。
     static Grid PillRow(
-        (UIElement? Avatar, UIElement Name, UIElement? Medal, List<UIElement> Badges) head,
+        (FrameworkElement? Avatar, FrameworkElement Name, FrameworkElement? Medal, List<FrameworkElement> Badges) head,
         ChatLine line, FontFamily font, Color ink,
         Windows.UI.Text.FontWeight weight, double nameSize)
     {
@@ -825,7 +827,9 @@ public sealed partial class OverlayWindow : Window
 
     // #4 文字阴影：前景之下放一份黑色偏移副本（和 Lyric() 的分层做法一样），
     // 偏移 (2,2)，透明度 = TextShadow；shadow<=0 时直接返回前景，不包 Grid。
-    static UIElement ShadowText(TextBlock foreground, double shadow)
+    // 返回 FrameworkElement（两个分支 TextBlock/Grid 都是）：调用方要把结果
+    // 传给 WinUI 3 的 Grid.SetColumn，它只要 FrameworkElement。
+    static FrameworkElement ShadowText(TextBlock foreground, double shadow)
     {
         if (shadow <= 0) return foreground;
         var alpha = (byte)Math.Clamp(shadow * 255, 0, 255);
@@ -984,15 +988,15 @@ public sealed partial class OverlayWindow : Window
         if (token.Index == 0 && token.Length == text.Trim().Length)
         {
             var size = Math.Max(48, state.FontSize * 3);
-            var img = new Image { Height = size, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var emoteImg = new Image { Height = size, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var box = new Grid { MinHeight = size + 16, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center };
-            box.Children.Add(img);
-            img.ImageFailed += (_, _) =>
+            box.Children.Add(emoteImg);
+            emoteImg.ImageFailed += (_, _) =>
             {
                 box.Children.Clear();
                 box.Children.Add(new TextBlock { Text = token.Value, FontFamily = font, Foreground = new SolidColorBrush(ink), FontSize = state.FontSize, FontWeight = weight, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
             };
-            try { img.Source = new BitmapImage(emoteUri); }
+            try { emoteImg.Source = new BitmapImage(emoteUri); }
             catch { return ShadowText(plain, state.TextShadow); }
             return box;
         }
