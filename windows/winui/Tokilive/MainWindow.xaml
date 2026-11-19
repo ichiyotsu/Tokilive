@@ -673,7 +673,7 @@
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="tokilive" Style="{ThemeResource BodyStrongTextBlockStyle}" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="VersionText" Text="0.2.0-b1" Grid.Column="1" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock x:Name="VersionText" Text="0.1.5" Grid.Column="1" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </Grid>
                                 <TextBlock Text="原生 WinUI 3，未打包，Windows 10 1809 和 Windows 11。应用 ID com.ichiyotsu.tokilive。" TextWrapping="Wrap"/>
                                 <TextBlock x:Name="UpdateText" TextWrapping="Wrap"/>
