@@ -585,6 +585,244 @@ public sealed partial class OverlayWindow : Window
     static Color Darken(Color c, double factor) =>
         Color.FromArgb(255, (byte)(c.R * factor), (byte)(c.G * factor), (byte)(c.B * factor));
 
+    // 卡片底色：transparent 无填充；CardBlur>0 走 Acrylic（TintOpacity 跟
+    // CardOpacity，FallbackColor 是同色带 CardOpacity 透明度——Acrylic 在透明
+    // 悬浮窗上失效时退回实色）；否则实色 + CardOpacity。
+    // Card()、StatsBar()、EmptyState() 三处共用，磨砂/浅色/深色走同一条路。
+    static Brush? CardBackground(AppState state, Color baseColor, bool transparent)
+    {
+        if (transparent) return null;
+        var alpha = (byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255);
+        if (state.CardBlur > 0)
+            // #5 磨砂：AcrylicBrush 采样窗后内容做系统级磨砂，
+            // TintOpacity 跟 CardOpacity；AcrylicBrush 没有模糊半径属性，
+            // CardBlur 的 px 数值映射不到它上面，>0 只做开关，==0 走实色。
+            // 注：BackgroundSource 是 UWP 版 AcrylicBrush 才有的属性，
+            // WinUI 3 版没有，这里用它默认的采样来源。
+            // 透明悬浮窗上 Acrylic 到底出不出来，必须在 Windows 上验证。
+            return new AcrylicBrush { TintColor = baseColor, TintOpacity = Math.Clamp(state.CardOpacity, 0, 1), FallbackColor = Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B) };
+        return new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
+    }
+
+    // 卡片描边：transparent 沿用旧做法（ink 色 140 透明度）；
+    // 其余走调色板的 Line 角色——弹幕卡片没有自己的 roles 时取 danmaku 那套。
+    // 以前 roles.Line 算出来却从没画过，所有卡片都没有描边。
+    static Color CardLineColor(AppState state, bool dark, PaletteHelper.PaletteRoles? roles, bool transparent, Color ink)
+    {
+        if (transparent) return Color.FromArgb(140, ink.R, ink.G, ink.B);
+        var lineHex = roles?.Line ?? PaletteHelper.For("danmaku", state.SeedColor, dark).Line;
+        return Parse(lineHex);
+    }
+
+    // head 里的元素：头像、名字、粉丝牌、舰长/房管徽章。
+    // 两行卡片（head 行）和单行 pill 共用一份，避免两处各写一套。
+    // Avatar 为 null 表示不显示头像；Badges 可能为空。
+    static (UIElement? Avatar, UIElement Name, UIElement? Medal, List<UIElement> Badges) HeadParts(
+        ChatLine line, AppState state, FontFamily font, string nameColorHex,
+        Windows.UI.Text.FontWeight weight, double nameSize, double smallSize,
+        CornerRadius chipRadius, double shadow)
+    {
+        UIElement? avatar = null;
+        if (state.ShowAvatar)
+        {
+            // 头像圆：字号 1.6 倍的圆，里面先放名字首字，Face 图盖在上面，
+            // 图加载失败就藏掉，首字兜底。只用消息里自带的 Face，不另查接口。
+            var size = state.FontSize + 12;
+            var initial = string.IsNullOrWhiteSpace(line.Name) ? "?" : line.Name.Trim()[..1];
+            var circle = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
+            var bg = new Border
+            {
+                Background = new SolidColorBrush(Parse(nameColorHex)),
+                CornerRadius = new CornerRadius(size / 2),
+                Child = new TextBlock { Text = initial, FontFamily = font, Foreground = new SolidColorBrush(Parse("#FFFFFF")), FontSize = nameSize, FontWeight = weight, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            };
+            circle.Children.Add(bg);
+            if (Uri.TryCreate(line.Face, UriKind.Absolute, out var faceUri) && (faceUri.Scheme == "http" || faceUri.Scheme == "https"))
+            {
+                // Ellipse + ImageBrush 才能真正裁成圆；图加载失败就藏掉，首字兜底。
+                try
+                {
+                    var bmp = new BitmapImage(faceUri);
+                    var ellipse = new Ellipse { Width = size, Height = size, Fill = new ImageBrush { ImageSource = bmp, Stretch = Stretch.UniformToFill } };
+                    bmp.ImageFailed += (_, _) => ellipse.Visibility = Visibility.Collapsed;
+                    circle.Children.Add(ellipse);
+                }
+                catch { /* 图打不开就留首字 */ }
+            }
+            avatar = circle;
+        }
+        // 1.2.0 里 showAvatar 只控制头像（.av），名字一直显示；
+        // 1.3.1 把名字也绑在 ShowAvatar 上，关头像就连名字都没了，这里改回。
+        // #4：名字也带文字阴影（TextShadow>0 时包一层 Grid，不影响 head 布局）。
+        var nameTb = new TextBlock { Text = line.Name, FontFamily = font, Foreground = new SolidColorBrush(Parse(nameColorHex)), FontSize = nameSize, FontWeight = weight, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        UIElement name = ShadowText(nameTb, shadow);
+        UIElement? medal = null;
+        if (state.ShowMedal && line.MedalLevel > 0 && line.MedalName.Length > 0)
+        {
+            // #28 粉丝牌：默认 unified 用 1.2.0 的固定配色（bg #FF5FC8、字 #2A0A1E、
+            // 等级块底 #4A0A30、白字），和 B 站自带颜色无关；MedalStyle 选 bilibili
+            // 时才用消息自带的颜色做底、白字，等级块底是它往黑里混 45% 的版本。
+            // 结构也照 1.2.0：外层是名字、内层是 lv.N 的小块。
+            Color medalBg, medalFg, lvBg, lvFg;
+            if (string.Equals(state.MedalStyle, "bilibili", StringComparison.OrdinalIgnoreCase)
+                && TryParseHex(line.MedalColor, out var biliBg))
+            {
+                medalBg = biliBg;
+                medalFg = Parse("#FFFFFF");
+                lvBg = Darken(biliBg, 0.45);
+                lvFg = Parse("#FFFFFF");
+            }
+            else
+            {
+                medalBg = Parse("#FF5FC8");
+                medalFg = Parse("#2A0A1E");
+                lvBg = Parse("#4A0A30");
+                lvFg = Parse("#FFFFFF");
+            }
+            var medalInner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
+            medalInner.Children.Add(new TextBlock { Text = line.MedalName, FontFamily = font, Foreground = new SolidColorBrush(medalFg), FontSize = smallSize, FontWeight = weight, VerticalAlignment = VerticalAlignment.Center });
+            medalInner.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(lvBg),
+                CornerRadius = chipRadius,
+                Padding = new Thickness(6, 1, 6, 1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock { Text = $"lv.{line.MedalLevel}", FontFamily = font, Foreground = new SolidColorBrush(lvFg), FontSize = smallSize, FontWeight = weight }
+            });
+            medal = new Border
+            {
+                Background = new SolidColorBrush(medalBg),
+                CornerRadius = chipRadius,
+                Padding = new Thickness(8, 1, 2, 1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = medalInner
+            };
+        }
+        var badges = new List<UIElement>();
+        if (line.GuardLevel is >= 1 and <= 3)
+        {
+            // 1.2.0 overlay.js 的 GUARD = ['', '总督', '提督', '舰长']。
+            var guardName = line.GuardLevel switch { 1 => "总督", 2 => "提督", _ => "舰长" };
+            badges.Add(new Border
+            {
+                Background = new SolidColorBrush(Parse("#7C4DFF")),
+                CornerRadius = chipRadius,
+                Padding = new Thickness(6, 1, 6, 1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock { Text = guardName, FontFamily = font, Foreground = new SolidColorBrush(Parse("#FFFFFF")), FontSize = smallSize, FontWeight = weight }
+            });
+        }
+        if (line.Admin)
+            badges.Add(new Border
+            {
+                Background = new SolidColorBrush(Parse("#FF8A65")),
+                CornerRadius = chipRadius,
+                Padding = new Thickness(6, 1, 6, 1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock { Text = "管", FontFamily = font, Foreground = new SolidColorBrush(Parse("#FFFFFF")), FontSize = smallSize, FontWeight = weight }
+            });
+        return (avatar, name, medal, badges);
+    }
+
+    // gift/guard/enter/follow/like/share：单行 pill（参考图第 1/5/7 行）。
+    // 名字 + 粉丝牌 + 徽章 + 动作文字全在一行：头像/名字/粉丝牌/徽章各占一列
+    // Auto，动作文字占 * 列。窄窗下不许竖排碎字（参考图右下角的竖卡就是这个问题）：
+    // 全部 NoWrap，动作文字超出用省略号，固定部分超出时由卡片边缘横向裁掉。
+    static Grid PillRow(
+        (UIElement? Avatar, UIElement Name, UIElement? Medal, List<UIElement> Badges) head,
+        ChatLine line, FontFamily font, Color ink,
+        Windows.UI.Text.FontWeight weight, double nameSize)
+    {
+        var row = new Grid { VerticalAlignment = VerticalAlignment.Center, ColumnSpacing = 6 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        if (head.Avatar != null) { Grid.SetColumn(head.Avatar, 0); row.Children.Add(head.Avatar); }
+        Grid.SetColumn(head.Name, 1);
+        row.Children.Add(head.Name);
+        if (head.Medal != null) { Grid.SetColumn(head.Medal, 2); row.Children.Add(head.Medal); }
+        if (head.Badges.Count > 0)
+        {
+            var badgeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            foreach (var badge in head.Badges) badgeRow.Children.Add(badge);
+            Grid.SetColumn(badgeRow, 3);
+            row.Children.Add(badgeRow);
+        }
+        var action = new TextBlock
+        {
+            Text = line.Text ?? "",
+            FontFamily = font,
+            Foreground = new SolidColorBrush(ink),
+            FontSize = nameSize,
+            FontWeight = weight,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(action, 4);
+        row.Children.Add(action);
+        return row;
+    }
+
+    // #23 收紧宽度（pill 版）：和 TightenCard 同一思路，但孩子是 Grid
+    //（横向 StackPanel 会让 TypeCard 把名字当正文逐字打，所以 pill 不用它做根）。
+    // 只缩不扩；量不到就保持全宽。
+    static void TightenGridCard(Border card)
+    {
+        try
+        {
+            if (card.Child is not Grid grid) return;
+            var full = card.ActualWidth;
+            if (full <= 0) return;
+            grid.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var target = Math.Ceiling(grid.DesiredSize.Width + 24 + 1);
+            if (target < full - 1)
+            {
+                card.Width = target;
+                // 1.2.0 的卡片是 align-self:flex-start（左对齐），不是拉满。
+                card.HorizontalAlignment = HorizontalAlignment.Left;
+            }
+        }
+        catch { /* 量不出来就保持全宽 */ }
+    }
+
+    // 卡片外壳：1dp Line 描边（浅色/深色/磨砂都有，磨砂也不例外）；
+    // pill 是胶囊（999，WinUI 按半高画）；普通卡片按 state.Corner，
+    // Corner==0 时先按 999 画、进树后按实测半高写精确值（沿用旧逻辑）。
+    static Border BuildCard(AppState state, UIElement content, Color baseColor, Color lineColor, bool transparent, bool pill)
+    {
+        var card = new Border
+        {
+            Background = CardBackground(state, baseColor, transparent),
+            BorderBrush = new SolidColorBrush(lineColor),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(pill || state.Corner == 0 ? 999 : state.Corner),
+            Padding = new Thickness(12, 8, 12, 8),
+            Child = content,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        // #15/#23：进树后量一次——收紧到内容宽（只缩不扩）；Corner==0 时
+        // 先按 999 画胶囊，等宽度定下来、尺寸变化触发 SizeChanged 时
+        // 再按实测半高写精确值；宽度没变就一直是 999，视觉上同样是胶囊。
+        card.Loaded += (_, _) =>
+        {
+            TightenCard(card);
+            TightenGridCard(card);
+            if (state.Corner == 0 && !pill)
+            {
+                void OnSized(object _, SizeChangedEventArgs e)
+                {
+                    card.SizeChanged -= OnSized;
+                    if (card.ActualHeight > 0) card.CornerRadius = new CornerRadius(card.ActualHeight / 2);
+                }
+                card.SizeChanged += OnSized;
+            }
+        };
+        return card;
+    }
+
     // #4 文字阴影：前景之下放一份黑色偏移副本（和 Lyric() 的分层做法一样），
     // 偏移 (2,2)，透明度 = TextShadow；shadow<=0 时直接返回前景，不包 Grid。
     static UIElement ShadowText(TextBlock foreground, double shadow)
@@ -631,6 +869,10 @@ public sealed partial class OverlayWindow : Window
     // 1.2.0 overlay.js render() 的卡片结构：头像 + 名字 + 粉丝牌 + 房管/舰长徽章
     // + 内容；礼物、醒目留言、上舰各有自己的底色/价格。1.3.1 把所有类型
     // 渲染成完全一样的卡片，Type 根本没被读，头像也只是名字那行文本。
+    // 重构后（参考图三列：浅色/深色/磨砂）：
+    // gift/guard/enter/follow/like/share 是单行 pill（名字 + 粉丝牌 + 动作文字
+    // 全在一行）；danmaku/superchat 保持两行卡片，醒目留言价格在右上角 "+30"；
+    // 三种样式都有 1dp Line 描边，磨砂（CardBlur>0）是 Acrylic 底 + 描边。
     public static Border Card(ChatLine line, AppState state)
     {
         var weight = WeightOf(state.DanmakuFontWeight);
@@ -663,108 +905,6 @@ public sealed partial class OverlayWindow : Window
         var chipRadius = ChipRadius(state);
         var shadow = state.TextShadow;
 
-        var panel = new StackPanel { Spacing = 2 };
-        var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        if (state.ShowAvatar)
-        {
-            // 头像圆：字号 1.6 倍的圆，里面先放名字首字，Face 图盖在上面，
-            // 图加载失败就藏掉，首字兜底。只用消息里自带的 Face，不另查接口。
-            var size = state.FontSize + 12;
-            var initial = string.IsNullOrWhiteSpace(line.Name) ? "?" : line.Name.Trim()[..1];
-            var circle = new Grid { Width = size, Height = size };
-            var bg = new Border
-            {
-                Background = new SolidColorBrush(Parse(nameColorHex)),
-                CornerRadius = new CornerRadius(size / 2),
-                Child = new TextBlock { Text = initial, FontFamily = font, Foreground = new SolidColorBrush(Parse("#FFFFFF")), FontSize = nameSize, FontWeight = weight, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-            };
-            circle.Children.Add(bg);
-            if (Uri.TryCreate(line.Face, UriKind.Absolute, out var faceUri) && (faceUri.Scheme == "http" || faceUri.Scheme == "https"))
-            {
-                // Ellipse + ImageBrush 才能真正裁成圆；图加载失败就藏掉，首字兜底。
-                try
-                {
-                    var bmp = new BitmapImage(faceUri);
-                    var ellipse = new Ellipse { Width = size, Height = size, Fill = new ImageBrush { ImageSource = bmp, Stretch = Stretch.UniformToFill } };
-                    bmp.ImageFailed += (_, _) => ellipse.Visibility = Visibility.Collapsed;
-                    circle.Children.Add(ellipse);
-                }
-                catch { /* 图打不开就留首字 */ }
-            }
-            head.Children.Add(circle);
-        }
-        // 1.2.0 里 showAvatar 只控制头像（.av），名字一直显示；
-        // 1.3.1 把名字也绑在 ShowAvatar 上，关头像就连名字都没了，这里改回。
-        // #4：名字也带文字阴影（TextShadow>0 时包一层 Grid，不影响 head 布局）。
-        var nameTb = new TextBlock { Text = line.Name, FontFamily = font, Foreground = new SolidColorBrush(Parse(nameColorHex)), FontSize = nameSize, FontWeight = weight, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-        head.Children.Add(ShadowText(nameTb, shadow));
-        if (state.ShowMedal && line.MedalLevel > 0 && line.MedalName.Length > 0)
-        {
-            // #28 粉丝牌：默认 unified 用 1.2.0 的固定配色（bg #FF5FC8、字 #2A0A1E、
-            // 等级块底 #4A0A30、白字），和 B 站自带颜色无关；MedalStyle 选 bilibili
-            // 时才用消息自带的颜色做底、白字，等级块底是它往黑里混 45% 的版本。
-            // 结构也照 1.2.0：外层是名字、内层是 lv.N 的小块。
-            Color medalBg, medalFg, lvBg, lvFg;
-            if (string.Equals(state.MedalStyle, "bilibili", StringComparison.OrdinalIgnoreCase)
-                && TryParseHex(line.MedalColor, out var biliBg))
-            {
-                medalBg = biliBg;
-                medalFg = Parse("#FFFFFF");
-                lvBg = Darken(biliBg, 0.45);
-                lvFg = Parse("#FFFFFF");
-            }
-            else
-            {
-                medalBg = Parse("#FF5FC8");
-                medalFg = Parse("#2A0A1E");
-                lvBg = Parse("#4A0A30");
-                lvFg = Parse("#FFFFFF");
-            }
-            var medalInner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
-            medalInner.Children.Add(new TextBlock { Text = line.MedalName, FontFamily = font, Foreground = new SolidColorBrush(medalFg), FontSize = smallSize, FontWeight = weight, VerticalAlignment = VerticalAlignment.Center });
-            medalInner.Children.Add(new Border
-            {
-                Background = new SolidColorBrush(lvBg),
-                CornerRadius = chipRadius,
-                Padding = new Thickness(6, 1, 6, 1),
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = new TextBlock { Text = $"lv.{line.MedalLevel}", FontFamily = font, Foreground = new SolidColorBrush(lvFg), FontSize = smallSize, FontWeight = weight }
-            });
-            head.Children.Add(new Border
-            {
-                Background = new SolidColorBrush(medalBg),
-                CornerRadius = chipRadius,
-                Padding = new Thickness(8, 1, 2, 1),
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = medalInner
-            });
-        }
-        if (line.GuardLevel is >= 1 and <= 3)
-        {
-            // 1.2.0 overlay.js 的 GUARD = ['', '总督', '提督', '舰长']。
-            var guardName = line.GuardLevel switch { 1 => "总督", 2 => "提督", _ => "舰长" };
-            head.Children.Add(new Border
-            {
-                Background = new SolidColorBrush(Parse("#7C4DFF")),
-                CornerRadius = chipRadius,
-                Padding = new Thickness(6, 1, 6, 1),
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = new TextBlock { Text = guardName, FontFamily = font, Foreground = new SolidColorBrush(Parse("#FFFFFF")), FontSize = smallSize, FontWeight = weight }
-            });
-        }
-        if (line.Admin)
-            head.Children.Add(new Border
-            {
-                Background = new SolidColorBrush(Parse("#FF8A65")),
-                CornerRadius = chipRadius,
-                Padding = new Thickness(6, 1, 6, 1),
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = new TextBlock { Text = "管", FontFamily = font, Foreground = new SolidColorBrush(Parse("#FFFFFF")), FontSize = smallSize, FontWeight = weight }
-            });
-        if (line.Type == "superchat" && line.Price > 0)
-            head.Children.Add(new TextBlock { Text = $"¥{line.Price}", FontFamily = font, Foreground = new SolidColorBrush(ink), FontSize = nameSize, FontWeight = weight, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) });
-        panel.Children.Add(head);
-        panel.Children.Add(MessageContent(line, state, font, ink, weight));
         // #6/#28 卡片底色：transparent 模式无填充、只有描边；调色板卡片
         // 用角色里的 Bg（深浅已经在 Build(seed, dark) 里算好）；弹幕卡片
         // 深色模式用 #2B2B2B、浅色用用户 CardColor；醒目留言只有 ScBiliColor
@@ -777,46 +917,48 @@ public sealed partial class OverlayWindow : Window
         }
         else if (dark) baseColor = Parse("#2B2B2B");
         else baseColor = Parse(state.CardColor);
-        Brush? background;
-        if (transparent) background = null;
-        else if (state.CardBlur > 0)
-            // #5 磨砂：AcrylicBrush 采样窗后内容做系统级磨砂，
-            // TintOpacity 跟 CardOpacity；AcrylicBrush 没有模糊半径属性，
-            // CardBlur 的 px 数值映射不到它上面，>0 只做开关，==0 走实色。
-            // 注：BackgroundSource 是 UWP 版 AcrylicBrush 才有的属性，
-            // WinUI 3 版没有，这里用它默认的采样来源。
-            // 透明悬浮窗上 Acrylic 到底出不出来，必须在 Windows 上验证。
-            background = new AcrylicBrush { TintColor = baseColor, TintOpacity = Math.Clamp(state.CardOpacity, 0, 1), FallbackColor = Color.FromArgb((byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255), baseColor.R, baseColor.G, baseColor.B) };
-        else
-            background = new SolidColorBrush(Color.FromArgb((byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255), baseColor.R, baseColor.G, baseColor.B));
-        var card = new Border
+        var lineColor = CardLineColor(state, dark, roles, transparent, ink);
+
+        var head = HeadParts(line, state, font, nameColorHex, weight, nameSize, smallSize, chipRadius, shadow);
+        // gift/guard/enter/follow/like/share：单行 pill（参考图第 1/5/7 行）。
+        if (line.Type is "gift" or "guard" or "enter" or "follow" or "like" or "share")
+            return BuildCard(state, PillRow(head, line, font, ink, weight, nameSize), baseColor, lineColor, transparent, pill: true);
+
+        var panel = new StackPanel { Spacing = 2 };
+        var headRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        if (head.Avatar != null) headRow.Children.Add(head.Avatar);
+        headRow.Children.Add(head.Name);
+        if (head.Medal != null) headRow.Children.Add(head.Medal);
+        foreach (var badge in head.Badges) headRow.Children.Add(badge);
+        // 醒目留言价格：参考图第 2 行，右上角 "+30"（不再是 head 里的 "¥{Price}"）。
+        // 价格色走调色板 superchat 的 price（浅色 tone 90 / 深色 tone 20，
+        // 见 PaletteHelper 文件头的映射表）。
+        UIElement headElement = headRow;
+        if (line.Type == "superchat" && line.Price > 0)
         {
-            Background = background,
-            CornerRadius = new CornerRadius(state.Corner == 0 ? 999 : state.Corner),
-            Padding = new Thickness(12, 8, 12, 8),
-            Child = panel,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            // transparent 模式：无填充，只有描边（文字靠 #4 的阴影才看得清）。
-            BorderBrush = transparent ? new SolidColorBrush(Color.FromArgb(140, ink.R, ink.G, ink.B)) : null,
-            BorderThickness = transparent ? new Thickness(1) : new Thickness(0),
-        };
-        // #15/#23：进树后量一次——收紧到内容宽（只缩不扩）；Corner==0 时
-        // 先按 999 画胶囊，等宽度定下来、尺寸变化触发 SizeChanged 时
-        // 再按实测半高写精确值；宽度没变就一直是 999，视觉上同样是胶囊。
-        card.Loaded += (_, _) =>
-        {
-            TightenCard(card);
-            if (state.Corner == 0)
+            var price = new TextBlock
             {
-                void OnSized(object _, SizeChangedEventArgs e)
-                {
-                    card.SizeChanged -= OnSized;
-                    if (card.ActualHeight > 0) card.CornerRadius = new CornerRadius(card.ActualHeight / 2);
-                }
-                card.SizeChanged += OnSized;
-            }
-        };
-        return card;
+                Text = $"+{line.Price}",
+                FontFamily = font,
+                Foreground = new SolidColorBrush(Parse(PaletteHelper.Tone(state.SeedColor, dark ? 20 : 90))),
+                FontSize = nameSize,
+                FontWeight = weight,
+                TextWrapping = TextWrapping.NoWrap,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            var headGrid = new Grid();
+            headGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
+            headGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(headRow, 0);
+            headGrid.Children.Add(headRow);
+            Grid.SetColumn(price, 1);
+            headGrid.Children.Add(price);
+            headElement = headGrid;
+        }
+        panel.Children.Add(headElement);
+        panel.Children.Add(MessageContent(line, state, font, ink, weight));
+        return BuildCard(state, panel, baseColor, lineColor, transparent, pill: false);
     }
 
     // B 站表情：行内显示，和字一样大（高 = 字号，宽按原图比例自动，
@@ -837,6 +979,23 @@ public sealed partial class OverlayWindow : Window
             return ShadowText(plain, state.TextShadow);
         var token = Regex.Match(text, @"\[[^\[\]]{1,20}\]");
         if (!token.Success) return ShadowText(plain, state.TextShadow);
+        // 纯表情（整条只有一个表情 token）：参考图第 6 行，高卡片、表情图居中放大。
+        // 图加载失败时回退 token 文字，用卡片 ink 色（深底也不能出现黑字）。
+        if (token.Index == 0 && token.Length == text.Trim().Length)
+        {
+            var size = Math.Max(48, state.FontSize * 3);
+            var img = new Image { Height = size, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var box = new Grid { MinHeight = size + 16, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center };
+            box.Children.Add(img);
+            img.ImageFailed += (_, _) =>
+            {
+                box.Children.Clear();
+                box.Children.Add(new TextBlock { Text = token.Value, FontFamily = font, Foreground = new SolidColorBrush(ink), FontSize = state.FontSize, FontWeight = weight, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            };
+            try { img.Source = new BitmapImage(emoteUri); }
+            catch { return ShadowText(plain, state.TextShadow); }
+            return box;
+        }
         var rich = new RichTextBlock { FontFamily = font, Foreground = new SolidColorBrush(ink), FontSize = state.FontSize, FontWeight = weight, TextWrapping = TextWrapping.Wrap };
         var para = new Paragraph();
         if (token.Index > 0) para.Inlines.Add(new Run { Text = text[..token.Index] });
@@ -886,9 +1045,41 @@ public sealed partial class OverlayWindow : Window
     Border StatsBar(AppState state, bool vertical, bool compact)
     {
         var dark = IsCardDark(state);
-        var bg = dark ? Parse("#2A2A2A") : Parse("#F7F7F7");
-        var num = dark ? Parse("#FFFFFF") : Parse("#111111");
-        var label = dark ? Color.FromArgb(184, 255, 255, 255) : Parse("#FFFFFF");
+        var transparent = string.Equals(state.CardThemeMode, "transparent", StringComparison.OrdinalIgnoreCase);
+        var frosted = !transparent && state.CardBlur > 0;
+        // 三种样式（参考图最后一行）：
+        // 浅色：深色 pill + 白字——旧代码浅色底 #F7F7F7 配纯白标签，白底白字看不见；
+        // 深色：深灰卡 + 白字；磨砂：白底半透明卡 + 深字 + 描边。
+        // transparent：无底无边框，白字 + 阴影（浮在直播画面上才看得清）。
+        Color bg, label, num, line;
+        if (transparent)
+        {
+            bg = Parse("#000000");
+            label = Color.FromArgb(220, 255, 255, 255);
+            num = Parse("#FFFFFF");
+            line = Color.FromArgb(0, 0, 0, 0);
+        }
+        else if (frosted)
+        {
+            bg = Parse("#FFFFFF");
+            label = Color.FromArgb(184, 17, 17, 17);
+            num = Parse("#111111");
+            line = Color.FromArgb(110, 0, 0, 0);
+        }
+        else if (dark)
+        {
+            bg = Parse("#2A2A2A");
+            label = Color.FromArgb(184, 255, 255, 255);
+            num = Parse("#FFFFFF");
+            line = Color.FromArgb(90, 255, 255, 255);
+        }
+        else
+        {
+            bg = Parse("#333333");
+            label = Color.FromArgb(184, 255, 255, 255);
+            num = Parse("#FFFFFF");
+            line = Color.FromArgb(140, 0, 0, 0);
+        }
         var font = FontHelper.FamilyForCards(state.CardFont, state.CjkFont, state.JpFont);
         var scale = Root.XamlRoot?.RasterizationScale ?? 1;
         if (scale <= 0) scale = 1;
@@ -916,7 +1107,7 @@ public sealed partial class OverlayWindow : Window
                 Foreground = new SolidColorBrush(label),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            row.Children.Add(ShadowText(captionBlock, dark ? 0.35 : 0.7));
+            row.Children.Add(ShadowText(captionBlock, transparent ? 0.7 : 0));
             row.Children.Add(new TextBlock
             {
                 Text = value,
@@ -933,11 +1124,10 @@ public sealed partial class OverlayWindow : Window
         Add(vertical ? "在线" : "当前在线", FormatCount(LiveService.Online));
         if (vertical && !string.IsNullOrWhiteSpace(LiveService.Watched)) Add("看过", LiveService.Watched);
         var radius = !vertical && state.Corner <= 0 ? barH / 2 : state.Corner <= 0 ? Math.Min(28, winW * 0.22) : state.Corner;
-        var transparent = string.Equals(state.CardThemeMode, "transparent", StringComparison.OrdinalIgnoreCase);
         return new Border
         {
-            Background = transparent ? null : new SolidColorBrush(Color.FromArgb((byte)(Math.Clamp(state.CardOpacity, 0, 1) * 255), bg.R, bg.G, bg.B)),
-            BorderBrush = new SolidColorBrush(dark ? Color.FromArgb(90, 255, 255, 255) : Color.FromArgb(50, 0, 0, 0)),
+            Background = CardBackground(state, bg, transparent),
+            BorderBrush = new SolidColorBrush(line),
             BorderThickness = transparent ? new Thickness(0) : new Thickness(1),
             CornerRadius = new CornerRadius(radius),
             Padding = new Thickness(vertical ? 16 : 18, vertical ? 10 : 0, vertical ? 16 : 18, vertical ? 10 : 0),
@@ -954,6 +1144,7 @@ public sealed partial class OverlayWindow : Window
     static Border EmptyState(AppState state, string title = "等待弹幕", string subtitle = "连接后会显示在这里")
     {
         var dark = IsCardDark(state);
+        var transparent = string.Equals(state.CardThemeMode, "transparent", StringComparison.OrdinalIgnoreCase);
         var ink = !state.AdaptiveText ? Parse(state.TextColor) : dark ? Parse("#FFFFFF") : Parse("#1A1A1A");
         var font = FontHelper.FamilyForCards(state.CardFont, state.CjkFont, state.JpFont);
         var weight = WeightOf(state.DanmakuFontWeight);
@@ -974,11 +1165,14 @@ public sealed partial class OverlayWindow : Window
             Foreground = new SolidColorBrush(Color.FromArgb(170, ink.R, ink.G, ink.B)),
             TextWrapping = TextWrapping.Wrap
         });
+        // 空卡片也按三种样式画：和弹幕卡片同一套底色 + 1dp Line 描边；
+        // 以前 Background 是 null、BorderThickness 是 0，描边刷子配了却没画出来。
+        var baseColor = dark ? Parse("#2B2B2B") : Parse(state.CardColor);
         return new Border
         {
-            Background = null,
-            BorderBrush = new SolidColorBrush(Color.FromArgb(140, ink.R, ink.G, ink.B)),
-            BorderThickness = new Thickness(0),
+            Background = CardBackground(state, baseColor, transparent),
+            BorderBrush = new SolidColorBrush(CardLineColor(state, dark, null, transparent, ink)),
+            BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(state.Corner <= 0 ? 16 : state.Corner),
             Padding = new Thickness(14, 10, 14, 10),
             HorizontalAlignment = HorizontalAlignment.Left,
