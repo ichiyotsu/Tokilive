@@ -1,7 +1,7 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Huge Icons "live-streaming-01" (yesicon.app), stroke glyph on the existing #4F378B background. -->
-    <group android:translateX="17.83" android:translateY="16.32" android:scaleX="3.014" android:scaleY="3.014">
-        <path android:fillColor="#00000000" android:strokeColor="#E8DEF8" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M17,21c1.87,0 2.804,0 3.5,-0.402a3,3 0 0 0 1.098,-1.098C22,18.804 22,17.87 22,16s0,-2.804 -0.402,-3.5a3,3 0 0 0 -1.098,-1.098C19.804,11 18.87,11 17,11H7c-1.87,0 -2.804,0 -3.5,0.402A3,3 0 0 0 2.402,12.5C2,13.196 2,14.13 2,16s0,2.804 0.402,3.5A3,3 0 0 0 3.5,20.598C4.196,21 5.13,21 7,21zM16,6c-0.977,-1.226 -2.407,-2 -4,-2s-3.023,0.774 -4,2m6,2c-0.489,-0.613 -1.203,-1 -2,-1s-1.511,0.387 -2,1"/>
-        <path android:fillColor="#00000000" android:strokeColor="#E8DEF8" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M5,14v4h1.5M19,18h-2v-2m0,0v-2h2m-2,2h1.5M9,14v4m2.5,-4l1.5,4l1.5,-4"/>
+    <!-- Huge Icons "live-streaming-01" (yesicon.app), black stroke glyph on pure white, 2.0x centered (30..78dp) per TokiUI. -->
+    <group android:translateX="30" android:translateY="30" android:scaleX="2" android:scaleY="2">
+        <path android:fillColor="#00000000" android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M17,21c1.87,0 2.804,0 3.5,-0.402a3,3 0 0 0 1.098,-1.098C22,18.804 22,17.87 22,16s0,-2.804 -0.402,-3.5a3,3 0 0 0 -1.098,-1.098C19.804,11 18.87,11 17,11H7c-1.87,0 -2.804,0 -3.5,0.402A3,3 0 0 0 2.402,12.5C2,13.196 2,14.13 2,16s0,2.804 0.402,3.5A3,3 0 0 0 3.5,20.598C4.196,21 5.13,21 7,21zM16,6c-0.977,-1.226 -2.407,-2 -4,-2s-3.023,0.774 -4,2m6,2c-0.489,-0.613 -1.203,-1 -2,-1s-1.511,0.387 -2,1"/>
+        <path android:fillColor="#00000000" android:strokeColor="#FF000000" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M5,14v4h1.5M19,18h-2v-2m0,0v-2h2m-2,2h1.5M9,14v4m2.5,-4l1.5,4l1.5,-4"/>
     </group>
 </vector>
