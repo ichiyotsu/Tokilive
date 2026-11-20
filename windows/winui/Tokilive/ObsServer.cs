@@ -228,7 +228,7 @@ public static class ObsServer
         // 原来的 1 秒 /api/state 轮询；EventSource 重连成功（onopen）后停掉轮询。
         // 卡片样式不再写死白色，改用 config 事件下发的主题变量。
         var html = """
-            <!doctype html><meta charset=utf-8><title>tokilive · __TITLE__</title>
+            <!doctype html><meta charset=utf-8><title>TokiLive · __TITLE__</title>
             <style>
             :root{--card-bg:rgba(255,255,255,.88);--card-text:#111;--card-name:#111;--card-fs:16px;--card-radius:16px;--card-font:'Segoe UI Variable',sans-serif}
             html,body{margin:0;background:transparent;color:var(--card-text);font-family:var(--card-font);font-size:var(--card-fs)}

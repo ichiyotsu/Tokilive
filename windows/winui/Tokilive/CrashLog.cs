@@ -25,7 +25,7 @@ public static class CrashLog
     {
         var text = Format(ex);
         if (text.Length > 1800) text = text[..1800];
-        MessageBoxW(IntPtr.Zero, text, "tokilive 无法启动", 0x00000010);
+        MessageBoxW(IntPtr.Zero, text, "TokiLive 无法启动", 0x00000010);
     }
 
     public static string Format(Exception ex)

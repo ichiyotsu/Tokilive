@@ -48,13 +48,13 @@ public static class LyricsService
     static readonly Dictionary<string, CachedLyrics> Cache = new();
     // 1.2.0 的 DEMO_LRC：4 行，带翻译（| 分隔）和一行逐字时间戳，
     // 用来检查逐行、翻译和逐字解析。最后行 10.50，循环按 14 秒算。
-    const string Demo = "[00:00.00]这是 tokilive 的演示歌词 | demo lyric\n[00:03.00]<00:03.00>不<00:03.40>是<00:03.80>在<00:04.20>售<00:04.60>歌<00:05.00>曲 | not a commercial song\n[00:07.00]用来检查逐行、翻译和逐字高亮\n[00:10.50]关闭演示后，这里只显示系统正在播放的曲目";
+    const string Demo = "[00:00.00]这是 TokiLive 的演示歌词 | demo lyric\n[00:03.00]<00:03.00>不<00:03.40>是<00:03.80>在<00:04.20>售<00:04.60>歌<00:05.00>曲 | not a commercial song\n[00:07.00]用来检查逐行、翻译和逐字高亮\n[00:10.50]关闭演示后，这里只显示系统正在播放的曲目";
 
     public static async Task Refresh()
     {
         if (AppState.Current.LyricDemo)
         {
-            Current = new NowPlaying { Title = "演示", Artist = "tokilive", Source = "演示", Label = "演示排版", Lines = Parse(Demo), Position = (DateTime.UtcNow.TimeOfDay.TotalSeconds % 14), Duration = 14, Playing = true };
+            Current = new NowPlaying { Title = "演示", Artist = "TokiLive", Source = "演示", Label = "演示排版", Lines = Parse(Demo), Position = (DateTime.UtcNow.TimeOfDay.TotalSeconds % 14), Duration = 14, Playing = true };
             Current.Current = LineAt(Current.Lines, Current.Position);
             Updated?.Invoke();
             return;
@@ -298,7 +298,7 @@ public static class LyricsService
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"tokilive/{AppState.Version} (https://github.com/ichiyotsu/Tokilive)");
+            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"TokiLive/{AppState.Version} (https://github.com/ichiyotsu/Tokilive)");
             var url = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title) + "&artist_name=" + Uri.EscapeDataString(artist);
             using var res = await http.GetAsync(url);
             if ((int)res.StatusCode == 429) return new CachedLyrics { Error = "歌词服务限流，稍后再试", Cacheable = false };

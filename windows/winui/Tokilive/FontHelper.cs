@@ -36,6 +36,8 @@ public static class FontHelper
         "Source Han Sans SC",
         "PingFang SC",
         "Inter",
+        "Rajdhani",
+        "VT323",
         "Google Sans",
         "One UI Sans",
         "Yu Gothic UI",
@@ -44,6 +46,19 @@ public static class FontHelper
         "SimHei",
         "SimSun",
     ];
+
+    // 内置字体：Inter（全局默认）+ Rajdhani（赛博朋克 2077 游戏内字体）
+    // + VT323（MC 像素风格）。文件随程序打包在 Fonts/ 下，名字映射成
+    // ms-appx URI 后，WinUI 才能按名字找到它们；只写名字会去系统字体
+    // 里找，找不到就悄悄回退。
+    // MC 自己的 Mojangles 字体没有官方字体文件（游戏用位图字帖渲染，
+    // 网上流传的都是粉丝描摹、无授权），所以不打包它，用 OFL 的 VT323 代替。
+    static readonly Dictionary<string, string> BundledFonts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Inter"] = "ms-appx:///Fonts/Inter.ttf#Inter",
+        ["Rajdhani"] = "ms-appx:///Fonts/Rajdhani-Regular.ttf#Rajdhani",
+        ["VT323"] = "ms-appx:///Fonts/VT323-Regular.ttf#VT323",
+    };
 
     public static string Resolve(string? name) => Resolve(name, null, null);
 
@@ -58,7 +73,8 @@ public static class FontHelper
         {
             var f = (font ?? "").Trim();
             if (f.Length == 0 || !seen.Add(f)) return;
-            parts.Add(f);
+            // 打包进来的字体要写成文件 URI，否则 WinUI 只认系统已安装字体。
+            parts.Add(BundledFonts.TryGetValue(f, out var uri) ? uri : f);
         }
         Add(latin);
         Add(cjk);

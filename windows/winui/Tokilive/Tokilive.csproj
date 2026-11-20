@@ -35,5 +35,15 @@
     <Manifest Include="$(ApplicationManifest)" />
     <None Include="appicon.ico" />
     <EmbeddedResource Include="splash.png" />
+    <!-- 打包字体：Inter（变量字体，全局默认）+ Rajdhani（赛博朋克 2077）
+         + VT323（MC 像素风）。FontHelper.Resolve 会把名字映射成 ms-appx URI。
+         注意 Inter.ttf 是变量字体的改名（原文件名带方括号，进不了 URI）。 -->
+    <Content Include="Fonts\Inter.ttf" />
+    <Content Include="Fonts\Inter-Regular.ttf" />
+    <Content Include="Fonts\Inter-Bold.ttf" />
+    <Content Include="Fonts\Rajdhani-Regular.ttf" />
+    <Content Include="Fonts\Rajdhani-Bold.ttf" />
+    <Content Include="Fonts\Rajdhani-SemiBold.ttf" />
+    <Content Include="Fonts\VT323-Regular.ttf" />
   </ItemGroup>
 </Project>

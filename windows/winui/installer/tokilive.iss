@@ -4,10 +4,10 @@
 
 [Setup]
 AppId=com.ichiyotsu.tokilive
-AppName=tokilive
+AppName=TokiLive
 AppVersion=0.1.5
 AppPublisher=ichiyotsu
-DefaultDirName={autopf}\tokilive
+DefaultDirName={autopf}\TokiLive
 DisableDirPage=no
 DisableProgramGroupPage=yes
 OutputBaseFilename=TokiLive-0.1.5
@@ -24,7 +24,7 @@ SetupIconFile=..\Tokilive\appicon.ico
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\tokilive"; Filename: "{app}\Tokilive.exe"
+Name: "{autoprograms}\TokiLive"; Filename: "{app}\Tokilive.exe"
 
 [Run]
-Filename: "{app}\Tokilive.exe"; Description: "启动 tokilive"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Tokilive.exe"; Description: "启动 TokiLive"; Flags: nowait postinstall skipifsilent

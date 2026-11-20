@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -26,7 +27,7 @@ public static class UpdateService
         try
         {
             using var http = new HttpClient();
-            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"tokilive/{AppState.Version} (https://github.com/ichiyotsu/Tokilive)");
+            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"TokiLive/{AppState.Version} (https://github.com/ichiyotsu/Tokilive)");
             http.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
             using var list = JsonDocument.Parse(await http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases?per_page=20"));
             if (list.RootElement.ValueKind != JsonValueKind.Array)
@@ -36,19 +37,54 @@ public static class UpdateService
                 state.UpdateMessage = "检查失败：GitHub 返回异常（可能触发限流），请稍后再试。";
                 return;
             }
+            // 更新通道（版本号后缀定通道：-aN 是 alpha，-bN 是 beta，无后缀是正式版）：
+            // 正式版用户只收更新的正式版；alpha 用户收所有更新的版本；
+            // beta 用户收更新的 beta 版，以及发布日期比自己新版更新的正式版
+            // （正式版号可能比 beta 小，例如 0.1.5 晚于 0.2.0-b1，不能只比版本号）。
+            // 找不到自身版本时（列表里没有当前版本、或没有 published_at），
+            // 兜底按版本号比较。
+            var ownVersion = AppState.Version;
+            var ownChannel = ChannelOf(ownVersion);
+            DateTimeOffset? ownPublished = null;
+            foreach (var rel in list.RootElement.EnumerateArray())
+            {
+                if (!rel.TryGetProperty("tag_name", out var tag) || tag.ValueKind != JsonValueKind.String) continue;
+                if (tag.GetString()?.Trim().TrimStart('v', 'V') != ownVersion) continue;
+                if (rel.TryGetProperty("published_at", out var pub) && pub.ValueKind == JsonValueKind.String
+                    && DateTimeOffset.TryParse(pub.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+                    ownPublished = dt;
+                break;
+            }
             JsonElement? best = null;
             string bestVersion = "";
             foreach (var rel in list.RootElement.EnumerateArray())
             {
                 // 缺字段或字段类型不对的发行版直接跳过，不能让它抛异常把整个检查拖垮。
                 if (!TryFlag(rel, "draft", out var isDraft) || !TryFlag(rel, "prerelease", out var isPre)) continue;
-                if (isDraft || isPre) continue;
+                if (isDraft) continue;
                 if (!rel.TryGetProperty("tag_name", out var tag) || tag.ValueKind != JsonValueKind.String) continue;
                 var version = tag.GetString()?.Trim().TrimStart('v', 'V') ?? "";
-                if (version.Contains('-') || Compare(version, AppState.Version) <= 0) continue;
-                if (best == null || Compare(version, bestVersion) > 0) { best = rel; bestVersion = version; }
+                var channel = ChannelOf(version);
+                // 没有后缀却标了 prerelease 的，按 beta 算（不是正式版）。
+                if (isPre && channel == "stable") channel = "beta";
+                DateTimeOffset? published = null;
+                if (rel.TryGetProperty("published_at", out var pub) && pub.ValueKind == JsonValueKind.String
+                    && DateTimeOffset.TryParse(pub.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+                    published = dt;
+                var eligible = ownChannel switch
+                {
+                    "alpha" => CompareRelease(version, ownVersion) > 0,
+                    "beta" => channel == "beta"
+                        ? CompareRelease(version, ownVersion) > 0
+                        : channel == "stable" && (published != null && ownPublished != null
+                            ? published > ownPublished
+                            : CompareRelease(version, ownVersion) > 0),
+                    _ => channel == "stable" && Compare(version, ownVersion) > 0,
+                };
+                if (!eligible) continue;
+                if (best == null || CompareRelease(version, bestVersion) > 0) { best = rel; bestVersion = version; }
             }
-            if (best == null) { state.UpdateMessage = "已经是最新正式版 " + AppState.Version + "。"; return; }
+            if (best == null) { state.UpdateMessage = "已经是最新版 " + AppState.Version + "。"; return; }
             var release = best.Value;
             LatestNotes = release.TryGetProperty("body", out var body) && body.ValueKind == JsonValueKind.String ? body.GetString() : null;
             if (LatestNotes?.Length > 2000)
@@ -86,27 +122,27 @@ public static class UpdateService
             var isPortable = IsPortable(asset.Value);
             var isZip = name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
             state.UpdateMessage = isPortable
-                ? "已校验 " + name + "（便携版）。确认后会关闭 tokilive 并替换当前程序。"
+                ? "已校验 " + name + "（便携版）。确认后会关闭 TokiLive 并替换当前程序。"
                 : "已校验 " + name + "。确认后才会打开安装程序。";
             var confirm = await App.Confirm(isPortable
                 ? isZip
-                    ? "安装 " + versionName + "（便携版）？会关闭 tokilive，把已校验的压缩包解压覆盖到当前程序目录，再重新打开。"
-                    : "安装 " + versionName + "（便携版）？会关闭 tokilive，用已校验的文件替换当前程序，再重新打开。"
-                : "安装 " + versionName + "？会关闭 tokilive 并打开安装程序。安装程序可以选择目录。");
+                    ? "安装 " + versionName + "（便携版）？会关闭 TokiLive，把已校验的压缩包解压覆盖到当前程序目录，再重新打开。"
+                    : "安装 " + versionName + "（便携版）？会关闭 TokiLive，用已校验的文件替换当前程序，再重新打开。"
+                : "安装 " + versionName + "？会关闭 TokiLive 并打开安装程序。安装程序可以选择目录。");
             if (!confirm) return;
             if (isPortable)
             {
                 var exe = Environment.ProcessPath;
                 if (string.IsNullOrWhiteSpace(exe))
                 {
-                    state.UpdateMessage = "便携版已下载到 " + dest + "，拿不到当前程序路径，无法自动替换。请关闭 tokilive 后手动解压覆盖，再重新打开。";
+                    state.UpdateMessage = "便携版已下载到 " + dest + "，拿不到当前程序路径，无法自动替换。请关闭 TokiLive 后手动解压覆盖，再重新打开。";
                     return;
                 }
                 string script;
                 try { script = WritePortableScript(isZip, dest, exe); }
                 catch (Exception ex)
                 {
-                    state.UpdateMessage = "便携版已下载到 " + dest + "，自动替换脚本写不出来（" + ex.Message + "），请关闭 tokilive 后手动替换。";
+                    state.UpdateMessage = "便携版已下载到 " + dest + "，自动替换脚本写不出来（" + ex.Message + "），请关闭 TokiLive 后手动替换。";
                     return;
                 }
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File \"" + script + "\"") { UseShellExecute = false, CreateNoWindow = true });
@@ -286,6 +322,43 @@ public static class UpdateService
             return Convert.ToHexString(hash.Hash!).ToLowerInvariant();
         }
         throw new InvalidOperationException("重定向过多");
+    }
+
+    // 版本号后缀定通道：-aN 是 alpha，-bN 是 beta，无后缀是正式版。
+    // 后缀格式不对（例如 -rc1）也按 beta 算：它不是正式版。
+    static string ChannelOf(string version)
+    {
+        var dash = version.IndexOf('-');
+        if (dash < 0) return "stable";
+        var suffix = version[(dash + 1)..];
+        if (suffix.Length >= 2 && suffix[0] is 'a' or 'A' && int.TryParse(suffix[1..], out _)) return "alpha";
+        if (suffix.Length >= 2 && suffix[0] is 'b' or 'B' && int.TryParse(suffix[1..], out _)) return "beta";
+        return "beta";
+    }
+
+    // 带后缀感知的版本比较：先比核心段；核心相同是有后缀的更旧
+    // （0.2.0-b1 < 0.2.0）；都有后缀时 alpha < beta，再比后缀数字。
+    // 旧的 Compare 会把 "0-b1" 整个段解析成 0，分不出 b1 和 b2。
+    static int CompareRelease(string a, string b)
+    {
+        var (ca, cha, na) = SplitChannel(a);
+        var (cb, chb, nb) = SplitChannel(b);
+        var core = Compare(ca, cb);
+        if (core != 0) return core;
+        if (cha == chb) return na - nb;
+        if (cha == "stable") return 1;
+        if (chb == "stable") return -1;
+        return cha == "alpha" ? -1 : 1;
+    }
+
+    static (string core, string channel, int num) SplitChannel(string version)
+    {
+        var dash = version.IndexOf('-');
+        if (dash < 0) return (version, "stable", 0);
+        var suffix = version[(dash + 1)..];
+        if (suffix.Length >= 2 && suffix[0] is 'a' or 'A' && int.TryParse(suffix[1..], out var an)) return (version[..dash], "alpha", an);
+        if (suffix.Length >= 2 && suffix[0] is 'b' or 'B' && int.TryParse(suffix[1..], out var bn)) return (version[..dash], "beta", bn);
+        return (version[..dash], "beta", 0);
     }
 
     public static int Compare(string a, string b)
