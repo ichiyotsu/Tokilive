@@ -9,6 +9,12 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls"/>
             </ResourceDictionary.MergedDictionaries>
             <Thickness x:Key="PagePadding">24,16,24,16</Thickness>
+            <!-- 全局字体：Google Inter（打包在 Fonts/ 下的变量字体）+ 微软雅黑。
+                 ContentControlThemeFontFamily 是 WinUI 大部分控件的默认字体，
+                 TextControlThemeFontFamily 覆盖输入框一类；两个都改，
+                 设置窗口、弹幕卡片和歌词才会统一用同一套字体。 -->
+            <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Fonts/Inter.ttf#Inter, Microsoft YaHei</FontFamily>
+            <FontFamily x:Key="TextControlThemeFontFamily">ms-appx:///Fonts/Inter.ttf#Inter, Microsoft YaHei</FontFamily>
             <Style x:Key="SettingsCardStyle" TargetType="Border">
                 <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
                 <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>

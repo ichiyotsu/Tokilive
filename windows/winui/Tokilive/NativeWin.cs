@@ -67,7 +67,7 @@ public static class NativeWin
     {
         var hwnd = Hwnd(window);
         var app = ForWindow(window);
-        app.Title = "tokilive · 设置";
+        app.Title = "TokiLive · 设置";
         // 顶栏透明：把内容延伸进标题栏，标题栏那条就不再是系统单独画的
         // 有色条，而是窗口自己的背景（Mica / Acrylic）透出来。
         // 标题栏按钮的底色也全部改透明，悬停/按下只留一层很淡的灰，
@@ -118,7 +118,7 @@ public static class NativeWin
 
     public static IntPtr Foreground() => GetForegroundWindow();
 
-    public static void ApplyOverlay(Window window, string title, bool clickThrough, bool resizable, bool noActivate, bool perPixelTransparent = false)
+    public static void ApplyOverlay(Window window, string title, bool clickThrough, bool resizable, bool noActivate, bool perPixelTransparent = false, bool topmost = true)
     {
         var hwnd = Hwnd(window);
         var app = ForWindow(window);
@@ -129,7 +129,7 @@ public static class NativeWin
             presenter.IsMaximizable = false;
             presenter.IsMinimizable = false;
             presenter.IsResizable = resizable && !clickThrough;
-            presenter.IsAlwaysOnTop = true;
+            presenter.IsAlwaysOnTop = topmost;
         }
         var style = GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64();
         style &= ~(WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
@@ -173,7 +173,10 @@ public static class NativeWin
         {
             // 强调色渐变策略会在 WinUI 合成器下面再铺一层，客户区经常是黑的。
             // 透明悬浮窗只留 DWM 延展 + 透明 SystemBackdrop。
-            try { window.SystemBackdrop ??= new TransparentBackdrop(); } catch { /* 见 TransparentBackdrop */ }
+            // 全透明 SystemBackdrop 每次都换一个新的：第一次挂接失败时
+            // （TransparentBackdrop 内部把失败吞掉），旧的 ??= 写法会一直
+            // 留着那个挂不上的旧对象，窗口底色退回不透明的白。
+            try { window.SystemBackdrop = new TransparentBackdrop(); } catch { /* 见 TransparentBackdrop */ }
         }
         else
         {
@@ -190,7 +193,7 @@ public static class NativeWin
         }
         // SWP_FRAMECHANGED：扩展样式改了要让系统重算窗口帧，否则
         // WS_EX_TOOLWINDOW 去掉 / WS_EX_APPWINDOW 加上可能不生效。
-        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+        SetWindowPos(hwnd, topmost ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
     }
 
     public static void PlaceBelow(IntPtr overlay, IntPtr main)
@@ -263,6 +266,7 @@ public static class NativeWin
     {
         _click = onClick;
         _trayHwnd = hwnd;
+        if (_taskbarCreatedMsg == 0) _taskbarCreatedMsg = RegisterWindowMessage("TaskbarCreated");
         var data = Notify(hwnd);
         return Shell_NotifyIcon(NIM_ADD, ref data);
     }
@@ -341,9 +345,28 @@ public static class NativeWin
         uID = 1,
         uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
         uCallbackMessage = WM_APP + 1,
-        hIcon = LoadIcon(IntPtr.Zero, new IntPtr(32512)),
-        szTip = "tokilive"
+        hIcon = TrayIcon(),
+        szTip = "TokiLive"
     };
+
+    // 托盘图标：以前写死 IDI_APPLICATION（32512），是系统通用图标，
+    // 在“显示隐藏的图标”展开列表里也看不出是哪个程序。现在取当前
+    // exe 自己的主图标（appicon.ico 编进 exe 的第一个图标），取不到
+    // 才回退到系统图标。句柄进程内缓存，不销毁（随进程退出回收）。
+    static IntPtr _trayIcon;
+    static uint _taskbarCreatedMsg;
+    static IntPtr TrayIcon()
+    {
+        if (_trayIcon != IntPtr.Zero) return _trayIcon;
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrWhiteSpace(exe)) _trayIcon = ExtractIcon(IntPtr.Zero, exe, 0);
+        }
+        catch { /* 取不到就用系统默认图标 */ }
+        if (_trayIcon == IntPtr.Zero) _trayIcon = LoadIcon(IntPtr.Zero, new IntPtr(32512));
+        return _trayIcon;
+    }
 
     static SUBCLASSPROC? _proc;
     static Action? _click;
@@ -362,6 +385,13 @@ public static class NativeWin
             var code = lParam.ToInt32() & 0xFFFF;
             if (code is WM_LBUTTONUP or WM_LBUTTONDBLCLK) _click?.Invoke();
             else if (code == WM_RBUTTONUP) ShowTrayMenu(hWnd);
+        }
+        // 资源管理器重启（任务栏重建）后托盘图标会丢：系统广播
+        // TaskbarCreated，收到就重新把图标加上。
+        if (_taskbarCreatedMsg != 0 && msg == _taskbarCreatedMsg && hWnd == _trayHwnd)
+        {
+            var tray = Notify(hWnd);
+            Shell_NotifyIcon(NIM_ADD, ref tray);
         }
         // RegisterHotKey 到达的消息：wParam 是热键 id，Hotkey 按 id 分发
         // 给输入热键（OnPressed）或锁定热键（LockHotkeyPressed）。
@@ -420,6 +450,8 @@ public static class NativeWin
     [DllImport("user32.dll")] static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOWCOMPOSITIONATTRIBDATA data);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern bool Shell_NotifyIcon(int message, ref NOTIFYICONDATA data);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr LoadIcon(IntPtr instance, IntPtr icon);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern IntPtr ExtractIcon(IntPtr hInst, string pszExeFileName, int nIconIndex);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint RegisterWindowMessage(string lpString);
     [DllImport("comctl32.dll")] static extern bool SetWindowSubclass(IntPtr hWnd, SUBCLASSPROC proc, nuint id, nuint data);
     [DllImport("comctl32.dll")] static extern IntPtr DefSubclassProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 }

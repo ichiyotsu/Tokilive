@@ -19,7 +19,7 @@ public sealed partial class InputWindow : Window
     public InputWindow()
     {
         InitializeComponent();
-        NativeWin.ApplyOverlay(this, "tokilive · 输入", clickThrough: false, resizable: !AppState.Current.InputLocked, noActivate: false);
+        NativeWin.ApplyOverlay(this, "TokiLive · 输入", clickThrough: false, resizable: !AppState.Current.InputLocked, noActivate: false);
         RestoreBounds();
         // 移动和改大小都走 AppWindow.Changed（DidPositionChange /
         // DidSizeChange），不用轮询，也不用再等主窗口的 KeepOrder。
@@ -103,7 +103,7 @@ public sealed partial class InputWindow : Window
     // 和 OverlayWindow.ApplyChrome() 一个作用：按当前设置重算窗口的
     // 扩展样式（穿透、大小、OBS 捕获兼容的任务栏样式），改开关后不用重启。
     public void ApplyChrome() =>
-        NativeWin.ApplyOverlay(this, "tokilive · 输入", false, !AppState.Current.InputLocked, false);
+        NativeWin.ApplyOverlay(this, "TokiLive · 输入", false, !AppState.Current.InputLocked, false);
 
     public IntPtr Handle => NativeWin.Hwnd(this);
 
@@ -119,7 +119,9 @@ public sealed partial class InputWindow : Window
     {
         if (_drag == null || AppState.Current.InputLocked) return;
         var p = e.GetCurrentPoint(Root).Position;
-        AppWindow.Move(new global::Windows.Graphics.PointInt32(_drag.Value.X + (int)(p.X - _start.X), _drag.Value.Y + (int)(p.Y - _start.Y)));
+        // 同 OverlayWindow：Position 是物理像素，点位是 DIP，要乘缩放。
+        var scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
+        AppWindow.Move(new global::Windows.Graphics.PointInt32(_drag.Value.X + (int)Math.Round((p.X - _start.X) * scale), _drag.Value.Y + (int)Math.Round((p.Y - _start.Y) * scale)));
     }
 
     async void Box_KeyDown(object sender, KeyRoutedEventArgs e)

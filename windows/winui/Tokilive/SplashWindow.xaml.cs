@@ -22,7 +22,7 @@ public sealed partial class SplashWindow : Window
         InitializeComponent();
         // 无边框、常驻最前、不可改大小，和悬浮窗同一套做法；
         // noActivate: false，启动画面正常显示。
-        NativeWin.ApplyOverlay(this, "tokilive", clickThrough: false, resizable: false, noActivate: false);
+        NativeWin.ApplyOverlay(this, "TokiLive", clickThrough: false, resizable: false, noActivate: false);
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         AppWindow.MoveAndResize(new global::Windows.Graphics.RectInt32(
             area.X + (area.Width - Width) / 2, area.Y + (area.Height - Height) / 2, Width, Height));

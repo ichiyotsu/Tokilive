@@ -40,7 +40,7 @@ public sealed partial class OverlayWindow : Window
     {
         _kind = kind;
         InitializeComponent();
-        var title = kind switch { Kind.Live => "tokilive · 实时窗", Kind.Lyrics => "tokilive · 歌词", _ => "tokilive · 弹幕" };
+        var title = kind switch { Kind.Live => "TokiLive · 实时窗", Kind.Lyrics => "TokiLive · 歌词", _ => "TokiLive · 弹幕" };
         NativeWin.ApplyOverlay(this, title, ClickThrough, resizable: kind != Kind.Lyrics, noActivate: true, perPixelTransparent: true);
         RestoreBounds();
         Closed += (_, _) => { };
@@ -60,7 +60,11 @@ public sealed partial class OverlayWindow : Window
         {
             if (_drag == null || ClickThrough) return;
             var p = e.GetCurrentPoint(Root).Position;
-            AppWindow.Move(new Windows.Graphics.PointInt32(_drag.Value.X + (int)(p.X - _start.X), _drag.Value.Y + (int)(p.Y - _start.Y)));
+            // AppWindow.Position 是物理像素，GetCurrentPoint 给的是 DIP；
+            // 不乘缩放的话，高 DPI 下窗口只会以 1/缩放倍的速度跟鼠标。
+            // 每次都从按下时的锚点算，不逐段累加，就不会因取整丢零头。
+            var scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
+            AppWindow.Move(new Windows.Graphics.PointInt32(_drag.Value.X + (int)Math.Round((p.X - _start.X) * scale), _drag.Value.Y + (int)Math.Round((p.Y - _start.Y) * scale)));
         };
         Root.PointerReleased += (_, _) => _drag = null;
         Render();
@@ -119,9 +123,10 @@ public sealed partial class OverlayWindow : Window
     public void ApplyChrome()
     {
         var locked = _kind == Kind.Lyrics && AppState.Current.LyricLocked;
-        NativeWin.ApplyOverlay(this, AppWindow.Title, ClickThrough || locked, resizable: !locked && _kind != Kind.Lyrics, noActivate: true, perPixelTransparent: true);
+        NativeWin.ApplyOverlay(this, AppWindow.Title, ClickThrough || locked, resizable: !locked && _kind != Kind.Lyrics, noActivate: true, perPixelTransparent: true, topmost: AppState.Current.OverlayTopmost);
         Root.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-        var border = _kind == Kind.Live ? AppState.Current.ShowLiveBorder : _kind == Kind.Danmaku && AppState.Current.ShowWindowBorder;
+        var clickThrough = ClickThrough || locked;
+        var border = (_kind == Kind.Live ? AppState.Current.ShowLiveBorder : _kind == Kind.Danmaku && AppState.Current.ShowWindowBorder) && !clickThrough;
         Root.BorderBrush = border ? new SolidColorBrush(Parse(AppState.Current.UseSystemAccent ? NativeWin.SystemAccent() ?? AppState.Current.AccentHex : AppState.Current.AccentHex)) : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
         Root.BorderThickness = border ? new Thickness(2) : new Thickness(0);
     }
@@ -320,9 +325,8 @@ public sealed partial class OverlayWindow : Window
         sb.Begin();
     }
 
-    // 弹幕入场动画。只在 OverlayWindow.Render() 里调：PreviewList 用的
-    // Card() 本身不带动画，设置页预览里的卡片永远不播；实时窗/歌词窗
-    // 也不走这里。关掉开关或选默认时直接返回，新弹幕直接出现，和现在一样。
+    // 弹幕入场动画。只在 OverlayWindow.Render() 里调：Card() 本身不带动画，
+    // 实时窗/歌词窗也不走这里。关掉开关或选默认时直接返回，新弹幕直接出现，和现在一样。
     // 时长：基础 350ms（缓慢上升 600ms），实际时长 = 基础 / 速度倍率，
     // 速度 0.5x 时 700ms（上升 1200ms），2x 时 175ms（上升 300ms）。
     void AnimateCard(Border card, ChatLine line, AppState state)

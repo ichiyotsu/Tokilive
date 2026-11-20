@@ -31,7 +31,7 @@ public sealed partial class MainWindow : Window
     string _lastMaterial = "";
     string _lastBgPath = "\0";
     double _lastBgOpacity = -1;
-    int _previewBg;
+    bool _dragSubscribed;
     DispatcherTimer? _refreshTimer;
     DispatcherTimer? _z;
     DispatcherTimer? _sample;
@@ -42,6 +42,10 @@ public sealed partial class MainWindow : Window
     bool _syncingColor;
     bool _updatingSeek;
     string _coverKey = "";
+    // 全部歌词页的重绘节流：歌没换、当前行没变时不重建列表，
+    // 否则 500ms 的歌词定时器每次都会把滚动位置弹回顶部。
+    string _fullLyricsKey = "";
+    int _fullLyricsIndex = -1;
     DispatcherTimer? _seekTimer;
 
     public MainWindow()
@@ -60,7 +64,17 @@ public sealed partial class MainWindow : Window
         // 构造时窗口还没显示，XamlRoot 可能拿不到，缩放会按 1.0 算；
         // 激活后 XamlRoot 就有了，再按真实缩放重算一次，避免高 DPI 下
         // 拖动区盖住右边的最小化/最大化/关闭按钮。
-        Activated += (_, _) => NativeWin.UpdateMainDragRectangles(this);
+        Activated += (_, _) =>
+        {
+            NativeWin.UpdateMainDragRectangles(this);
+            // XamlRoot.Changed 在改 DPI/换显示器时触发，拖动区跟着实时缩放重算；
+            // 只靠 Activated 的话，窗口不失活地换屏时拖动区会一直过期，盖住最小化按钮。
+            if (!_dragSubscribed && Content?.XamlRoot is { } xr)
+            {
+                _dragSubscribed = true;
+                xr.Changed += (_, _) => NativeWin.UpdateMainDragRectangles(this);
+            }
+        };
         Closed += (_, args) =>
         {
             // #30 关到托盘：1.2.0 的 window-all-closed 行为——主窗口关掉只是
@@ -151,7 +165,6 @@ public sealed partial class MainWindow : Window
             try { await LyricsService.Seek(PlayerSeek.Value); } catch { /* 播放器不接受拖动 */ }
         };
         ApplyVisibility();
-        ApplyPreviewBg();
         RefreshCards();
         ObsServer.Apply();
     }
@@ -335,6 +348,8 @@ public sealed partial class MainWindow : Window
         LyricLockSwitch.IsOn = s.LyricLocked;
         LyricOffsetSlider.Value = s.LyricOffset;
         DanmakuWindowSwitch.IsOn = s.ShowDanmaku;
+        MainTopmostSwitch.IsOn = s.MainTopmost;
+        OverlayTopmostSwitch.IsOn = s.OverlayTopmost;
         TaskbarSwitch.IsOn = s.HideFromTaskbar;
         ObsSwitch.IsOn = s.ObsEnabled;
         ObsCaptureSwitch.IsOn = s.ObsCaptureCompat;
@@ -425,7 +440,7 @@ public sealed partial class MainWindow : Window
         void Save(object? _, object? __) { if (!_loading) Pull(); }
         foreach (var box in new TextBox[] { RoomBox, NameColorBox, CardColorBox, TextColorBox, CardFontBox, HotkeyBox, LyricFontBox, LyricColorBox, LyricHiBox, AccentBox, SeedColorBox, CjkFontBox, JpFontBox, LockHotkeyBox })
             box.TextChanged += (_, _) => Save(null, null);
-        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, CardBlurSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, LyricWordSwitch, DanmakuWindowSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
+        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, CardBlurSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, LyricWordSwitch, DanmakuWindowSwitch, MainTopmostSwitch, OverlayTopmostSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
             sw.Toggled += (_, _) => Save(null, null);
         foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider, AnimSpeedSlider, TextShadowSlider, AppBgOpacitySlider })
             slider.ValueChanged += (_, _) => Save(null, null);
@@ -535,6 +550,8 @@ public sealed partial class MainWindow : Window
         s.LyricLocked = LyricLockSwitch.IsOn;
         s.LyricOffset = LyricOffsetSlider.Value;
         s.ShowDanmaku = DanmakuWindowSwitch.IsOn;
+        s.MainTopmost = MainTopmostSwitch.IsOn;
+        s.OverlayTopmost = OverlayTopmostSwitch.IsOn;
         s.HideFromTaskbar = TaskbarSwitch.IsOn && _tray;
         s.ObsEnabled = ObsSwitch.IsOn;
         s.ObsCaptureCompat = ObsCaptureSwitch.IsOn;
@@ -730,20 +747,33 @@ public sealed partial class MainWindow : Window
         // 设置窗口在前台时，先把它放进置顶带，再把悬浮窗插到它下面。
         // 这样悬浮窗仍盖住别的程序，但不会盖住正在点的设置页。
         // 切走之后不再把设置窗口留在 TOPMOST，否则 400ms 内又盖回游戏。
+        // 两个置顶开关只管“平时”的状态：主窗口默认不置顶，悬浮窗默认置顶；
+        // 正在操作设置窗口的那一刻，主窗口必须临时置顶，否则会被悬浮窗盖住点不到。
         var settingsFocused = AppWindow.IsVisible && (fg == main || fg == _input.Handle);
+        var mainTop = AppState.Current.MainTopmost;
+        var overlayTop = AppState.Current.OverlayTopmost;
         if (settingsFocused)
         {
             NativeWin.RaiseAbove(main, true);
-            NativeWin.PlaceBelow(danmaku, main);
-            NativeWin.PlaceBelow(live, main);
-            NativeWin.PlaceBelow(lyrics, main);
+            if (overlayTop)
+            {
+                NativeWin.PlaceBelow(danmaku, main);
+                NativeWin.PlaceBelow(live, main);
+                NativeWin.PlaceBelow(lyrics, main);
+            }
+            else
+            {
+                NativeWin.RaiseAbove(danmaku, false);
+                NativeWin.RaiseAbove(live, false);
+                NativeWin.RaiseAbove(lyrics, false);
+            }
         }
         else
         {
-            NativeWin.RaiseAbove(main, false);
-            NativeWin.RaiseAbove(danmaku, true);
-            NativeWin.RaiseAbove(live, true);
-            NativeWin.RaiseAbove(lyrics, true);
+            NativeWin.RaiseAbove(main, mainTop);
+            NativeWin.RaiseAbove(danmaku, overlayTop);
+            NativeWin.RaiseAbove(live, overlayTop);
+            NativeWin.RaiseAbove(lyrics, overlayTop);
         }
         if (_input.AppWindow.IsVisible) NativeWin.RaiseAbove(_input.Handle, true);
         _danmaku.Remember();
@@ -772,29 +802,10 @@ public sealed partial class MainWindow : Window
         RefreshCards();
     }
 
-    // #37 预览固定 demo 集：1.2.0 overlay.js 的 DEMO() + samples.js 的
-    // sample() 拼出来的，每种卡片一张，不再拿最近 4 条真消息凑数。
-    // 粉丝牌颜色 0x2D0855 是 samples.js 里 medal.color 2951253 的 hex。
-    // 预览里的卡片不播入场动画（OverlayWindow.Card 本身不带动画）。
-    static readonly ChatLine[] DemoCards =
-    [
-        new() { Type = "danmaku", Name = "夜宵", Text = "哈哈哈哈哈，主播好！", MedalName = "粉丝团", MedalLevel = 24, MedalColor = "#2D0855", Admin = true },
-        new() { Type = "gift", Name = "咕咕鸽", Text = "小花花 x10（1000金瓜子）", Price = 1000, MedalName = "粉丝团", MedalLevel = 22, MedalColor = "#2D0855" },
-        new() { Type = "superchat", Name = "星川", Text = "主播今天好帅！这是测试醒目留言～", Price = 30, Color = "#2A60B2", MedalName = "粉丝团", MedalLevel = 24, MedalColor = "#2D0855" },
-        new() { Type = "guard", Name = "阿梨", Text = "舰长 x1", Price = 198, GuardLevel = 3, MedalName = "粉丝团", MedalLevel = 22, MedalColor = "#2D0855" },
-        new() { Type = "enter", Name = "小林", Text = "进入直播间", MedalName = "粉丝团", MedalLevel = 22, MedalColor = "#2D0855" },
-        new() { Type = "follow", Name = "小林", Text = "按下了关注", MedalName = "粉丝团", MedalLevel = 22, MedalColor = "#2D0855" },
-        new() { Type = "like", Name = "小林", Text = "点赞了", MedalName = "粉丝团", MedalLevel = 22, MedalColor = "#2D0855" },
-        new() { Type = "share", Name = "小林", Text = "分享了直播间", MedalName = "粉丝团", MedalLevel = 22, MedalColor = "#2D0855" },
-        new() { Type = "danmaku", Name = "さくら Sakura", Text = "こんにちは！今日の配信も楽しみです ✨", MedalName = "粉丝团", MedalLevel = 18, MedalColor = "#2D0855" },
-    ];
-
     void RefreshCards()
     {
         _danmaku.Render();
         _live.Render();
-        PreviewList.Children.Clear();
-        foreach (var line in DemoCards) PreviewList.Children.Add(OverlayWindow.Card(line, AppState.Current));
         LivePreview.Text = $"点赞 {LiveService.Likes}    弹幕 {LiveService.Danmaku}    在线 {LiveService.Online}\n{LiveService.Watched}";
         MiniPreviewText.Text = AppState.Current.MiniStats
             ? $"点赞 {LiveService.Likes} · 弹幕 {LiveService.Danmaku} · 在线 {LiveService.Online}"
@@ -803,55 +814,6 @@ public sealed partial class MainWindow : Window
         AccountText.Text = AppState.Current.Account;
     }
 
-    // #37 预览背景：1.2.0 settings.html 的 BGS 四项。棋盘格是 WinUI 里
-    // 没有的 CSS conic 渐变，这里用代码现画一张 360x360 的棋盘格位图
-    // （18px 一格，灰格 #888 透明度 0x22，和 1.2.0 的 #8882 对应）。
-    void PreviewBg_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button b && b.Tag is string tag && int.TryParse(tag, out var index))
-        {
-            _previewBg = index;
-            ApplyPreviewBg();
-        }
-    }
-
-    void ApplyPreviewBg()
-    {
-        Preview.Background = _previewBg switch
-        {
-            1 => new SolidColorBrush(Microsoft.UI.Colors.White),
-            2 => new SolidColorBrush(OverlayWindow.Parse("#1B1B1B")),
-            3 => new LinearGradientBrush
-            {
-                StartPoint = new Windows.Foundation.Point(0, 0),
-                EndPoint = new Windows.Foundation.Point(1, 1),
-                GradientStops = new GradientStopCollection
-                {
-                    new() { Offset = 0, Color = OverlayWindow.Parse("#3A6DF0") },
-                    new() { Offset = 1, Color = OverlayWindow.Parse("#C03AD0") }
-                }
-            },
-            _ => new ImageBrush { ImageSource = MakeCheckerBitmap(), Stretch = Stretch.UniformToFill }
-        };
-    }
-
-    static WriteableBitmap MakeCheckerBitmap()
-    {
-        const int size = 360, cell = 18;
-        var bitmap = new WriteableBitmap(size, size);
-        using var stream = bitmap.PixelBuffer.AsStream();
-        var pixels = new byte[size * size * 4];
-        for (var y = 0; y < size; y++)
-            for (var x = 0; x < size; x++)
-            {
-                // 棋盘格：(x/cell + y/cell) 偶数格填灰，奇数格透明。
-                if (((x / cell) + (y / cell)) % 2 != 0) continue;
-                var i = (y * size + x) * 4;
-                pixels[i] = 0x88; pixels[i + 1] = 0x88; pixels[i + 2] = 0x88; pixels[i + 3] = 0x22;
-            }
-        stream.Write(pixels, 0, pixels.Length);
-        return bitmap;
-    }
 
     void ShowPlayer()
     {
@@ -873,7 +835,9 @@ public sealed partial class MainWindow : Window
             _coverKey = coverKey;
             _ = ShowCoverAsync(now.Cover);
         }
-        RenderPlayerLyrics(now);
+        // 全部歌词页开着时跟着进度刷新高亮行（RenderFullLyrics 自己节流，
+        // 歌没换、当前行没变时不重建列表，不会把滚动位置弹回顶部）。
+        if (PageFullLyrics.Visibility == Visibility.Visible) RenderFullLyrics();
     }
 
     async Task ShowCoverAsync(byte[]? bytes)
@@ -903,12 +867,24 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    void RenderPlayerLyrics(NowPlaying now)
+    // 全部歌词页：整页居左列出所有行，当前行高亮；逐字歌词按时间逐字着色。
+    // 只在歌换了或当前行变了时重建列表，否则 500ms 的进度 tick 会把
+    // 滚动位置弹回顶部。
+    void RenderFullLyrics()
     {
-        PlayerLyrics.Children.Clear();
+        var now = LyricsService.Current;
+        FullLyricsSong.Text = string.IsNullOrWhiteSpace(now.Title) ? "" : now.Title + (string.IsNullOrWhiteSpace(now.Artist) ? "" : " — " + now.Artist);
+        var key = now.Title + "\n" + now.Artist + "\n" + now.Lines.Count;
+        // LineIndexAt 在还没唱到第一行时返回 -1：不要把它钳到 0，
+        // 否则节流会认不出“第一行刚开始唱”这次变化，高亮一直不亮。
+        var index = now.Lines.Count == 0 ? -1 : LyricsService.LineIndexAt(now.Lines, now.Position);
+        if (key == _fullLyricsKey && index == _fullLyricsIndex && FullLyricsList.Children.Count > 0) return;
+        _fullLyricsKey = key;
+        _fullLyricsIndex = index;
+        FullLyricsList.Children.Clear();
         if (now.Lines.Count == 0)
         {
-            PlayerLyrics.Children.Add(new TextBlock
+            FullLyricsList.Children.Add(new TextBlock
             {
                 Text = string.IsNullOrWhiteSpace(now.Current) ? (string.IsNullOrWhiteSpace(now.Label) ? "没有带时间轴的歌词" : now.Label) : now.Current,
                 TextWrapping = TextWrapping.Wrap,
@@ -916,42 +892,56 @@ public sealed partial class MainWindow : Window
             });
             return;
         }
-        var index = LyricsService.LineIndexAt(now.Lines, now.Position);
-        if (index < 0) index = 0;
-        var start = Math.Max(0, index - 1);
-        var end = Math.Min(now.Lines.Count, index + 4);
-        var primary = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
-        var tertiary = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
-        var accent = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
-        for (var i = start; i < end; i++)
+        for (var i = 0; i < now.Lines.Count; i++)
         {
             var line = now.Lines[i];
-            var current = i == index && line.Time <= now.Position;
-            if (current && AppState.Current.LyricWordByWord && line.Words.Count > 0)
-            {
-                var active = LyricsService.WordIndexAt(line, now.Position);
-                var rich = new RichTextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 16 };
-                var para = new Paragraph();
-                for (var w = 0; w < line.Words.Count; w++)
-                    para.Inlines.Add(new Run { Text = line.Words[w].Text, Foreground = w <= active ? accent : tertiary });
-                rich.Blocks.Add(para);
-                PlayerLyrics.Children.Add(rich);
-            }
-            else
-            {
-                PlayerLyrics.Children.Add(new TextBlock
-                {
-                    Text = line.Text,
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = current ? 16 : 14,
-                    FontWeight = current ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
-                    Foreground = current ? primary : tertiary
-                });
-                if (current && !string.IsNullOrWhiteSpace(line.Translation))
-                    PlayerLyrics.Children.Add(new TextBlock { Text = line.Translation, TextWrapping = TextWrapping.Wrap, FontSize = 13, Foreground = tertiary });
-            }
+            var current = i == index;
+            FullLyricsList.Children.Add(LyricLineView(line, current, now.Position));
+            if (current && !string.IsNullOrWhiteSpace(line.Translation))
+                FullLyricsList.Children.Add(new TextBlock { Text = line.Translation, TextWrapping = TextWrapping.Wrap, FontSize = 13, Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"] });
         }
     }
+
+    // 一行歌词的显示：当前行 16 号半粗体、主色；其余行 14 号、次色。
+    // 逐字歌词开着时，当前行按时间逐字着色（唱到的字用强调色）。
+    UIElement LyricLineView(LyricLine line, bool current, double position)
+    {
+        var tertiary = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"];
+        if (current && AppState.Current.LyricWordByWord && line.Words.Count > 0)
+        {
+            var active = LyricsService.WordIndexAt(line, position);
+            var accent = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
+            var rich = new RichTextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 16 };
+            var para = new Paragraph();
+            for (var w = 0; w < line.Words.Count; w++)
+                para.Inlines.Add(new Run { Text = line.Words[w].Text, Foreground = w <= active ? accent : tertiary });
+            rich.Blocks.Add(para);
+            return rich;
+        }
+        return new TextBlock
+        {
+            Text = line.Text,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = current ? 16 : 14,
+            FontWeight = current ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+            Foreground = current ? (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"] : tertiary
+        };
+    }
+
+    void PlayerCard_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        // 点到播放控制按钮（上一首/播放/下一首）时只走按钮自己的 Click，
+        // 别顺带进歌词页；点卡片其他地方才进全部歌词页。
+        DependencyObject? el = e.OriginalSource as DependencyObject;
+        while (el != null)
+        {
+            if (el is Button) return;
+            el = VisualTreeHelper.GetParent(el);
+        }
+        ShowPage("fullyrics");
+    }
+
+    void FullLyricsBack_Click(object sender, RoutedEventArgs e) => ShowPage("lyrics");
 
     void PlayerSeek_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
@@ -992,10 +982,12 @@ public sealed partial class MainWindow : Window
         PageDanmaku.Visibility = tag == "danmaku" ? Visibility.Visible : Visibility.Collapsed;
         PageLive.Visibility = tag == "live" ? Visibility.Visible : Visibility.Collapsed;
         PageLyrics.Visibility = tag == "lyrics" ? Visibility.Visible : Visibility.Collapsed;
+        PageFullLyrics.Visibility = tag == "fullyrics" ? Visibility.Visible : Visibility.Collapsed;
         PageSource.Visibility = tag == "source" ? Visibility.Visible : Visibility.Collapsed;
         PageSettings.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
         if (tag == "source") { OverlayUrl.Text = ObsServer.OverlayUrl; MiniUrl.Text = ObsServer.MiniUrl; }
         if (tag == "lyrics") ShowPlayer();
+        if (tag == "fullyrics") RenderFullLyrics();
     }
 
     void Connect_Click(object sender, RoutedEventArgs e) { AppState.Current.Room = RoomBox.Text; LiveService.Connect(RoomBox.Text); }
@@ -1055,6 +1047,22 @@ public sealed partial class MainWindow : Window
     void Test_Click(object sender, RoutedEventArgs e)
     {
         var tag = (string)((Button)sender).Tag;
+        // 测试消息只发给悬浮窗：目标窗藏着时，点了就像没反应。
+        // 先按这条消息实际会去的窗口把它打开（开关跟着变并保存），再发消息。
+        // 进场/关注/点赞/分享按各自的“互动去向”走：mini 去实时窗，main 去弹幕窗；
+        // 去向是“关闭”时消息会被直接丢掉，这是设置本身的意思，不是测试坏了。
+        var s = AppState.Current;
+        var toLive = tag switch
+        {
+            "enter" => s.RouteEnter == "mini",
+            "follow" => s.RouteFollow == "mini",
+            "like" => s.RouteLike == "mini",
+            "share" => s.RouteShare == "mini",
+            _ => false,
+        };
+        if (toLive) { if (!s.ShowLive) LiveSwitch.IsOn = true; }
+        else if (!s.ShowDanmaku) DanmakuWindowSwitch.IsOn = true;
+        ApplyVisibility();
         if (tag == "emote")
         {
             // 1.2.0 演示里的 [dog] 表情，不用进直播间就能看到行内表情的效果。
@@ -1082,7 +1090,7 @@ public sealed partial class MainWindow : Window
     }
     void PreviewSpeech_Click(object sender, RoutedEventArgs e)
     {
-        SpeechService.Speak("这是 tokilive 的试听", force: true);
+        SpeechService.Speak("这是 TokiLive 的试听", force: true);
     }
     async void LyricControl_Click(object sender, RoutedEventArgs e) => await LyricsService.Control((string)((Button)sender).Tag);
     async void ImportLyrics_Click(object sender, RoutedEventArgs e)
@@ -1102,7 +1110,7 @@ public sealed partial class MainWindow : Window
         {
             var dialog = new ContentDialog
             {
-                Title = "tokilive",
+                Title = "TokiLive",
                 Content = $"这个文件里没有带时间的歌词行（共 {lineCount} 行），没有导入。",
                 CloseButtonText = "知道了",
                 XamlRoot = Content.XamlRoot
@@ -1225,10 +1233,6 @@ public sealed partial class MainWindow : Window
         }
         switch (tag)
         {
-            case "紧凑": // pad .72：字和圆角都收小一档，其余跟默认一样
-                FontSlider.Value = 16; CornerSlider.Value = 10; OpacitySlider.Value = 0.86;
-                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
-                AllMessages(); break;
             case "极简": // hide medal+badge、无描边：关头像和边框，圆角收小
                 FontSlider.Value = 16; CornerSlider.Value = 8; OpacitySlider.Value = 0.86;
                 AvatarSwitch.IsOn = false; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
@@ -1238,22 +1242,9 @@ public sealed partial class MainWindow : Window
                 NameColorBox.Text = "#6750A4";
                 AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = true;
                 AllMessages(); break;
-            case "纯文字": // 背景全无、白字：不透明度拉到最低、圆角 0、字改白
-                FontSlider.Value = 18; CornerSlider.Value = 0; OpacitySlider.Value = 0.2;
-                NameColorBox.Text = "#FFFFFF"; TextColorBox.Text = "#FFFFFF"; CardColorBox.Text = "#000000";
-                AvatarSwitch.IsOn = false; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
-                AllMessages(); break;
-            case "大字": // 1.2.0 readable：fontSize 22
-                FontSlider.Value = 22; CornerSlider.Value = 20; OpacitySlider.Value = 0.92;
-                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
-                AllMessages(); break;
-            case "安静": // 1.2.0 quiet：opacity 0.72、hide medal+badge
-                FontSlider.Value = 14; CornerSlider.Value = 12; OpacitySlider.Value = 0.72;
-                AvatarSwitch.IsOn = false; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
-                AllMessages(enter: false, follow: false, like: false, share: false); break;
             default: // 默认：字号 18（1.2.0 默认）、圆角 16、不透明度 0.86，颜色和开关全重置
                 FontSlider.Value = 18; CornerSlider.Value = 16; OpacitySlider.Value = 0.86;
-                NameColorBox.Text = "#7C4DFF"; TextColorBox.Text = "#1A1A1A"; CardColorBox.Text = "#F5F5F5"; CardFontBox.Text = "Segoe UI Variable";
+                NameColorBox.Text = "#7C4DFF"; TextColorBox.Text = "#1A1A1A"; CardColorBox.Text = "#F5F5F5"; CardFontBox.Text = "Inter";
                 AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
                 AllMessages(); break;
         }
@@ -1265,7 +1256,7 @@ public sealed partial class MainWindow : Window
     {
         var picker = new FileSavePicker();
         InitializeWithWindow.Initialize(picker, NativeWin.Hwnd(this));
-        picker.SuggestedFileName = "tokilive-theme";
+        picker.SuggestedFileName = "TokiLive-theme";
         picker.FileTypeChoices.Add("JSON", new System.Collections.Generic.List<string> { ".json" });
         var file = await picker.PickSaveFileAsync();
         if (file == null) return;

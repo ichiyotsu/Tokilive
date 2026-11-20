@@ -24,6 +24,10 @@ public sealed class AppState : INotifyPropertyChanged
     public bool ClickThrough { get => clickThrough; set => Set(ref clickThrough, value); }
     public bool ShowDanmaku { get => showDanmaku; set => Set(ref showDanmaku, value); }
     public bool ShowLive { get => showLive; set => Set(ref showLive, value); }
+    // 置顶（分开控制）：主窗口默认不置顶，悬浮窗默认置顶。
+    // 正在操作设置窗口时，主窗口会临时置顶以免被悬浮窗盖住，见 KeepOrderCore。
+    public bool MainTopmost { get => mainTopmost; set => Set(ref mainTopmost, value); }
+    public bool OverlayTopmost { get => overlayTopmost; set => Set(ref overlayTopmost, value); }
     public bool ShowDesktopLyrics { get => showDesktopLyrics; set => Set(ref showDesktopLyrics, value); }
     public bool ShowAvatar { get => showAvatar; set => Set(ref showAvatar, value); }
     public string NameColor { get => nameColor; set => Set(ref nameColor, value); }
@@ -149,6 +153,8 @@ public sealed class AppState : INotifyPropertyChanged
     bool clickThrough = true;
     bool showDanmaku = true;
     bool showLive = true;
+    bool mainTopmost;
+    bool overlayTopmost = true;
     bool showDesktopLyrics;
     bool showAvatar = true;
     string nameColor = "#7C4DFF";
@@ -212,12 +218,12 @@ public sealed class AppState : INotifyPropertyChanged
     int inputX, inputY, inputW, inputH;
     string lockHotkey = "Control+Shift+L";
     double ttsVolume = 1;
-    string cardFont = "Segoe UI Variable";
+    string cardFont = "Inter";
     int danmakuX, danmakuY, danmakuW, danmakuH;
     int liveX, liveY, liveW, liveH;
     int lyricX, lyricY, lyricW, lyricH;
     bool showLiveBorder;
-    string lyricFont = "Segoe UI Variable";
+    string lyricFont = "Inter";
     double lyricSize = 22;
     string lyricColor = "#FFFFFF";
     string lyricHighlight = "#FFFFFF";

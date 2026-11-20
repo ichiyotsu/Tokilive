@@ -127,7 +127,7 @@ public partial class App : Application
             if (Shell == null) { source.SetResult(false); return; }
             var dialog = new ContentDialog
             {
-                Title = "tokilive",
+                Title = "TokiLive",
                 Content = text,
                 PrimaryButtonText = "继续",
                 CloseButtonText = "取消",
