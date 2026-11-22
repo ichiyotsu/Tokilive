@@ -46,6 +46,16 @@ public static class LyricsService
     static bool _managerWired;
     static readonly object _watchLock = new();
     static readonly Dictionary<string, CachedLyrics> Cache = new();
+    // 歌词位置本地推算：有的播放器（网易云）会一直刷新 LastUpdatedTime，
+    // 但 Position 永远不往前走，桌面歌词就一直卡在第一行。处理办法：
+    // 同一首歌、正在播放、SMTC 报告的位置不动，就按上次锚定的位置
+    // 加上本地走过的时间往前推；位置动了（正常播放/拖进度条）或
+    // 暂停了，就重新锚定。_lastRaw 记的是 Position 加经过时间之前的
+    // 原始值，卡住时不更新，下一轮才能继续认出“没动”。
+    static string _posKey = "";
+    static double _lastRaw;
+    static double _posAnchor;
+    static DateTimeOffset _posAnchorAt;
     // 1.2.0 的 DEMO_LRC：4 行，带翻译（| 分隔）和一行逐字时间戳，
     // 用来检查逐行、翻译和逐字解析。最后行 10.50，循环按 14 秒算。
     const string Demo = "[00:00.00]这是 TokiLive 的演示歌词 | demo lyric\n[00:03.00]<00:03.00>不<00:03.40>是<00:03.80>在<00:04.20>售<00:04.60>歌<00:05.00>曲 | not a commercial song\n[00:07.00]用来检查逐行、翻译和逐字高亮\n[00:10.50]关闭演示后，这里只显示系统正在播放的曲目";
@@ -54,6 +64,7 @@ public static class LyricsService
     {
         if (AppState.Current.LyricDemo)
         {
+            _posKey = "";
             Current = new NowPlaying { Title = "演示", Artist = "TokiLive", Source = "演示", Label = "演示排版", Lines = Parse(Demo), Position = (DateTime.UtcNow.TimeOfDay.TotalSeconds % 14), Duration = 14, Playing = true };
             Current.Current = LineAt(Current.Lines, Current.Position);
             Updated?.Invoke();
@@ -67,6 +78,7 @@ public static class LyricsService
             Watch(_manager, session);
             if (session == null)
             {
+                _posKey = "";
                 Current = new NowPlaying { Label = "没有系统媒体会话。QQ 音乐和网易云需要向系统报告正在播放的曲目。" };
                 Updated?.Invoke();
                 return;
@@ -74,10 +86,35 @@ public static class LyricsService
             var props = await session.TryGetMediaPropertiesAsync();
             var timeline = session.GetTimelineProperties();
             var status = session.GetPlaybackInfo().PlaybackStatus;
-            var position = timeline.Position.TotalSeconds;
-            if (status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+            var playing = status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            var raw = timeline.Position.TotalSeconds;
+            var position = raw;
+            if (playing)
                 position += Math.Max(0, (DateTimeOffset.Now - timeline.LastUpdatedTime).TotalSeconds);
             position += AppState.Current.LyricOffset;
+            // 见文件头：播放器只刷新 LastUpdatedTime 不推 Position 时，
+            // 用本地时间锚点自己往前走，否则桌面歌词永远停在第一行。
+            var key = props.Title + "\n" + props.Artist;
+            var now = DateTimeOffset.Now;
+            if (key != _posKey)
+            {
+                _posKey = key;
+                _lastRaw = raw;
+                _posAnchor = position;
+                _posAnchorAt = now;
+            }
+            else if (playing && Math.Abs(raw - _lastRaw) < 0.001)
+            {
+                position = _posAnchor + (now - _posAnchorAt).TotalSeconds;
+                _posAnchor = position;
+                _posAnchorAt = now;
+            }
+            else
+            {
+                _lastRaw = raw;
+                _posAnchor = position;
+                _posAnchorAt = now;
+            }
             var duration = Math.Max(0, timeline.EndTime.TotalSeconds);
             var label = AppRank(session) == 0 ? "QQ音乐" : AppRank(session) == 1 ? "网易云音乐" : "其他来源";
             var (lines, lyricError) = await LyricsFor(props.Title, props.Artist, duration);

@@ -39,6 +39,17 @@ public static class NativeWin
     const int WM_RBUTTONUP = 0x0205;
     const int WM_HOTKEY = 0x0312;
     const int WM_APP = 0x8000;
+    const int WM_NCCALCSIZE = 0x0083;
+    const int WM_NCHITTEST = 0x0084;
+    const int HTCLIENT = 1;
+    const int HTLEFT = 10;
+    const int HTRIGHT = 11;
+    const int HTTOP = 12;
+    const int HTTOPLEFT = 13;
+    const int HTTOPRIGHT = 14;
+    const int HTBOTTOM = 15;
+    const int HTBOTTOMLEFT = 16;
+    const int HTBOTTOMRIGHT = 17;
     const uint WCA_ACCENT_POLICY = 19;
     const int ACCENT_ENABLE_TRANSPARENTGRADIENT = 2;
     // 托盘右键菜单
@@ -191,6 +202,11 @@ public static class NativeWin
             }
             finally { Marshal.FreeHGlobal(ptr); }
         }
+        // 悬浮窗（perPixelTransparent）再挂一个子类化：DwmExtendFrameIntoClientArea
+        // 把玻璃延进客户区后，DWM 会在窗口边缘描一条 1px 的框（穿透开着也一样），
+        // 只有 WM_NCCALCSIZE 能把它去掉。先挂再发 SWP_FRAMECHANGED，
+        // 这一轮重算帧就直接按无框走。
+        if (perPixelTransparent) InstallOverlaySubclass(hwnd);
         // SWP_FRAMECHANGED：扩展样式改了要让系统重算窗口帧，否则
         // WS_EX_TOOLWINDOW 去掉 / WS_EX_APPWINDOW 加上可能不生效。
         SetWindowPos(hwnd, topmost ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
@@ -399,6 +415,68 @@ public static class NativeWin
         return DefSubclassProc(hWnd, msg, wParam, lParam);
     }
 
+    // 悬浮窗的子类化（弹幕 / 实时 / 歌词窗）：只挂一次，id 和主窗口的托盘
+    // 子类化分开（2）。输入窗不走 perPixelTransparent，不挂这个。
+    static SUBCLASSPROC? _overlayProc;
+    static readonly HashSet<IntPtr> _overlaySubclassed = new();
+
+    static void InstallOverlaySubclass(IntPtr hwnd)
+    {
+        if (!_overlaySubclassed.Add(hwnd)) return;
+        _overlayProc ??= OverlaySubclass;
+        SetWindowSubclass(hwnd, _overlayProc, 2, 0);
+    }
+
+    static IntPtr OverlaySubclass(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam, nuint id, nuint data)
+    {
+        if (msg == WM_NCCALCSIZE && wParam != IntPtr.Zero)
+        {
+            // 客户区扩到整个窗口，非客户区归零，系统就不再画那条 1px 框。
+            // wParam != 0 时 lParam 是 NCCALCSIZE_PARAMS；wParam == 0 时
+            // lParam 只是 RECT*，不碰，走默认处理。
+            try
+            {
+                var p = Marshal.PtrToStructure<NCCALCSIZE_PARAMS>(lParam);
+                var wp = Marshal.PtrToStructure<WINDOWPOS>(p.lppos);
+                p.rgrc0 = new RECT { left = wp.x, top = wp.y, right = wp.x + wp.cx, bottom = wp.y + wp.cy };
+                Marshal.StructureToPtr(p, lParam, false);
+                return IntPtr.Zero;
+            }
+            catch { /* 结构不对就走默认处理，不挡窗口 */ }
+        }
+        if (msg == WM_NCHITTEST)
+        {
+            // 非客户区没了，系统不再给边缘缩放：穿透关着、窗口可缩放
+            //（WS_THICKFRAME 还在）时，自己在边缘 6px 内返回缩放 hit 值；
+            // 其余一律 HTCLIENT。穿透开着时窗口收不到鼠标消息，不会走到这里。
+            // lParam 低 16 位是 x、高 16 位是 y（有符号，要按 short 取）。
+            var style = GetWindowLongPtr(hWnd, GWL_STYLE).ToInt64();
+            if ((style & WS_THICKFRAME) != 0)
+            {
+                var x = (short)(lParam.ToInt32() & 0xFFFF);
+                var y = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
+                if (GetWindowRect(hWnd, out var rc))
+                {
+                    const int grip = 6;
+                    var left = x - rc.left < grip;
+                    var right = rc.right - x < grip;
+                    var top = y - rc.top < grip;
+                    var bottom = rc.bottom - y < grip;
+                    if (top && left) return (IntPtr)HTTOPLEFT;
+                    if (top && right) return (IntPtr)HTTOPRIGHT;
+                    if (bottom && left) return (IntPtr)HTBOTTOMLEFT;
+                    if (bottom && right) return (IntPtr)HTBOTTOMRIGHT;
+                    if (left) return (IntPtr)HTLEFT;
+                    if (right) return (IntPtr)HTRIGHT;
+                    if (top) return (IntPtr)HTTOP;
+                    if (bottom) return (IntPtr)HTBOTTOM;
+                }
+            }
+            return (IntPtr)HTCLIENT;
+        }
+        return DefSubclassProc(hWnd, msg, wParam, lParam);
+    }
+
     public static string? SystemAccent()
     {
         try
@@ -411,6 +489,10 @@ public static class NativeWin
 
     [StructLayout(LayoutKind.Sequential)] struct RECT { public int left, top, right, bottom; }
     [StructLayout(LayoutKind.Sequential)] struct POINT { public int x, y; }
+    // WM_NCCALCSIZE（wParam != 0）用的结构：rgrc[0] 是提议的客户区，
+    // lppos 指向 WINDOWPOS（新窗口矩形）。
+    [StructLayout(LayoutKind.Sequential)] struct NCCALCSIZE_PARAMS { public RECT rgrc0, rgrc1, rgrc2; public IntPtr lppos; }
+    [StructLayout(LayoutKind.Sequential)] struct WINDOWPOS { public IntPtr hwnd, hwndInsertAfter; public int x, y, cx, cy; public uint flags; }
     [StructLayout(LayoutKind.Sequential)] struct MARGINS { public int cxLeftWidth, cxRightWidth, cyTopHeight, cyBottomHeight; }
     [StructLayout(LayoutKind.Sequential)] struct ACCENT_POLICY { public int AccentState, AccentFlags, GradientColor, AnimationId; }
     [StructLayout(LayoutKind.Sequential)] struct WINDOWCOMPOSITIONATTRIBDATA { public uint Attribute; public IntPtr Data; public int SizeOfData; }

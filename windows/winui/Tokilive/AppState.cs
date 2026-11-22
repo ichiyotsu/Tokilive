@@ -117,7 +117,6 @@ public sealed class AppState : INotifyPropertyChanged
     public int LyricY { get => lyricY; set => Set(ref lyricY, value); }
     public int LyricW { get => lyricW; set => Set(ref lyricW, value); }
     public int LyricH { get => lyricH; set => Set(ref lyricH, value); }
-    public bool ShowLiveBorder { get => showLiveBorder; set => Set(ref showLiveBorder, value); }
     public string LyricFont { get => lyricFont; set => Set(ref lyricFont, value); }
     public double LyricSize { get => lyricSize; set => Set(ref lyricSize, value); }
     public string LyricColor { get => lyricColor; set => Set(ref lyricColor, value); }
@@ -222,7 +221,6 @@ public sealed class AppState : INotifyPropertyChanged
     int danmakuX, danmakuY, danmakuW, danmakuH;
     int liveX, liveY, liveW, liveH;
     int lyricX, lyricY, lyricW, lyricH;
-    bool showLiveBorder;
     string lyricFont = "Inter";
     double lyricSize = 22;
     string lyricColor = "#FFFFFF";
@@ -358,7 +356,6 @@ public sealed class AppState : INotifyPropertyChanged
             }
             s.ObsPort = (int)Num("obsPort", s.ObsPort);
             s.ShowWindowBorder = Bool("showWindowBorder", s.ShowWindowBorder);
-            s.ShowLiveBorder = Bool("showLiveBorder", s.ShowLiveBorder);
             s.AdaptiveText = Bool("adaptiveText", s.AdaptiveText);
             s.HideFromTaskbar = Bool("hideFromTaskbar", s.HideFromTaskbar);
             // 1.2.0 没有这个设置，行为无条件是开；现在默认关，用户要

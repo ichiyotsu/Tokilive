@@ -269,12 +269,14 @@ public sealed partial class MainWindow : Window
         NameColorBox.Text = s.NameColor;
         CardColorBox.Text = s.CardColor;
         TextColorBox.Text = s.TextColor;
-        CardFontBox.Text = s.CardFont;
-        foreach (var font in FontHelper.KnownFonts) { CardFontPicker.Items.Add(font); LyricFontPicker.Items.Add(font); CjkFontPicker.Items.Add(font); JpFontPicker.Items.Add(font); }
-        CardFontPicker.SelectedItem = FontHelper.KnownFonts.Contains(s.CardFont) ? s.CardFont : null;
-        LyricFontPicker.SelectedItem = FontHelper.KnownFonts.Contains(s.LyricFont) ? s.LyricFont : null;
-        CjkFontPicker.SelectedItem = FontHelper.KnownFonts.Contains(s.CjkFont) ? s.CjkFont : null;
-        JpFontPicker.SelectedItem = FontHelper.KnownFonts.Contains(s.JpFont) ? s.JpFont : null;
+        FillFontCombo(CardFontBox);
+        SelectFont(CardFontBox, s.CardFont);
+        FillFontCombo(LyricFontBox);
+        SelectFont(LyricFontBox, s.LyricFont);
+        FillFontCombo(CjkFontBox);
+        SelectFont(CjkFontBox, s.CjkFont);
+        FillFontCombo(JpFontBox);
+        SelectFont(JpFontBox, s.JpFont);
         FontSlider.Value = s.FontSize;
         AdaptiveSwitch.IsOn = s.AdaptiveText;
         CornerSlider.Value = s.Corner;
@@ -300,8 +302,8 @@ public sealed partial class MainWindow : Window
         SelectCombo(CardThemeBox, s.CardThemeMode);
         SeedColorBox.Text = s.SeedColor;
         ShowMedalSwitch.IsOn = s.ShowMedal;
-        CjkFontBox.Text = s.CjkFont;
-        JpFontBox.Text = s.JpFont;
+        SelectFont(CjkFontBox, s.CjkFont);
+        SelectFont(JpFontBox, s.JpFont);
         SelectCombo(MedalStyleBox, s.MedalStyle);
         ScBiliColorSwitch.IsOn = s.ScBiliColor;
         MinGiftPriceBox.Value = s.MinGiftPrice;
@@ -315,7 +317,6 @@ public sealed partial class MainWindow : Window
         var savedVoice = VoiceBox.Items.IndexOf(s.TtsVoice);
         VoiceBox.SelectedIndex = savedVoice >= 0 ? savedVoice : 0;
         LiveSwitch.IsOn = s.ShowLive;
-        LiveBorderSwitch.IsOn = s.ShowLiveBorder;
         MiniStatsSwitch.IsOn = s.MiniStats;
         SelectCombo(MiniLayoutBox, s.MiniLayout);
         MiniPillsSwitch.IsOn = s.MiniPills;
@@ -332,7 +333,7 @@ public sealed partial class MainWindow : Window
         // 会直接返回，不会把保存过的单项改动盖掉。
         foreach (var design in LyricsDesigns.All) LyricDesignBox.Items.Add(new ComboBoxItem { Content = design.Name, Tag = design.Id });
         SelectCombo(LyricDesignBox, s.LyricDesign);
-        LyricFontBox.Text = s.LyricFont;
+        SelectFont(LyricFontBox, s.LyricFont);
         LyricSizeSlider.Value = s.LyricSize;
         SelectCombo(LyricWeightBox, s.LyricWeight);
         LyricColorBox.Text = s.LyricColor;
@@ -438,9 +439,11 @@ public sealed partial class MainWindow : Window
     void Wire()
     {
         void Save(object? _, object? __) { if (!_loading) Pull(); }
-        foreach (var box in new TextBox[] { RoomBox, NameColorBox, CardColorBox, TextColorBox, CardFontBox, HotkeyBox, LyricFontBox, LyricColorBox, LyricHiBox, AccentBox, SeedColorBox, CjkFontBox, JpFontBox, LockHotkeyBox })
+        foreach (var box in new TextBox[] { RoomBox, NameColorBox, CardColorBox, TextColorBox, HotkeyBox, LyricColorBox, LyricHiBox, AccentBox, SeedColorBox, LockHotkeyBox })
             box.TextChanged += (_, _) => Save(null, null);
-        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, CardBlurSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, LiveBorderSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, LyricWordSwitch, DanmakuWindowSwitch, MainTopmostSwitch, OverlayTopmostSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
+        foreach (var box in new ComboBox[] { CardFontBox, LyricFontBox, CjkFontBox, JpFontBox })
+            box.SelectionChanged += (_, _) => Save(null, null);
+        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, CardBlurSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, LyricWordSwitch, DanmakuWindowSwitch, MainTopmostSwitch, OverlayTopmostSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
             sw.Toggled += (_, _) => Save(null, null);
         foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider, AnimSpeedSlider, TextShadowSlider, AppBgOpacitySlider })
             slider.ValueChanged += (_, _) => Save(null, null);
@@ -484,7 +487,7 @@ public sealed partial class MainWindow : Window
         if (TryNormalizeHex(NameColorBox.Text, out var nameHex)) { s.NameColor = nameHex; if (NameColorBox.Text != nameHex) NameColorBox.Text = nameHex; }
         if (TryNormalizeHex(CardColorBox.Text, out var cardHex)) { s.CardColor = cardHex; if (CardColorBox.Text != cardHex) CardColorBox.Text = cardHex; }
         if (TryNormalizeHex(TextColorBox.Text, out var textHex)) { s.TextColor = textHex; if (TextColorBox.Text != textHex) TextColorBox.Text = textHex; }
-        s.CardFont = CardFontBox.Text;
+        s.CardFont = CardFontBox.SelectedItem as string ?? s.CardFont;
         s.FontSize = FontSlider.Value;
         s.AdaptiveText = AdaptiveSwitch.IsOn;
         s.Corner = CornerSlider.Value;
@@ -510,8 +513,8 @@ public sealed partial class MainWindow : Window
         s.CardThemeMode = ComboValue(CardThemeBox) ?? s.CardThemeMode;
         if (TryNormalizeHex(SeedColorBox.Text, out var seedHex)) { s.SeedColor = seedHex; if (SeedColorBox.Text != seedHex) SeedColorBox.Text = seedHex; }
         s.ShowMedal = ShowMedalSwitch.IsOn;
-        s.CjkFont = CjkFontBox.Text;
-        s.JpFont = JpFontBox.Text;
+        s.CjkFont = CjkFontBox.SelectedItem as string ?? s.CjkFont;
+        s.JpFont = JpFontBox.SelectedItem as string ?? s.JpFont;
         s.MedalStyle = ComboValue(MedalStyleBox) ?? s.MedalStyle;
         s.ScBiliColor = ScBiliColorSwitch.IsOn;
         s.MinGiftPrice = MinGiftPriceBox.Value;
@@ -521,7 +524,6 @@ public sealed partial class MainWindow : Window
         s.TtsVolume = VolumeSlider.Value;
         s.TtsVoice = VoiceBox.SelectedItem as string ?? "";
         s.ShowLive = LiveSwitch.IsOn;
-        s.ShowLiveBorder = LiveBorderSwitch.IsOn;
         s.MiniStats = MiniStatsSwitch.IsOn;
         s.MiniLayout = ComboValue(MiniLayoutBox) ?? s.MiniLayout;
         s.MiniPills = MiniPillsSwitch.IsOn;
@@ -533,7 +535,7 @@ public sealed partial class MainWindow : Window
         s.RouteLike = ComboValue(RouteLikeBox) ?? s.RouteLike;
         s.ShowDesktopLyrics = DesktopLyricsSwitch.IsOn;
         s.LyricDemo = LyricDemoSwitch.IsOn;
-        s.LyricFont = LyricFontBox.Text;
+        s.LyricFont = LyricFontBox.SelectedItem as string ?? s.LyricFont;
         s.LyricSize = LyricSizeSlider.Value;
         s.LyricWeight = ComboValue(LyricWeightBox) ?? s.LyricWeight;
         if (TryNormalizeHex(LyricColorBox.Text, out var lyricHex)) { s.LyricColor = lyricHex; if (LyricColorBox.Text != lyricHex) LyricColorBox.Text = lyricHex; }
@@ -806,7 +808,6 @@ public sealed partial class MainWindow : Window
     {
         _danmaku.Render();
         _live.Render();
-        LivePreview.Text = $"点赞 {LiveService.Likes}    弹幕 {LiveService.Danmaku}    在线 {LiveService.Online}\n{LiveService.Watched}";
         MiniPreviewText.Text = AppState.Current.MiniStats
             ? $"点赞 {LiveService.Likes} · 弹幕 {LiveService.Danmaku} · 在线 {LiveService.Online}"
             : "数据栏已隐藏（实时窗设置里可打开）";
@@ -1153,26 +1154,6 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
     }
 
-    void CardFontPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (CardFontPicker.SelectedItem is string font) CardFontBox.Text = font;
-    }
-
-    void LyricFontPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (LyricFontPicker.SelectedItem is string font) LyricFontBox.Text = font;
-    }
-
-    void CjkFontPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (CjkFontPicker.SelectedItem is string font) CjkFontBox.Text = font;
-    }
-
-    void JpFontPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (JpFontPicker.SelectedItem is string font) JpFontBox.Text = font;
-    }
-
     // ComboBoxItem 的值优先读 Tag（细/常规/粗/特粗这种中文显示配英文值），
     // 没有 Tag 就读 Content（对齐那组就是直接拿 Content 当值）。
     static string? ComboValue(ComboBox box) =>
@@ -1188,6 +1169,22 @@ public sealed partial class MainWindow : Window
             }
     }
 
+    // 字体只选不输：四个字体下拉框都用这组方法。FillFontCombo 只在加载时
+    // 调一次（把 KnownFonts 填进去）；SelectFont 选值，保存的值不在列表里
+    //（以前手输的）就先加进去再选，不丢用户已有的字体。
+    static void FillFontCombo(ComboBox box)
+    {
+        box.Items.Clear();
+        foreach (var font in FontHelper.KnownFonts) box.Items.Add(font);
+    }
+
+    static void SelectFont(ComboBox box, string? font)
+    {
+        if (string.IsNullOrWhiteSpace(font)) { box.SelectedItem = null; return; }
+        if (!box.Items.Contains(font)) box.Items.Add(font);
+        box.SelectedItem = font;
+    }
+
     // 选设计：把设计表里的值一次写进表单控件，再走 Pull() 保存并
     // 刷新歌词窗。_loading 期间（LoadForm）直接返回，不盖掉已保存的单项。
     // 选完之后再改单项设置，设计名还留在那，不会把改动弹回去。
@@ -1197,7 +1194,7 @@ public sealed partial class MainWindow : Window
         if (LyricDesignBox.SelectedItem == null) return;
         var design = LyricsDesigns.ById(ComboValue(LyricDesignBox));
         _loading = true;
-        LyricFontBox.Text = design.Font;
+        SelectFont(LyricFontBox, design.Font);
         LyricSizeSlider.Value = design.Size;
         LyricColorBox.Text = design.Color;
         LyricHiBox.Text = design.Highlight;
@@ -1244,7 +1241,7 @@ public sealed partial class MainWindow : Window
                 AllMessages(); break;
             default: // 默认：字号 18（1.2.0 默认）、圆角 16、不透明度 0.86，颜色和开关全重置
                 FontSlider.Value = 18; CornerSlider.Value = 16; OpacitySlider.Value = 0.86;
-                NameColorBox.Text = "#7C4DFF"; TextColorBox.Text = "#1A1A1A"; CardColorBox.Text = "#F5F5F5"; CardFontBox.Text = "Inter";
+                NameColorBox.Text = "#7C4DFF"; TextColorBox.Text = "#1A1A1A"; CardColorBox.Text = "#F5F5F5"; SelectFont(CardFontBox, "Inter");
                 AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
                 AllMessages(); break;
         }
@@ -1279,7 +1276,7 @@ public sealed partial class MainWindow : Window
         if (theme == null) { StatusText.Text = "主题文件读不出来"; return; }
         _loading = true;
         NameColorBox.Text = theme.NameColor; TextColorBox.Text = theme.TextColor; CardColorBox.Text = theme.CardColor;
-        CardFontBox.Text = theme.CardFont; FontSlider.Value = theme.FontSize; CornerSlider.Value = theme.Corner;
+        SelectFont(CardFontBox, theme.CardFont); FontSlider.Value = theme.FontSize; CornerSlider.Value = theme.Corner;
         OpacitySlider.Value = theme.CardOpacity; AvatarSwitch.IsOn = theme.ShowAvatar;
         _loading = false;
         Pull();
