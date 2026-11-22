@@ -7,7 +7,7 @@ namespace Tokilive;
 
 public sealed class AppState : INotifyPropertyChanged
 {
-    public const string Version = "0.1.6";
+    public const string Version = "0.1.7";
     public static AppState Current { get; } = Load();
 
     static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never };
