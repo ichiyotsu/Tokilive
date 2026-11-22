@@ -126,7 +126,8 @@ public sealed partial class OverlayWindow : Window
         NativeWin.ApplyOverlay(this, AppWindow.Title, ClickThrough || locked, resizable: !locked && _kind != Kind.Lyrics, noActivate: true, perPixelTransparent: true, topmost: AppState.Current.OverlayTopmost);
         Root.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
         var clickThrough = ClickThrough || locked;
-        var border = (_kind == Kind.Live ? AppState.Current.ShowLiveBorder : _kind == Kind.Danmaku && AppState.Current.ShowWindowBorder) && !clickThrough;
+        // 窗框：只有弹幕窗有这个开关（窗口边框），实时窗的边框功能已删。
+        var border = _kind == Kind.Danmaku && AppState.Current.ShowWindowBorder && !clickThrough;
         Root.BorderBrush = border ? new SolidColorBrush(Parse(AppState.Current.UseSystemAccent ? NativeWin.SystemAccent() ?? AppState.Current.AccentHex : AppState.Current.AccentHex)) : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
         Root.BorderThickness = border ? new Thickness(2) : new Thickness(0);
     }
@@ -788,6 +789,14 @@ public sealed partial class OverlayWindow : Window
             {
                 card.Width = target;
                 // 1.2.0 的卡片是 align-self:flex-start（左对齐），不是拉满。
+                card.HorizontalAlignment = HorizontalAlignment.Left;
+            }
+            else
+            {
+                // 内容比窗口还宽也别贴满两边：卡片封顶到窗口宽 -16px，
+                // 左对齐，胶囊才看得出是胶囊，不是一条通栏色块。
+                // 用 MaxWidth 而不用 Width：窗口改窄时卡片能跟着缩，不溢出。
+                card.MaxWidth = Math.Max(0, full - 16);
                 card.HorizontalAlignment = HorizontalAlignment.Left;
             }
         }

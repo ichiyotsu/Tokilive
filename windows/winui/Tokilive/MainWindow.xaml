@@ -81,7 +81,7 @@
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="显示弹幕窗" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="DanmakuWindowSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="DanmakuWindowSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                             </Border>
                             <TextBlock Text="预设" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
@@ -197,18 +197,15 @@
                                             </ComboBox>
                                         </StackPanel>
                                     </Grid>
-                                    <TextBox x:Name="CjkFontBox" Header="中文字体"/>
-                                    <ComboBox x:Name="CjkFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="CjkFontPicker_SelectionChanged"/>
-                                    <TextBox x:Name="JpFontBox" Header="日文字体"/>
-                                    <ComboBox x:Name="JpFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="JpFontPicker_SelectionChanged"/>
+                                    <ComboBox x:Name="CjkFontBox" Header="中文字体" HorizontalAlignment="Stretch"/>
+                                    <ComboBox x:Name="JpFontBox" Header="日文字体" HorizontalAlignment="Stretch"/>
                                     <NumberBox x:Name="MinGiftPriceBox" Header="最低礼物价（元，0=不过滤）" Minimum="0" Maximum="100000" SpinButtonPlacementMode="Inline"/>
                                 </StackPanel>
                             </Border>
                             <TextBlock Text="文字" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
                             <Border Style="{StaticResource SettingsCardStyle}">
                                 <StackPanel Spacing="12">
-                                    <TextBox x:Name="CardFontBox" Header="字体"/>
-                                    <ComboBox x:Name="CardFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="CardFontPicker_SelectionChanged"/>
+                                    <ComboBox x:Name="CardFontBox" Header="字体" HorizontalAlignment="Stretch"/>
                                     <ToggleSwitch x:Name="AdaptiveSwitch" Header="文字颜色自适应" OnContent="开" OffContent="关"/>
                                     <TextBlock Text="默认关闭。打开后大约每 2 秒把悬浮窗藏起一瞬，采样它挡住的那一块屏幕。不上传。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
@@ -312,17 +309,9 @@
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="显示实时窗" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="LiveSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
-                                </Grid>
-                                <Grid ColumnSpacing="12">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="实时窗边框（强调色）" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="LiveBorderSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="LiveSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                             </StackPanel>
-                        </Border>
-                        <Border Padding="12" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                            <TextBlock x:Name="LivePreview" TextWrapping="Wrap"/>
                         </Border>
                         <TextBlock Text="数据栏" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
                         <Border Style="{StaticResource SettingsCardStyle}">
@@ -330,7 +319,7 @@
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="显示数据栏" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="MiniStatsSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="MiniStatsSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                                 <ComboBox x:Name="MiniLayoutBox" Header="数据栏布局" HorizontalAlignment="Stretch">
                                     <ComboBoxItem Content="横条" Tag="h"/>
@@ -340,7 +329,7 @@
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="实时窗里显示互动气泡" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="MiniPillsSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="MiniPillsSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -401,20 +390,19 @@
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="桌面歌词" VerticalAlignment="Center"/>
-                                        <ToggleSwitch x:Name="DesktopLyricsSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                        <ToggleSwitch x:Name="DesktopLyricsSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                     </Grid>
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="演示排版" VerticalAlignment="Center"/>
-                                        <ToggleSwitch x:Name="LyricDemoSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                        <ToggleSwitch x:Name="LyricDemoSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
                             <TextBlock Text="文字" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
                             <Border Style="{StaticResource SettingsCardStyle}">
                                 <StackPanel Spacing="12">
-                                    <TextBox x:Name="LyricFontBox" Header="字体"/>
-                                    <ComboBox x:Name="LyricFontPicker" Header="常用字体（点一下填入上面，可再手动改）" HorizontalAlignment="Stretch" SelectionChanged="LyricFontPicker_SelectionChanged"/>
+                                    <ComboBox x:Name="LyricFontBox" Header="字体" HorizontalAlignment="Stretch"/>
                                     <Slider x:Name="LyricSizeSlider" Header="字号" Minimum="16" Maximum="64"/>
                                     <ComboBox x:Name="LyricWeightBox" Header="粗细" HorizontalAlignment="Stretch">
                                         <ComboBoxItem Content="细" Tag="light"/>
@@ -444,12 +432,12 @@
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="阴影" VerticalAlignment="Center"/>
-                                        <ToggleSwitch x:Name="LyricShadowSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                        <ToggleSwitch x:Name="LyricShadowSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                     </Grid>
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="描边" VerticalAlignment="Center"/>
-                                        <ToggleSwitch x:Name="LyricOutlineSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                        <ToggleSwitch x:Name="LyricOutlineSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                     </Grid>
                                     <Slider x:Name="LyricBgSlider" Header="底色不透明度" Minimum="0" Maximum="0.8" StepFrequency="0.05"/>
                                 </StackPanel>
@@ -471,7 +459,7 @@
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="逐字歌词" VerticalAlignment="Center"/>
-                                        <ToggleSwitch x:Name="LyricWordSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                        <ToggleSwitch x:Name="LyricWordSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                     </Grid>
                                     <TextBlock Text="打开后，带逐字时间戳的当前行会按时间高亮。这一行没有逐字时间就整行显示，不会编造。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
@@ -482,12 +470,12 @@
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="桌面歌词穿透" VerticalAlignment="Center"/>
-                                        <ToggleSwitch x:Name="LyricClickSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                        <ToggleSwitch x:Name="LyricClickSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                     </Grid>
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="锁定位置" VerticalAlignment="Center"/>
-                                        <ToggleSwitch x:Name="LyricLockSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                        <ToggleSwitch x:Name="LyricLockSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                     </Grid>
                                     <Slider x:Name="LyricOffsetSlider" Header="时间偏移（秒）" Minimum="-10" Maximum="10" StepFrequency="0.1"/>
                                 </StackPanel>
@@ -571,17 +559,17 @@
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="主窗口置顶" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="MainTopmostSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="MainTopmostSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="悬浮窗置顶" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="OverlayTopmostSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="OverlayTopmostSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="在任务栏隐藏" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="TaskbarSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="TaskbarSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                                 <Button Content="重置窗口位置" Click="ResetBounds_Click"/>
                                 <TextBlock Text="窗口仍在托盘里。托盘创建失败时会留下任务栏按钮，避免程序消失。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -593,12 +581,12 @@
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="启用本地浏览器源" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="ObsSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="ObsSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="OBS 窗口捕获兼容" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="ObsCaptureSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="ObsCaptureSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                                 <TextBlock Text="开启后悬浮窗会出现在任务栏和 Alt-Tab 里，OBS 窗口捕获才能在列表里看到它；关闭时悬浮窗不出现在任务栏，程序只留在托盘。改完立即生效，不用重启。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <NumberBox x:Name="PortBox" Header="端口" Minimum="1024" Maximum="65535" SpinButtonPlacementMode="Inline"/>
@@ -622,7 +610,7 @@
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="使用 Windows 强调色" VerticalAlignment="Center"/>
-                                    <ToggleSwitch x:Name="AccentSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                    <ToggleSwitch x:Name="AccentSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                                 </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -661,7 +649,7 @@
                             <Grid ColumnSpacing="12">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="启动时显示启动画面" VerticalAlignment="Center"/>
-                                <ToggleSwitch x:Name="SplashSwitch" Grid.Column="1" VerticalAlignment="Center" OnContent="" OffContent=""/>
+                                <ToggleSwitch x:Name="SplashSwitch" Grid.Column="1" VerticalAlignment="Center" Width="48" MinWidth="48" OnContent="" OffContent=""/>
                             </Grid>
                         </Border>
                         <TextBlock Text="快捷键" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
