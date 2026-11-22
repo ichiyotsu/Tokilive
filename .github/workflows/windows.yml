@@ -66,12 +66,12 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: TokiLive-0.1.6-crash-log
+          name: TokiLive-0.1.7-crash-log
           path: crash.log
           if-no-files-found: ignore
       - name: Portable zip
         shell: pwsh
-        run: Compress-Archive -Path "$env:RUNNER_TEMP\tokilive-publish\*" -DestinationPath TokiLive-0.1.6.zip
+        run: Compress-Archive -Path "$env:RUNNER_TEMP\tokilive-publish\*" -DestinationPath TokiLive-0.1.7.zip
       - name: Installer
         shell: pwsh
         run: |
@@ -79,8 +79,8 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DPublishDir=$env:RUNNER_TEMP\tokilive-publish" /O"$pwd" windows/winui/installer/tokilive.iss
       - uses: actions/upload-artifact@v4
         with:
-          name: TokiLive-0.1.6-windows
+          name: TokiLive-0.1.7-windows
           path: |
-            TokiLive-0.1.6.exe
-            TokiLive-0.1.6.zip
+            TokiLive-0.1.7.exe
+            TokiLive-0.1.7.zip
           if-no-files-found: error
