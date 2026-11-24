@@ -50,7 +50,6 @@ public sealed class AppState : INotifyPropertyChanged
     public bool ObsCaptureCompat { get => obsCaptureCompat; set => Set(ref obsCaptureCompat, value); }
     public bool ObsEnabled { get => obsEnabled; set => Set(ref obsEnabled, value); }
     public int ObsPort { get => obsPort; set => Set(ref obsPort, value); }
-    public bool ShowWindowBorder { get => showWindowBorder; set => Set(ref showWindowBorder, value); }
     public bool ShowDanmakuMsg { get => showDanmakuMsg; set => Set(ref showDanmakuMsg, value); }
     public bool ShowGift { get => showGift; set => Set(ref showGift, value); }
     public bool ShowSuperchat { get => showSuperchat; set => Set(ref showSuperchat, value); }
@@ -125,7 +124,6 @@ public sealed class AppState : INotifyPropertyChanged
     public bool LyricShadow { get => lyricShadow; set => Set(ref lyricShadow, value); }
     public bool LyricOutline { get => lyricOutline; set => Set(ref lyricOutline, value); }
     public double LyricBg { get => lyricBg; set => Set(ref lyricBg, value); }
-    public int LyricLines { get => lyricLines; set => Set(ref lyricLines, value); }
     // 歌词新字段：粗细（light/normal/bold/black）、单双行（single/double）、
     // 横竖排（horizontal/vertical）、设计（default/cyberpunk/minecraft）。
     public string LyricWeight { get => lyricWeight; set => Set(ref lyricWeight, value); }
@@ -172,7 +170,6 @@ public sealed class AppState : INotifyPropertyChanged
     bool obsCaptureCompat;
     bool obsEnabled;
     int obsPort = 7788;
-    bool showWindowBorder;
     bool showDanmakuMsg = true;
     bool showGift = true;
     bool showSuperchat = true;
@@ -229,9 +226,6 @@ public sealed class AppState : INotifyPropertyChanged
     bool lyricShadow = true;
     bool lyricOutline;
     double lyricBg = 0;
-    // 旧的行数滑杆（1-5）已被单行/双行取代：字段留着做迁移兼容，
-    // 渲染不再读它。
-    int lyricLines = 1;
     string lyricWeight = "normal";
     string lyricMode = "single";
     string lyricDirection = "horizontal";
@@ -355,7 +349,6 @@ public sealed class AppState : INotifyPropertyChanged
                 s.RouteLike = R("like", s.RouteLike);
             }
             s.ObsPort = (int)Num("obsPort", s.ObsPort);
-            s.ShowWindowBorder = Bool("showWindowBorder", s.ShowWindowBorder);
             s.AdaptiveText = Bool("adaptiveText", s.AdaptiveText);
             s.HideFromTaskbar = Bool("hideFromTaskbar", s.HideFromTaskbar);
             // 1.2.0 没有这个设置，行为无条件是开；现在默认关，用户要

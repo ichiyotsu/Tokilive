@@ -14,7 +14,7 @@
             <RowDefinition Height="32"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <Grid x:Name="TitleBarRow" Background="Transparent" PointerPressed="TitleBarRow_PointerPressed">
+        <Grid Background="Transparent" PointerPressed="TitleBarRow_PointerPressed">
             <TextBlock Text="TokiLive · 设置" VerticalAlignment="Center" Margin="12,0,0,0" FontSize="12" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
         </Grid>
         <!-- IsTitleBarAutoPaddingEnabled 关掉：顶栏已经在上面单独占了 32px，
@@ -220,15 +220,9 @@
                                         <Slider x:Name="CornerSlider" Grid.Column="1" Header="圆角" Minimum="0" Maximum="28"/>
                                         <Slider x:Name="OpacitySlider" Grid.Column="0" Grid.Row="1" Header="卡片不透明度" Minimum="0.2" Maximum="1" StepFrequency="0.05"/>
                                     </Grid>
-                                    <Grid ColumnSpacing="12">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Spacing="8">
-                                            <ToggleSwitch x:Name="BorderSwitch" Header="窗口边框（强调色）" OnContent="开" OffContent="关"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Spacing="8">
-                                            <ToggleSwitch x:Name="ClickSwitch" Header="鼠标穿透" OnContent="开" OffContent="关"/>
-                                        </StackPanel>
-                                    </Grid>
+                                    <StackPanel Spacing="8">
+                                        <ToggleSwitch x:Name="ClickSwitch" Header="鼠标穿透" OnContent="开" OffContent="关"/>
+                                    </StackPanel>
                                     <TextBlock Text="主窗口和悬浮窗是否一直置顶，在「窗口源 → 窗口」里分开设置；正在操作设置窗口时，主窗口会临时置顶以免被悬浮窗盖住。不注入游戏，也不保证盖住独占全屏。无边框窗口化更有机会。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
                             </Border>
@@ -285,7 +279,7 @@
                         </StackPanel>
                     </ScrollViewer>
                     <Border Grid.Row="1" Margin="16" Padding="6" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                        <ScrollViewer x:Name="TestBar" HorizontalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled" PointerWheelChanged="TestBar_Wheel">
+                        <ScrollViewer HorizontalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled" PointerWheelChanged="TestBar_Wheel">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Button Content="测试弹幕" Tag="danmaku" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>
                                 <Button Content="测试表情" Tag="emote" Click="Test_Click" MinHeight="28" Padding="10,4" FontSize="13"/>

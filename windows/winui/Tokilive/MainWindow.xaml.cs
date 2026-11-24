@@ -179,15 +179,14 @@ public sealed partial class MainWindow : Window
 
     // #29/#32 托盘菜单接线：NativeWin 只发事件，真正的动作都在这里。
     // 注意弹幕窗和实时窗的“锁定”共用同一个 ClickThrough（AppState 里
-    // 没有分开的 DanmakuLocked/LiveLocked 字段），所以托盘里“锁定弹幕窗”
-    // 和“锁定实时窗”改的是同一个开关；歌词窗另有自己的 LyricLocked。
+    // 没有分开的 DanmakuLocked/LiveLocked 字段），所以托盘里只有一项
+    // “锁定悬浮窗”，同时管两个窗；歌词窗另有自己的 LyricLocked。
     // 锁全部 = 弹幕/实时穿透 + 歌词锁定一起开；全锁了再按一次就是全解锁。
     void WireTray()
     {
         NativeWin.TrayShowSettings += () => App.UI(() => { AppWindow.Show(); Activate(); });
         NativeWin.TrayToggleLockAll += () => App.UI(ToggleLockAll);
         NativeWin.TrayToggleDanmakuLock += () => App.UI(() => ClickSwitch.IsOn = !ClickSwitch.IsOn);
-        NativeWin.TrayToggleLiveLock += () => App.UI(() => ClickSwitch.IsOn = !ClickSwitch.IsOn);
         NativeWin.TrayToggleDanmakuVisible += () => App.UI(() => DanmakuWindowSwitch.IsOn = !DanmakuWindowSwitch.IsOn);
         NativeWin.TrayToggleLiveVisible += () => App.UI(() => LiveSwitch.IsOn = !LiveSwitch.IsOn);
         NativeWin.TrayReconnect += () => App.UI(() => { AppState.Current.Room = RoomBox.Text; LiveService.Connect(RoomBox.Text); });
@@ -195,7 +194,6 @@ public sealed partial class MainWindow : Window
         NativeWin.TrayStatusText = () => AppState.Current.Status;
         NativeWin.TrayAllLocked = () => AppState.Current.ClickThrough && AppState.Current.LyricLocked;
         NativeWin.TrayDanmakuLocked = () => AppState.Current.ClickThrough;
-        NativeWin.TrayLiveLocked = () => AppState.Current.ClickThrough;
         NativeWin.TrayDanmakuVisible = () => AppState.Current.ShowDanmaku;
         NativeWin.TrayLiveVisible = () => AppState.Current.ShowLive;
         Hotkey.LockHotkeyPressed += () => App.UI(ToggleLockAll);
@@ -281,7 +279,6 @@ public sealed partial class MainWindow : Window
         AdaptiveSwitch.IsOn = s.AdaptiveText;
         CornerSlider.Value = s.Corner;
         OpacitySlider.Value = s.CardOpacity;
-        BorderSwitch.IsOn = s.ShowWindowBorder;
         ClickSwitch.IsOn = s.ClickThrough;
         MsgDanmaku.IsOn = s.ShowDanmakuMsg;
         MsgGift.IsOn = s.ShowGift;
@@ -302,8 +299,6 @@ public sealed partial class MainWindow : Window
         SelectCombo(CardThemeBox, s.CardThemeMode);
         SeedColorBox.Text = s.SeedColor;
         ShowMedalSwitch.IsOn = s.ShowMedal;
-        SelectFont(CjkFontBox, s.CjkFont);
-        SelectFont(JpFontBox, s.JpFont);
         SelectCombo(MedalStyleBox, s.MedalStyle);
         ScBiliColorSwitch.IsOn = s.ScBiliColor;
         MinGiftPriceBox.Value = s.MinGiftPrice;
@@ -333,7 +328,6 @@ public sealed partial class MainWindow : Window
         // 会直接返回，不会把保存过的单项改动盖掉。
         foreach (var design in LyricsDesigns.All) LyricDesignBox.Items.Add(new ComboBoxItem { Content = design.Name, Tag = design.Id });
         SelectCombo(LyricDesignBox, s.LyricDesign);
-        SelectFont(LyricFontBox, s.LyricFont);
         LyricSizeSlider.Value = s.LyricSize;
         SelectCombo(LyricWeightBox, s.LyricWeight);
         LyricColorBox.Text = s.LyricColor;
@@ -443,7 +437,7 @@ public sealed partial class MainWindow : Window
             box.TextChanged += (_, _) => Save(null, null);
         foreach (var box in new ComboBox[] { CardFontBox, LyricFontBox, CjkFontBox, JpFontBox })
             box.SelectionChanged += (_, _) => Save(null, null);
-        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, BorderSwitch, ClickSwitch, CardBlurSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, LyricWordSwitch, DanmakuWindowSwitch, MainTopmostSwitch, OverlayTopmostSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
+        foreach (var sw in new ToggleSwitch[] { AvatarSwitch, AdaptiveSwitch, ClickSwitch, CardBlurSwitch, MsgDanmaku, MsgGift, MsgSc, MsgGuard, MsgEnter, MsgFollow, MsgLike, MsgShare, AnimSwitch, TtsSwitch, LiveSwitch, DesktopLyricsSwitch, LyricDemoSwitch, LyricShadowSwitch, LyricOutlineSwitch, LyricClickSwitch, LyricLockSwitch, LyricWordSwitch, DanmakuWindowSwitch, MainTopmostSwitch, OverlayTopmostSwitch, TaskbarSwitch, ObsSwitch, ObsCaptureSwitch, AccentSwitch, ShowMedalSwitch, ScBiliColorSwitch, MiniStatsSwitch, MiniPillsSwitch })
             sw.Toggled += (_, _) => Save(null, null);
         foreach (var slider in new Slider[] { FontSlider, CornerSlider, OpacitySlider, RateSlider, VolumeSlider, LyricSizeSlider, LyricBgSlider, LyricOffsetSlider, AnimSpeedSlider, TextShadowSlider, AppBgOpacitySlider })
             slider.ValueChanged += (_, _) => Save(null, null);
@@ -492,7 +486,6 @@ public sealed partial class MainWindow : Window
         s.AdaptiveText = AdaptiveSwitch.IsOn;
         s.Corner = CornerSlider.Value;
         s.CardOpacity = OpacitySlider.Value;
-        s.ShowWindowBorder = BorderSwitch.IsOn;
         s.ClickThrough = ClickSwitch.IsOn;
         s.ShowDanmakuMsg = MsgDanmaku.IsOn;
         s.ShowGift = MsgGift.IsOn;
@@ -795,19 +788,26 @@ public sealed partial class MainWindow : Window
         {
             // 采样失败（拿不到屏幕像素）时用 AdaptiveManual 兜底，和 1.2.0
             // adaptive.js 一样：'light' = 背景按亮的算、用深字；'dark' = 反过来。
-            // 只有算出来的值真变了才重绘，免得每 2 秒无故重建一次卡片。
             var fallbackDarkText = AppState.Current.AdaptiveManual != "dark";
             if (OverlayWindow.DarkText != fallbackDarkText) { OverlayWindow.DarkText = fallbackDarkText; RefreshCards(); }
+            else RefreshTexts();
             return;
         }
-        OverlayWindow.DarkText = light.Value;
-        RefreshCards();
+        // 只有算出来的值真变了才重建卡片，免得每 2 秒无故重建一次；
+        // 状态文字每 2 秒照常刷（连接状态就靠这个推到界面上）。
+        if (OverlayWindow.DarkText != light.Value) { OverlayWindow.DarkText = light.Value; RefreshCards(); }
+        else RefreshTexts();
     }
 
     void RefreshCards()
     {
         _danmaku.Render();
         _live.Render();
+        RefreshTexts();
+    }
+
+    void RefreshTexts()
+    {
         MiniPreviewText.Text = AppState.Current.MiniStats
             ? $"点赞 {LiveService.Likes} · 弹幕 {LiveService.Danmaku} · 在线 {LiveService.Online}"
             : "数据栏已隐藏（实时窗设置里可打开）";
@@ -851,8 +851,8 @@ public sealed partial class MainWindow : Window
         }
         try
         {
-            var stream = new InMemoryRandomAccessStream();
-            var writer = new DataWriter(stream);
+            using var stream = new InMemoryRandomAccessStream();
+            using var writer = new DataWriter(stream);
             writer.WriteBytes(bytes);
             await writer.StoreAsync();
             stream.Seek(0);
@@ -1035,8 +1035,8 @@ public sealed partial class MainWindow : Window
         StatusText.Text = message;
         if (url == null) return;
         var png = new PngByteQRCode(new QRCodeGenerator().CreateQrCode(url, QRCodeGenerator.ECCLevel.Q)).GetGraphic(8);
-        var stream = new InMemoryRandomAccessStream();
-        var writer = new DataWriter(stream);
+        using var stream = new InMemoryRandomAccessStream();
+        using var writer = new DataWriter(stream);
         writer.WriteBytes(png);
         await writer.StoreAsync();
         stream.Seek(0);
@@ -1216,8 +1216,8 @@ public sealed partial class MainWindow : Window
     // 纯文字：hide medal+badge、背景全无、白字；大字：fontSize 22；
     // 安静：opacity 0.72、blur 0、hide medal+badge。
     // “藏粉丝牌/徽章”在 WinUI 里没有对应开关，就用头像开关（关掉头像圆）
-    // 和边框开关来近似；每个预设都把字号、圆角、不透明度、头像、
-    // 自适应、边框和 8 个消息开关一次设全，免得切了预设还留着上一个的状态。
+    // 来近似；每个预设都把字号、圆角、不透明度、头像、自适应
+    // 和 8 个消息开关一次设全，免得切了预设还留着上一个的状态。
     void Preset_Click(object sender, RoutedEventArgs e)
     {
         var tag = (string)((FrameworkElement)sender).Tag;
@@ -1230,19 +1230,19 @@ public sealed partial class MainWindow : Window
         }
         switch (tag)
         {
-            case "极简": // hide medal+badge、无描边：关头像和边框，圆角收小
+            case "极简": // hide medal+badge：关头像，圆角收小
                 FontSlider.Value = 16; CornerSlider.Value = 8; OpacitySlider.Value = 0.86;
-                AvatarSwitch.IsOn = false; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
+                AvatarSwitch.IsOn = false; AdaptiveSwitch.IsOn = false;
                 AllMessages(); break;
-            case "霓虹": // 名字用主题色、发光描边：开强调色边框，名字改成种子色
+            case "霓虹": // 名字用主题色：名字改成种子色
                 FontSlider.Value = 18; CornerSlider.Value = 16; OpacitySlider.Value = 0.92;
                 NameColorBox.Text = "#6750A4";
-                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = true;
+                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false;
                 AllMessages(); break;
             default: // 默认：字号 18（1.2.0 默认）、圆角 16、不透明度 0.86，颜色和开关全重置
                 FontSlider.Value = 18; CornerSlider.Value = 16; OpacitySlider.Value = 0.86;
                 NameColorBox.Text = "#7C4DFF"; TextColorBox.Text = "#1A1A1A"; CardColorBox.Text = "#F5F5F5"; SelectFont(CardFontBox, "Inter");
-                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false; BorderSwitch.IsOn = false;
+                AvatarSwitch.IsOn = true; AdaptiveSwitch.IsOn = false;
                 AllMessages(); break;
         }
         _loading = false;

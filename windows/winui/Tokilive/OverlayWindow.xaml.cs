@@ -22,7 +22,7 @@ public sealed partial class OverlayWindow : Window
     public enum Kind { Danmaku, Live, Lyrics }
     readonly Kind _kind;
     Windows.Graphics.PointInt32? _drag;
-    Windows.Foundation.Point _start;
+    (int X, int Y)? _start;
     public static bool DarkText = true;
     // 已经播过入场动画的弹幕行。ChatLine 没有重写 Equals/GetHashCode，
     // HashSet 默认就是引用相等，正好按“同一条消息对象”去重。
@@ -49,24 +49,27 @@ public sealed partial class OverlayWindow : Window
         // 不用 WM_NCLBUTTONDOWN 的模态移动循环：它会被 KeepOrder 的
         // SetWindowPos 和消息重绘打断，长按拖不动。改用和输入窗一样的手
         // 动拖动：按下记偏移，移动调 AppWindow.Move，松开结束。
+        // 偏移必须用屏幕坐标（GetCursorPos）：PointerMoved 给的点位是相对
+        // 窗口的，窗口一动点位就跟着变，用它算目标位置会越拖越慢、来回抽搐。
         Root.PointerPressed += (_, e) =>
         {
             if (ClickThrough) return;
+            var cursor = NativeWin.CursorPos();
+            if (cursor == null) return;
             _drag = AppWindow.Position;
-            _start = e.GetCurrentPoint(Root).Position;
+            _start = cursor.Value;
             Root.CapturePointer(e.Pointer);
         };
         Root.PointerMoved += (_, e) =>
         {
-            if (_drag == null || ClickThrough) return;
-            var p = e.GetCurrentPoint(Root).Position;
-            // AppWindow.Position 是物理像素，GetCurrentPoint 给的是 DIP；
-            // 不乘缩放的话，高 DPI 下窗口只会以 1/缩放倍的速度跟鼠标。
-            // 每次都从按下时的锚点算，不逐段累加，就不会因取整丢零头。
-            var scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
-            AppWindow.Move(new Windows.Graphics.PointInt32(_drag.Value.X + (int)Math.Round((p.X - _start.X) * scale), _drag.Value.Y + (int)Math.Round((p.Y - _start.Y) * scale)));
+            if (_drag == null || _start == null || ClickThrough) return;
+            var cursor = NativeWin.CursorPos();
+            if (cursor == null) return;
+            // 屏幕坐标和 AppWindow.Position 都是物理像素，不用乘缩放；
+            // 锚点固定在按下那一刻的鼠标位置，不依赖窗口当前位置。
+            AppWindow.Move(new Windows.Graphics.PointInt32(_drag.Value.X + cursor.Value.X - _start.Value.X, _drag.Value.Y + cursor.Value.Y - _start.Value.Y));
         };
-        Root.PointerReleased += (_, _) => _drag = null;
+        Root.PointerReleased += (_, _) => { _drag = null; _start = null; };
         Render();
     }
 
@@ -125,11 +128,6 @@ public sealed partial class OverlayWindow : Window
         var locked = _kind == Kind.Lyrics && AppState.Current.LyricLocked;
         NativeWin.ApplyOverlay(this, AppWindow.Title, ClickThrough || locked, resizable: !locked && _kind != Kind.Lyrics, noActivate: true, perPixelTransparent: true, topmost: AppState.Current.OverlayTopmost);
         Root.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-        var clickThrough = ClickThrough || locked;
-        // 窗框：只有弹幕窗有这个开关（窗口边框），实时窗的边框功能已删。
-        var border = _kind == Kind.Danmaku && AppState.Current.ShowWindowBorder && !clickThrough;
-        Root.BorderBrush = border ? new SolidColorBrush(Parse(AppState.Current.UseSystemAccent ? NativeWin.SystemAccent() ?? AppState.Current.AccentHex : AppState.Current.AccentHex)) : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-        Root.BorderThickness = border ? new Thickness(2) : new Thickness(0);
     }
 
     void ConfigureHost()
@@ -550,8 +548,9 @@ public sealed partial class OverlayWindow : Window
     }
 
     // 1.2.0 overlay.js 的 fmt：>= 10 万显示 x.x 万。
+    // 数字格式化走 InvariantCulture：小数点在有的系统语言下是逗号。
     static string FormatCount(int n) =>
-        n >= 100000 ? (n / 10000.0).ToString("0.0").TrimEnd('0').TrimEnd('.') + "万" : n.ToString();
+        n >= 100000 ? (n / 10000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.') + "万" : n.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public static Border Card(string name, string text, AppState state) =>
         Card(new ChatLine { Name = name, Text = text }, state);
@@ -580,10 +579,9 @@ public sealed partial class OverlayWindow : Window
         _ => Application.Current?.RequestedTheme == ApplicationTheme.Dark,
     };
 
-    // #15/#27 胶囊圆角：Corner==0 时 chips 用 999——WinUI 里圆角超过
-    // 元素半高就按胶囊画，999 对小 chips 来说就是精确的胶囊。
-    // 卡片本身在 Loaded 里按实测半高写精确值（见 Card() 末尾）。
-    static CornerRadius ChipRadius(AppState state) => new(state.Corner == 0 ? 999 : state.Corner);
+    // 圆角就是圆角：Corner==0 是直角矩形，不再按旧逻辑换成胶囊
+    // （999 / 半高）。小 chips（粉丝牌等）同样按 Corner 画。
+    static CornerRadius ChipRadius(AppState state) => new(state.Corner);
 
     // 按比例往黑里混（近似 1.2.0 的 color-mix(in srgb, c 45%, #000)，
     // 粉丝牌 bilibili 样式的等级块底色用）。
@@ -635,7 +633,9 @@ public sealed partial class OverlayWindow : Window
             // 头像圆：字号 1.6 倍的圆，里面先放名字首字，Face 图盖在上面，
             // 图加载失败就藏掉，首字兜底。只用消息里自带的 Face，不另查接口。
             var size = state.FontSize + 12;
-            var initial = string.IsNullOrWhiteSpace(line.Name) ? "?" : line.Name.Trim()[..1];
+            // 名字首字按 Unicode 码点取：表情名直接 [..1] 会把代理对切成两半。
+            var initial = string.IsNullOrWhiteSpace(line.Name) ? "?" : line.Name.Trim().EnumerateRunes().FirstOrDefault().ToString();
+            if (initial.Length == 0) initial = "?";
             var circle = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
             var bg = new Border
             {
@@ -805,7 +805,7 @@ public sealed partial class OverlayWindow : Window
 
     // 卡片外壳：1dp Line 描边（浅色/深色/磨砂都有，磨砂也不例外）；
     // pill 是胶囊（999，WinUI 按半高画）；普通卡片按 state.Corner，
-    // Corner==0 时先按 999 画、进树后按实测半高写精确值（沿用旧逻辑）。
+    // Corner==0 就是直角矩形（不再按旧逻辑换成胶囊）。
     static Border BuildCard(AppState state, UIElement content, Color baseColor, Color lineColor, bool transparent, bool pill)
     {
         var card = new Border
@@ -813,27 +813,16 @@ public sealed partial class OverlayWindow : Window
             Background = CardBackground(state, baseColor, transparent),
             BorderBrush = new SolidColorBrush(lineColor),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(pill || state.Corner == 0 ? 999 : state.Corner),
+            CornerRadius = new CornerRadius(pill ? 999 : state.Corner),
             Padding = new Thickness(12, 8, 12, 8),
             Child = content,
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
-        // #15/#23：进树后量一次——收紧到内容宽（只缩不扩）；Corner==0 时
-        // 先按 999 画胶囊，等宽度定下来、尺寸变化触发 SizeChanged 时
-        // 再按实测半高写精确值；宽度没变就一直是 999，视觉上同样是胶囊。
+        // #15/#23：进树后量一次——收紧到内容宽（只缩不扩）。
         card.Loaded += (_, _) =>
         {
             TightenCard(card);
             TightenGridCard(card);
-            if (state.Corner == 0 && !pill)
-            {
-                void OnSized(object _, SizeChangedEventArgs e)
-                {
-                    card.SizeChanged -= OnSized;
-                    if (card.ActualHeight > 0) card.CornerRadius = new CornerRadius(card.ActualHeight / 2);
-                }
-                card.SizeChanged += OnSized;
-            }
         };
         return card;
     }
@@ -1140,7 +1129,8 @@ public sealed partial class OverlayWindow : Window
         Add("弹幕", FormatCount(LiveService.Danmaku));
         Add(vertical ? "在线" : "当前在线", FormatCount(LiveService.Online));
         if (vertical && !string.IsNullOrWhiteSpace(LiveService.Watched)) Add("看过", LiveService.Watched);
-        var radius = !vertical && state.Corner <= 0 ? barH / 2 : state.Corner <= 0 ? Math.Min(28, winW * 0.22) : state.Corner;
+        // 圆角就是圆角：Corner==0 是直角矩形，不再按旧逻辑换成半高胶囊。
+        var radius = state.Corner;
         return new Border
         {
             Background = CardBackground(state, bg, transparent),
@@ -1190,7 +1180,7 @@ public sealed partial class OverlayWindow : Window
             Background = CardBackground(state, baseColor, transparent),
             BorderBrush = new SolidColorBrush(CardLineColor(state, dark, null, transparent, ink)),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(state.Corner <= 0 ? 16 : state.Corner),
+            CornerRadius = new CornerRadius(state.Corner),
             Padding = new Thickness(14, 10, 14, 10),
             HorizontalAlignment = HorizontalAlignment.Left,
             MaxWidth = 360,
