@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -256,13 +257,15 @@ public static class LyricsService
                 {
                     var w = word.Groups[3].Value;
                     if (w.Length == 0) continue;
-                    words.Add(new LyricWord { Time = int.Parse(word.Groups[1].Value) * 60 + double.Parse(word.Groups[2].Value), Text = w });
+                    // 时间戳里的小数点走 InvariantCulture：有的系统语言下小数点是逗号，
+                    // double.Parse("03.50") 会直接抛异常，导入歌词时能把程序崩掉。
+                    words.Add(new LyricWord { Time = int.Parse(word.Groups[1].Value) * 60 + double.Parse(word.Groups[2].Value, CultureInfo.InvariantCulture), Text = w });
                     plain += w;
                 }
                 body = plain.Length > 0 ? plain : Regex.Replace(body, "<[^>]*>", "");
             }
             foreach (Match stamp in stamps)
-                lines.Add(new LyricLine { Time = int.Parse(stamp.Groups[1].Value) * 60 + double.Parse(stamp.Groups[2].Value), Text = body, Translation = translation, Words = words });
+                lines.Add(new LyricLine { Time = int.Parse(stamp.Groups[1].Value) * 60 + double.Parse(stamp.Groups[2].Value, CultureInfo.InvariantCulture), Text = body, Translation = translation, Words = words });
         }
         return lines.OrderBy(l => l.Time).ToList();
     }
@@ -300,7 +303,7 @@ public static class LyricsService
 
     static double Clock(string value)
     {
-        var parts = value.Split(':').Select(s => double.TryParse(s, out var n) ? n : 0).ToArray();
+        var parts = value.Split(':').Select(s => double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? n : 0).ToArray();
         if (parts.Length == 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
         if (parts.Length == 2) return parts[0] * 60 + parts[1];
         return parts.FirstOrDefault();

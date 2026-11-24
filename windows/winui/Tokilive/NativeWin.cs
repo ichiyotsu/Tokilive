@@ -65,7 +65,6 @@ public static class NativeWin
     const uint TrayMenuSettings = 1001;
     const uint TrayMenuLockAll = 1002;
     const uint TrayMenuLockDanmaku = 1003;
-    const uint TrayMenuLockLive = 1004;
     const uint TrayMenuDanmakuVisible = 1005;
     const uint TrayMenuLiveVisible = 1006;
     const uint TrayMenuReconnect = 1008;
@@ -178,12 +177,19 @@ public static class NativeWin
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex));
         // WDA_EXCLUDEFROMCAPTURE (0x11) 会让系统直接拒绝采集，必须保持 WDA_NONE。
         SetWindowDisplayAffinity(hwnd, WDA_NONE);
-        var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
-        DwmExtendFrameIntoClientArea(hwnd, ref margins);
+        // 悬浮窗（perPixelTransparent）不再做 DWM 玻璃延展：-1 全延展会让
+        // DWM 在窗口边缘描一条 1px 的框，WM_NCCALCSIZE 也去不掉（0.1.7
+        // 真机仍有框线）。透明只靠 TransparentBackdrop（合成器级透明底），
+        // 不靠玻璃；输入窗不走这条，保持原来的玻璃 + ACCENT 策略。
+        if (!perPixelTransparent)
+        {
+            var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
+            DwmExtendFrameIntoClientArea(hwnd, ref margins);
+        }
         if (perPixelTransparent)
         {
             // 强调色渐变策略会在 WinUI 合成器下面再铺一层，客户区经常是黑的。
-            // 透明悬浮窗只留 DWM 延展 + 透明 SystemBackdrop。
+            // 透明悬浮窗只留透明 SystemBackdrop。
             // 全透明 SystemBackdrop 每次都换一个新的：第一次挂接失败时
             // （TransparentBackdrop 内部把失败吞掉），旧的 ??= 写法会一直
             // 留着那个挂不上的旧对象，窗口底色退回不透明的白。
@@ -202,10 +208,11 @@ public static class NativeWin
             }
             finally { Marshal.FreeHGlobal(ptr); }
         }
-        // 悬浮窗（perPixelTransparent）再挂一个子类化：DwmExtendFrameIntoClientArea
-        // 把玻璃延进客户区后，DWM 会在窗口边缘描一条 1px 的框（穿透开着也一样），
-        // 只有 WM_NCCALCSIZE 能把它去掉。先挂再发 SWP_FRAMECHANGED，
-        // 这一轮重算帧就直接按无框走。
+        // 悬浮窗（perPixelTransparent）再挂一个子类化：边缘 6px 缩放手柄
+        // （WM_NCHITTEST）和无框重算（WM_NCCALCSIZE）都走它。玻璃延展
+        // 已去掉（见上），DWM 不再描那条 1px 框；子类化只留作缩放手柄
+        // 和无框重算的兜底。先挂再发 SWP_FRAMECHANGED，这一轮重算帧
+        // 就直接按无框走。
         if (perPixelTransparent) InstallOverlaySubclass(hwnd);
         // SWP_FRAMECHANGED：扩展样式改了要让系统重算窗口帧，否则
         // WS_EX_TOOLWINDOW 去掉 / WS_EX_APPWINDOW 加上可能不生效。
@@ -228,6 +235,12 @@ public static class NativeWin
         ReleaseCapture();
         SendMessage(hwnd, 0x00A1 /* WM_NCLBUTTONDOWN */, (IntPtr)2 /* HTCAPTION */, IntPtr.Zero);
     }
+
+    // 鼠标的屏幕坐标（物理像素，和 AppWindow.Position 同一套坐标）。
+    // 手动拖动必须用它：PointerMoved 给的是相对窗口客户区的点位，窗口
+    // 一动这个点位就跟着变，用它算目标位置会越拖越慢、来回抽搐。
+    public static (int X, int Y)? CursorPos() =>
+        GetCursorPos(out var pt) ? (pt.x, pt.y) : null;
 
     public static void RaiseAbove(IntPtr hwnd, bool overlays)
     {
@@ -299,7 +312,6 @@ public static class NativeWin
     public static event Action? TrayShowSettings;
     public static event Action? TrayToggleLockAll;
     public static event Action? TrayToggleDanmakuLock;
-    public static event Action? TrayToggleLiveLock;
     public static event Action? TrayToggleDanmakuVisible;
     public static event Action? TrayToggleLiveVisible;
     public static event Action? TrayReconnect;
@@ -310,7 +322,6 @@ public static class NativeWin
     public static Func<string>? TrayStatusText;
     public static Func<bool>? TrayAllLocked;
     public static Func<bool>? TrayDanmakuLocked;
-    public static Func<bool>? TrayLiveLocked;
     public static Func<bool>? TrayDanmakuVisible;
     public static Func<bool>? TrayLiveVisible;
 
@@ -325,8 +336,7 @@ public static class NativeWin
             AppendMenu(menu, MF_SEPARATOR, 0, null);
             AppendMenu(menu, MF_STRING, TrayMenuSettings, "设置");
             AppendMenu(menu, MF_STRING, TrayMenuLockAll, (TrayAllLocked?.Invoke() ?? false) ? "解锁全部窗口" : "锁定全部窗口");
-            AppendMenu(menu, MF_STRING, TrayMenuLockDanmaku, (TrayDanmakuLocked?.Invoke() ?? false) ? "解锁弹幕窗" : "锁定弹幕窗");
-            AppendMenu(menu, MF_STRING, TrayMenuLockLive, (TrayLiveLocked?.Invoke() ?? false) ? "解锁实时窗" : "锁定实时窗");
+            AppendMenu(menu, MF_STRING, TrayMenuLockDanmaku, (TrayDanmakuLocked?.Invoke() ?? false) ? "解锁悬浮窗" : "锁定悬浮窗");
             AppendMenu(menu, MF_SEPARATOR, 0, null);
             AppendMenu(menu, MF_STRING, TrayMenuDanmakuVisible, (TrayDanmakuVisible?.Invoke() ?? true) ? "隐藏弹幕窗" : "显示弹幕窗");
             AppendMenu(menu, MF_STRING, TrayMenuLiveVisible, (TrayLiveVisible?.Invoke() ?? true) ? "隐藏实时窗" : "显示实时窗");
@@ -344,7 +354,6 @@ public static class NativeWin
                 case TrayMenuSettings: TrayShowSettings?.Invoke(); break;
                 case TrayMenuLockAll: TrayToggleLockAll?.Invoke(); break;
                 case TrayMenuLockDanmaku: TrayToggleDanmakuLock?.Invoke(); break;
-                case TrayMenuLockLive: TrayToggleLiveLock?.Invoke(); break;
                 case TrayMenuDanmakuVisible: TrayToggleDanmakuVisible?.Invoke(); break;
                 case TrayMenuLiveVisible: TrayToggleLiveVisible?.Invoke(); break;
                 case TrayMenuReconnect: TrayReconnect?.Invoke(); break;
@@ -429,17 +438,25 @@ public static class NativeWin
 
     static IntPtr OverlaySubclass(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam, nuint id, nuint data)
     {
-        if (msg == WM_NCCALCSIZE && wParam != IntPtr.Zero)
+        if (msg == WM_NCCALCSIZE)
         {
             // 客户区扩到整个窗口，非客户区归零，系统就不再画那条 1px 框。
             // wParam != 0 时 lParam 是 NCCALCSIZE_PARAMS；wParam == 0 时
-            // lParam 只是 RECT*，不碰，走默认处理。
+            // lParam 只是 RECT*，同样扩到整个窗口矩形，两种都按无框走。
             try
             {
-                var p = Marshal.PtrToStructure<NCCALCSIZE_PARAMS>(lParam);
-                var wp = Marshal.PtrToStructure<WINDOWPOS>(p.lppos);
-                p.rgrc0 = new RECT { left = wp.x, top = wp.y, right = wp.x + wp.cx, bottom = wp.y + wp.cy };
-                Marshal.StructureToPtr(p, lParam, false);
+                if (wParam != IntPtr.Zero)
+                {
+                    var p = Marshal.PtrToStructure<NCCALCSIZE_PARAMS>(lParam);
+                    var wp = Marshal.PtrToStructure<WINDOWPOS>(p.lppos);
+                    p.rgrc0 = new RECT { left = wp.x, top = wp.y, right = wp.x + wp.cx, bottom = wp.y + wp.cy };
+                    Marshal.StructureToPtr(p, lParam, false);
+                }
+                else if (GetWindowRect(hWnd, out var rc))
+                {
+                    Marshal.StructureToPtr(rc, lParam, false);
+                }
+                else return DefSubclassProc(hWnd, msg, wParam, lParam);
                 return IntPtr.Zero;
             }
             catch { /* 结构不对就走默认处理，不挡窗口 */ }

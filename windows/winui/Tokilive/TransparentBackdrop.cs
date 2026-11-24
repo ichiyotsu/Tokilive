@@ -8,9 +8,11 @@ namespace Tokilive;
 
 /// <summary>
 /// WinUI 的窗口默认会铺一层不透明的主题底。悬浮窗要像 1.0.0 的 Electron
-/// 窗口那样真透明（只看见卡片），就把系统底刷成全透明，再配合
-/// DwmExtendFrameIntoClientArea。不要再加 WS_EX_LAYERED：WinUI 的交换链
-/// 不会走 UpdateLayeredWindow，分层窗口会整块涂黑。
+/// 窗口那样真透明（只看见卡片），就把系统底刷成全透明——透明只靠这层
+/// 合成器底，不再配合 DwmExtendFrameIntoClientArea（玻璃延展会让 DWM
+/// 在窗口边缘描一条 1px 的框，WM_NCCALCSIZE 也去不掉）。不要再加
+/// WS_EX_LAYERED：WinUI 的交换链不会走 UpdateLayeredWindow，分层窗口
+/// 会整块涂黑。
 /// ICompositionSupportsSystemBackdrop.SystemBackdrop 要的是
 /// Windows.UI.Composition 的画刷，不是 Microsoft.UI.Composition 那份。
 /// </summary>

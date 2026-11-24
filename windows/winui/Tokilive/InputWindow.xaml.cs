@@ -10,7 +10,7 @@ public sealed partial class InputWindow : Window
     const int DefaultX = 200, DefaultY = 640, DefaultW = 460, DefaultH = 64;
 
     Windows.Graphics.PointInt32? _drag;
-    Windows.Foundation.Point _start;
+    (int X, int Y)? _start;
     // 落盘防抖：拖动/改大小时 AppWindow.Changed 会连续触发，只写 AppState
     // 字段（Set 会去重），停 1 秒没再动才写一次 config.json；关闭时补一次。
     // 不是轮询：没有变化时这个计时器永远不会跑。
@@ -35,7 +35,7 @@ public sealed partial class InputWindow : Window
         Closed += (_, _) => { Remember(); SaveQuiet(); };
         Root.PointerPressed += Pressed;
         Root.PointerMoved += Moved;
-        Root.PointerReleased += (_, _) => _drag = null;
+        Root.PointerReleased += (_, _) => { _drag = null; _start = null; };
     }
 
     // #39：有保存过的位置就恢复它。AppState 默认全是 0，“从没保存过”
@@ -110,18 +110,21 @@ public sealed partial class InputWindow : Window
     void Pressed(object sender, PointerRoutedEventArgs e)
     {
         if (AppState.Current.InputLocked) return;
+        var cursor = NativeWin.CursorPos();
+        if (cursor == null) return;
         _drag = AppWindow.Position;
-        _start = e.GetCurrentPoint(Root).Position;
+        _start = cursor.Value;
         Root.CapturePointer(e.Pointer);
     }
 
     void Moved(object sender, PointerRoutedEventArgs e)
     {
-        if (_drag == null || AppState.Current.InputLocked) return;
-        var p = e.GetCurrentPoint(Root).Position;
-        // 同 OverlayWindow：Position 是物理像素，点位是 DIP，要乘缩放。
-        var scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
-        AppWindow.Move(new global::Windows.Graphics.PointInt32(_drag.Value.X + (int)Math.Round((p.X - _start.X) * scale), _drag.Value.Y + (int)Math.Round((p.Y - _start.Y) * scale)));
+        if (_drag == null || _start == null || AppState.Current.InputLocked) return;
+        var cursor = NativeWin.CursorPos();
+        if (cursor == null) return;
+        // 同 OverlayWindow：屏幕坐标和 AppWindow.Position 都是物理像素，
+        // 不用乘缩放；锚点固定在按下那一刻，不依赖窗口当前位置。
+        AppWindow.Move(new global::Windows.Graphics.PointInt32(_drag.Value.X + cursor.Value.X - _start.Value.X, _drag.Value.Y + cursor.Value.Y - _start.Value.Y));
     }
 
     async void Box_KeyDown(object sender, KeyRoutedEventArgs e)
